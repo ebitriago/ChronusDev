@@ -1,0 +1,24 @@
+{
+  "name": "chronusdev",
+  "private": true,
+  "version": "0.1.0",
+  "description": "MVP de tracking de proyectos y tiempos para ChronusDev",
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"node scripts/open-browser.js\"",
+    "dev:backend": "cd apps/backend && npm run dev",
+    "dev:frontend": "cd apps/frontend && npm run dev",
+    "build:backend": "cd apps/backend && npm run build",
+    "build:frontend": "cd apps/frontend && npm run build",
+    "start:backend": "cd apps/backend && npm run start",
+    "start:frontend": "cd apps/frontend && npm run start"
+  },
+  "workspaces": [
+    "apps/backend",
+    "apps/frontend"
+  ],
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "open": "^8.4.2"
+  }
+}
