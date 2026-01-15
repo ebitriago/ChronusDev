@@ -11,15 +11,21 @@ export default function Timer() {
   const [note, setNote] = useState('');
   const [availableTasks, setAvailableTasks] = useState<Task[]>([]);
   const [showTaskSelector, setShowTaskSelector] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    loadCurrentTimer();
-    loadTasks();
-    const interval = setInterval(() => {
+    setMounted(true);
+    if (typeof window !== 'undefined') {
       loadCurrentTimer();
-    }, 1000);
-    return () => clearInterval(interval);
+      loadTasks();
+      const interval = setInterval(() => {
+        loadCurrentTimer();
+      }, 1000);
+      return () => clearInterval(interval);
+    }
   }, []);
+
+  if (!mounted) return null;
 
   useEffect(() => {
     if (currentTimer?.status === 'RUNNING') {
@@ -42,8 +48,13 @@ export default function Timer() {
   }
 
   async function loadTasks() {
-    const tasks = await getTasks();
-    setAvailableTasks(tasks.filter(t => t.status !== 'DONE'));
+    try {
+      const tasks = await getTasks();
+      setAvailableTasks(tasks.filter(t => t.status !== 'DONE'));
+    } catch (err) {
+      console.error('Error cargando tareas:', err);
+      setAvailableTasks([]);
+    }
   }
 
   async function handleStart(taskId: string) {
@@ -143,7 +154,7 @@ export default function Timer() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 bg-white rounded-lg shadow-2xl border-2 border-blue-500 p-6 min-w-[320px]">
+    <div className="fixed bottom-6 right-6 z-50 bg-white rounded-lg shadow-2xl border-2 border-blue-500 p-6 min-w-[320px]" suppressHydrationWarning>
       {currentTimer?.status === 'RUNNING' ? (
         <>
           <div className="flex items-center justify-between mb-4">

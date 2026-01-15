@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { getProjects, getProjectSummary, downloadReportPDF, downloadPayrollCSV, type Project, type ProjectSummary } from '../app/api';
+import { getProjects, getProjectSummary, downloadPayrollCSV, type Project, type ProjectSummary } from '../app/api';
 import { format } from 'date-fns';
 
 export default function DashboardAdmin() {
@@ -45,11 +45,11 @@ export default function DashboardAdmin() {
   const chartData = projects.map((p) => {
     const summary = summaries[p.id];
     if (!summary) return null;
-    const percentage = (summary.costClient / summary.budgetClient) * 100;
+    const percentage = (summary.spent / summary.budget) * 100;
     return {
       name: p.name,
-      presupuesto: summary.budgetClient,
-      consumido: summary.costClient,
+      presupuesto: summary.budget,
+      consumido: summary.spent,
       restante: summary.remaining,
       porcentaje: percentage,
       color: getBudgetColor(percentage),
@@ -74,7 +74,7 @@ export default function DashboardAdmin() {
         {projects.map((project) => {
           const summary = summaries[project.id];
           if (!summary) return null;
-          const percentage = (summary.costClient / summary.budgetClient) * 100;
+          const percentage = (summary.spent / summary.budget) * 100;
           const color = getBudgetColor(percentage);
           const status = getBudgetStatus(percentage);
 
@@ -84,15 +84,19 @@ export default function DashboardAdmin() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Presupuesto:</span>
-                  <span className="font-medium">{summary.currency} {summary.budgetClient.toLocaleString()}</span>
+                  <span className="font-medium">{summary.currency} {summary.budget.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Consumido:</span>
-                  <span className="font-medium">{summary.currency} {summary.costClient.toFixed(2)}</span>
+                  <span className="font-medium">{summary.currency} {summary.spent.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Restante:</span>
                   <span className="font-medium">{summary.currency} {summary.remaining.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Progreso:</span>
+                  <span className="font-medium">{summary.progress}%</span>
                 </div>
                 <div className="mt-3">
                   <div className="flex justify-between text-xs mb-1">
@@ -114,14 +118,8 @@ export default function DashboardAdmin() {
                 </div>
                 <div className="flex gap-2 mt-4">
                   <button
-                    onClick={() => downloadReportPDF(project.id, selectedMonth)}
-                    className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700"
-                  >
-                    PDF Cliente
-                  </button>
-                  <button
                     onClick={() => downloadPayrollCSV(project.id, selectedMonth)}
-                    className="flex-1 bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700"
+                    className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700"
                   >
                     CSV Nómina
                   </button>

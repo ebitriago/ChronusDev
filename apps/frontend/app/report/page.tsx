@@ -33,7 +33,7 @@ function ReportContent() {
     return <div className="p-6">Cargando...</div>;
   }
 
-  const percentage = (summary.costClient / summary.budgetClient) * 100;
+  const percentage = (summary.spent / summary.budget) * 100;
 
   return (
     <>
@@ -65,7 +65,7 @@ function ReportContent() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-gray-600">Cliente:</span>
-                <span className="ml-2 font-medium">{summary.project.client}</span>
+                <span className="ml-2 font-medium">{summary.project.client?.name || 'N/A'}</span>
               </div>
               <div>
                 <span className="text-gray-600">Mes:</span>
@@ -81,13 +81,13 @@ function ReportContent() {
               <div>
                 <div className="text-sm text-gray-600">Presupuesto Total</div>
                 <div className="text-2xl font-bold">
-                  {summary.currency} {summary.budgetClient.toLocaleString()}
+                  {summary.currency} {summary.budget.toLocaleString()}
                 </div>
               </div>
               <div>
                 <div className="text-sm text-gray-600">Consumido</div>
                 <div className="text-2xl font-bold text-blue-600">
-                  {summary.currency} {summary.costClient.toFixed(2)}
+                  {summary.currency} {summary.spent.toFixed(2)}
                 </div>
               </div>
               <div>
