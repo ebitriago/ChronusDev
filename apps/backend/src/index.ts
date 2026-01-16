@@ -806,9 +806,14 @@ app.post("/timelogs/start", authMiddleware, (req: express.Request, res: express.
   };
   timeLogs.push(log);
 
-  if (task.status === "BACKLOG") {
+  if (task.status === "BACKLOG" || task.status === "TODO") {
     task.status = "IN_PROGRESS";
-    if (!task.assignedTo) task.assignedTo = user.id;
+  }
+  if (!task.assignedTo) task.assignedTo = user.id;
+
+  if (!task.activeWorkers) task.activeWorkers = [];
+  if (!task.activeWorkers.some((w) => w.id === user.id)) {
+    task.activeWorkers.push({ id: user.id, name: user.name });
   }
 
   res.json(log);
@@ -856,6 +861,10 @@ app.post("/timelogs/stop", authMiddleware, (req: express.Request, res: express.R
   log.payCost = Math.round(rounded * payRate * 100) / 100;
   log.billCost = Math.round(rounded * billRate * 100) / 100;
   log.status = "STOPPED";
+
+  if (task.activeWorkers) {
+    task.activeWorkers = task.activeWorkers.filter((w) => w.id !== user.id);
+  }
 
   res.json(log);
 });

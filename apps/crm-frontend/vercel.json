@@ -1,0 +1,8 @@
+{
+    "rewrites": [
+        {
+            "source": "/api/(.*)",
+            "destination": "https://chronusdev-backend.onrender.com/api/$1"
+        }
+    ]
+}

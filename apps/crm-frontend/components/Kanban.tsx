@@ -7,8 +7,6 @@ import { useToast } from './Toast';
 
 type KanbanProps = {
   project: Project;
-  allProjects?: Project[];
-  onSwitchProject?: (project: Project) => void;
 };
 
 const COLUMNS = [
@@ -26,7 +24,7 @@ const PRIORITY_STYLES = {
   URGENT: { bg: 'bg-red-100', text: 'text-red-700', label: 'Urgente' },
 };
 
-export default function Kanban({ project, allProjects, onSwitchProject }: KanbanProps) {
+export default function Kanban({ project }: KanbanProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [showNewTask, setShowNewTask] = useState(false);
@@ -300,37 +298,7 @@ export default function Kanban({ project, allProjects, onSwitchProject }: Kanban
                 {localProject.name.charAt(0)}
               </div>
               <div>
-                {/* Project Switcher */}
-                {allProjects && onSwitchProject && allProjects.length > 1 ? (
-                  <div className="relative group/proj">
-                    <button className="flex items-center gap-2 text-2xl font-bold text-gray-900 focus:outline-none">
-                      {localProject.name}
-                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {/* Dropdown Content with bridge to prevent closing on hover gap */}
-                    <div className="absolute left-0 top-full pt-2 w-64 hidden group-hover/proj:block z-50 animate-fadeIn">
-                      <div className="bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden">
-                        <div className="p-1 max-h-64 overflow-y-auto custom-scrollbar">
-                          {allProjects.map(p => (
-                            <button
-                              key={p.id}
-                              onClick={() => onSwitchProject(p)}
-                              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-between ${p.id === localProject.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}
-                            >
-                              {p.name}
-                              {p.id === localProject.id && <span className="text-blue-600">✓</span>}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <h2 className="text-2xl font-bold text-gray-900">{localProject.name}</h2>
-                )}
-
+                <h2 className="text-2xl font-bold text-gray-900">{localProject.name}</h2>
                 <div className="flex items-center gap-4 text-sm">
                   <span className="text-gray-500">{tasks.length} tareas</span>
 
@@ -450,19 +418,6 @@ export default function Kanban({ project, allProjects, onSwitchProject }: Kanban
                             {task.assignedUser.name.charAt(0)}
                           </div>
                         )}
-                        {task.activeWorkers && task.activeWorkers.length > 0 && (
-                          <div className="flex -space-x-1 ml-2">
-                            {task.activeWorkers.map((w) => (
-                              <div
-                                key={w.id}
-                                className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center text-[10px] font-bold text-green-700 border border-white shadow-sm ring-2 ring-green-400 animate-pulse"
-                                title={`Trabajando ahora: ${w.name}`}
-                              >
-                                {w.name.charAt(0)}
-                              </div>
-                            ))}
-                          </div>
-                        )}
                       </div>
 
                       <h4 className="font-bold text-gray-800 mb-2 line-clamp-2 group-hover:text-blue-600 transition-colors">
@@ -520,7 +475,7 @@ export default function Kanban({ project, allProjects, onSwitchProject }: Kanban
             );
           })}
         </div>
-      </div >
+      </div>
 
       {/* Task detail modal */}
       {

@@ -82,6 +82,7 @@ export interface Task {
   estimatedHours?: number;
   priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
   dueDate?: Date;
+  activeWorkers?: { id: string; name: string }[]; // Usuarios con timer activo
   createdAt: Date;
   updatedAt: Date;
 }

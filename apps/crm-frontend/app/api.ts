@@ -57,8 +57,6 @@ export type Task = {
   createdBy: string;
   estimatedHours?: number;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
-  dueDate?: string;
-  activeWorkers?: { id: string; name: string }[];
   totalHours?: number;
   commentsCount?: number;
   assignedUser?: { id: string; name: string };

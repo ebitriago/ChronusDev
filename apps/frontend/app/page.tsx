@@ -12,7 +12,8 @@ import TeamEarningsReport from '../components/TeamEarningsReport';
 import SuperAdminPanel from '../components/SuperAdminPanel';
 import Login from '../components/Login';
 import { Skeleton } from '../components/Skeleton';
-import { ToastProvider, useToast } from '../components/Toast';
+import { useToast } from '../components/Toast';
+import Sidebar from '../components/Sidebar';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -22,6 +23,7 @@ export default function Home() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [view, setView] = useState<'dashboard' | 'projects' | 'kanban' | 'clients' | 'team' | 'reports' | 'earnings' | 'superadmin'>('dashboard');
   const [darkMode, setDarkMode] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const loadProjects = useCallback(async () => {
     try {
@@ -36,14 +38,12 @@ export default function Home() {
   }, []);
 
   const checkAuth = useCallback(async () => {
-    // Fast path: check local storage or debug param first
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search);
       const debugMode = searchParams.get('debug') === 'true';
       const token = localStorage.getItem('authToken');
       const userId = localStorage.getItem('userId');
 
-      // Debug auto-login
       if (debugMode) {
         const debugUser: User = { id: 'u-admin', name: 'Admin Demo', email: 'admin@chronusdev.com', role: 'ADMIN' };
         localStorage.setItem('authToken', 'token-admin-123');
@@ -54,7 +54,6 @@ export default function Home() {
         return;
       }
 
-      // Existing session
       if (token && userId === 'u-admin') {
         setUser({ id: 'u-admin', name: 'Admin Demo', email: 'admin@chronusdev.com', role: 'ADMIN' });
         setLoading(false);
@@ -69,7 +68,6 @@ export default function Home() {
       await loadProjects();
     } catch (err) {
       console.error('Auth check failed:', err);
-      // Optional: clear broken session
       if (typeof window !== 'undefined') {
         localStorage.removeItem('authToken');
         localStorage.removeItem('userId');
@@ -85,8 +83,6 @@ export default function Home() {
       checkAuth();
     }
   }, [mounted, checkAuth]);
-
-
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -114,6 +110,8 @@ export default function Home() {
     setSelectedProject(null);
   }
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   // Loading state
   if (!mounted || loading) {
     return (
@@ -135,186 +133,94 @@ export default function Home() {
   const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
   const isSuperAdmin = user.role === 'SUPER_ADMIN';
 
+
   return (
-    <ToastProvider>
-      <div className="min-h-screen pb-32 bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="min-h-screen bg-slate-50 flex">
 
-        {/* Navbar mejorado */}
-        <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-              {/* Logo y navegación */}
-              <div className="flex items-center gap-8">
-                {/* Logo */}
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                    ChronusDev
-                  </span>
-                </div>
+      {/* Sidebar Navigation */}
+      {user && (
+        <>
+          {/* Mobile Overlay */}
+          {mobileMenuOpen && (
+            <div
+              className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+          )}
 
-                {/* Navegación */}
-                {isAdmin && (
-                  <div className="flex items-center gap-1 bg-gray-100/80 rounded-xl p-1">
-                    <button
-                      onClick={() => setView('dashboard')}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${view === 'dashboard'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                        }`}
-                      title="Dashboard"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                      </svg>
-                      <span className="hidden md:inline">Dashboard</span>
-                    </button>
-                    <button
-                      onClick={() => setView('projects')}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${view === 'projects'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                        }`}
-                      title="Proyectos"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                      </svg>
-                      <span className="hidden md:inline">Proyectos</span>
-                    </button>
-                    <button
-                      onClick={() => setView('kanban')}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${view === 'kanban'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                        }`}
-                      title="Tareas"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                      <span className="hidden md:inline">Tareas</span>
-                    </button>
-                    <button
-                      onClick={() => setView('clients')}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${view === 'clients'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                        }`}
-                      title="Clientes"
-                    >
-                      <span className="text-lg">🏢</span>
-                      <span className="hidden md:inline">Clientes</span>
-                    </button>
-                    <button
-                      onClick={() => setView('team')}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${view === 'team'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                        }`}
-                      title="Equipo"
-                    >
-                      <span className="text-lg">👥</span>
-                      <span className="hidden md:inline">Equipo</span>
-                    </button>
-                    <button
-                      onClick={() => setView('reports')}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${view === 'reports'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                        }`}
-                      title="Reportes"
-                    >
-                      <span className="text-lg">📊</span>
-                      <span className="hidden md:inline">Reportes</span>
-                    </button>
-                    <button
-                      onClick={() => setView('earnings')}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${view === 'earnings'
-                        ? 'bg-white text-blue-600 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                        }`}
-                      title="Nómina"
-                    >
-                      <span className="text-lg">💰</span>
-                      <span className="hidden md:inline">Nómina</span>
-                    </button>
-                    {isSuperAdmin && (
-                      <button
-                        onClick={() => setView('superadmin')}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${view === 'superadmin'
-                          ? 'bg-white text-purple-600 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
-                          }`}
-                        title="Super Admin"
-                      >
-                        <span className="text-lg">👑</span>
-                        <span className="hidden md:inline">Orgs</span>
-                      </button>
-                    )}
-                  </div>
-                )}
+          {/* Sidebar Component */}
+          <div className={`fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:static md:h-screen md:flex-shrink-0`}>
+            <Sidebar
+              currentView={view}
+              onChangeView={(v) => { setView(v); setMobileMenuOpen(false); }}
+              isCollapsed={sidebarCollapsed}
+              toggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+              isSuperAdmin={isSuperAdmin}
+            />
+          </div>
+        </>
+      )}
 
-                {/* Nombre del proyecto para devs */}
-                {!isAdmin && selectedProject && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    <span className="font-medium text-gray-700">{selectedProject.name}</span>
-                  </div>
-                )}
+      {/* Bloque principal con margen dinámico */}
+      <div className="flex-1 flex flex-col min-h-screen transition-all duration-300 overflow-x-hidden">
+
+        {/* Header Mobile / Top Bar minimalista */}
+        <div className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 md:px-8 sticky top-0 z-30 shadow-sm">
+          <div className="flex items-center gap-4">
+            {/* Mobile Hamburger */}
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </button>
+
+            <h2 className="text-xl font-bold text-gray-800 truncate">
+              {view === 'dashboard' && 'Dashboard'}
+              {view === 'projects' && 'Mis Proyectos'}
+              {view === 'kanban' && selectedProject ? <span className="flex items-center gap-2"><span className="hidden sm:inline">Proyecto:</span> {selectedProject.name}</span> : view === 'kanban' ? 'Tablero' : ''}
+              {view === 'clients' && 'Gestión de Clientes'}
+              {view === 'team' && 'Mi Equipo'}
+              {view === 'reports' && 'Reportes'}
+              {view === 'earnings' && 'Nómina'}
+              {view === 'superadmin' && 'Super Admin'}
+            </h2>
+          </div>
+
+          {/* User Profile & Dark Mode */}
+          <div className="flex items-center gap-2 md:gap-4">
+            {isAdmin && (
+              <a
+                href="http://localhost:3003"
+                target="_blank"
+                className="hidden md:flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-emerald-500/30 transition-all"
+              >
+                📊 CRM
+              </a>
+            )}
+
+            <button
+              onClick={toggleDarkMode}
+              className="p-2 rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all"
+            >
+              {darkMode ? '🌙' : '☀️'}
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden md:block">
+                <div className="text-sm font-bold text-gray-900">{user?.name}</div>
+                <div className="text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-lg inline-block">{user?.role}</div>
               </div>
-
-              {/* Dark Mode Toggle & User & logout */}
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={toggleDarkMode}
-                  className="p-2 rounded-xl bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all"
-                  title="Alternar modo oscuro"
-                >
-                  {darkMode ? (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 18v1m9-11h1m-18 0h1m15.364-6.364l-.707.707M6.343 17.657l-.707.707M16.95 16.95l.707.707M7.05 7.05l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                    </svg>
-                  )}
-                </button>
-
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-slate-700 dark:to-slate-800 rounded-xl flex items-center justify-center font-semibold text-gray-600 dark:text-slate-300 text-sm">
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="hidden sm:block">
-                    <div className="text-sm font-medium text-gray-800 dark:text-slate-200">{user.name}</div>
-                    <div className="flex items-center gap-1">
-                      <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium ${user.role === 'ADMIN'
-                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-500'
-                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-500'
-                        }`}>
-                        {user.role}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-all"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  <span className="hidden sm:inline">Salir</span>
-                </button>
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-xl flex items-center justify-center text-blue-700 font-bold border border-blue-200">
+                {user?.name ? user.name.charAt(0) : 'U'}
               </div>
             </div>
+
+            <button onClick={handleLogout} className="hidden md:block text-gray-400 hover:text-red-500 transition-colors" title="Salir">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            </button>
           </div>
-        </nav>
+        </div>
 
         {/* Contenido principal */}
         <main className="animate-fadeIn">
@@ -377,7 +283,13 @@ export default function Home() {
             </div>
           )}
 
-          {(view === 'kanban' || !isAdmin) && selectedProject && <Kanban project={selectedProject} />}
+          {(view === 'kanban' || !isAdmin) && selectedProject && (
+            <Kanban
+              project={selectedProject}
+              allProjects={projects}
+              onSwitchProject={(p) => setSelectedProject(p)}
+            />
+          )}
 
           {!isAdmin && projects.length === 0 && (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
@@ -397,7 +309,6 @@ export default function Home() {
 
       {/* Timer flotante */}
       {mounted && <Timer />}
-    </ToastProvider>
+    </div>
   );
 }
-
