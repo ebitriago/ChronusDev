@@ -247,6 +247,17 @@ export async function updateUser(id: string, data: { name?: string; role?: UserR
   return res.json();
 }
 
+export async function deleteUser(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/users/${id}`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Error eliminando usuario');
+  }
+}
+
 export type UserBalance = {
   userId: string;
   userName: string;

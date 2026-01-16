@@ -71,7 +71,9 @@ export const organizations: Organization[] = [
   {
     id: "org-main",
     name: "ChronusDev",
+    slug: "chronusdev",
     ownerId: "u-admin",
+    isActive: true,
     members: ["u-admin", "u-juan"],
     createdAt: new Date(),
     updatedAt: new Date(),

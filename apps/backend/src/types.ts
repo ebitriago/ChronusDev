@@ -38,7 +38,9 @@ export interface Client {
 export interface Organization {
   id: string;
   name: string;
+  slug: string; // URL-friendly name
   ownerId: string; // User ID del dueño
+  isActive: boolean; // Para habilitar/deshabilitar
   members: string[]; // User IDs
   createdAt: Date;
   updatedAt: Date;

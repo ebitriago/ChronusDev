@@ -15,6 +15,7 @@ import {
 import type {
   User,
   Client,
+  Organization,
   Project,
   ProjectMember,
   Task,
@@ -33,7 +34,7 @@ app.use(express.json());
 
 // ========== MIDDLEWARE DE AUTENTICACIÓN ==========
 
-import { verifyJWT, hashPassword, verifyPassword, generateJWT, type JWTPayload } from "./auth.js";
+import { verifyJWT, hashPassword, verifyPassword, generateJWT, hashPasswordSync, type JWTPayload } from "./auth.js";
 
 function getUserFromToken(token: string | undefined): User | undefined {
   if (!token) return undefined;
@@ -301,6 +302,145 @@ app.get("/users/:id/balance", requireRole(["ADMIN"]) as any, (req: express.Reque
     balance,
     payments: userPayments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
   });
+});
+
+// Eliminar usuario
+app.delete("/users/:id", requireRole(["ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const index = users.findIndex((u) => u.id === req.params.id);
+  if (index === -1) return res.status(404).json({ error: "Usuario no encontrado" });
+
+  const user = users[index];
+  // No permitir eliminar SUPER_ADMIN
+  if (user.role === "SUPER_ADMIN") {
+    return res.status(403).json({ error: "No se puede eliminar al Super Admin" });
+  }
+
+  users.splice(index, 1);
+  res.json({ ok: true });
+});
+
+// ========== ORGANIZACIONES (CRUD - Solo SUPER_ADMIN) ==========
+
+// Listar todas las organizaciones
+app.get("/organizations", requireRole(["SUPER_ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const orgsWithDetails = organizations.map((org) => {
+    const owner = users.find((u) => u.id === org.ownerId);
+    const memberCount = users.filter((u) => u.organizationId === org.id).length;
+    const projectCount = projects.filter((p) => p.organizationId === org.id).length;
+    return {
+      ...org,
+      owner: owner ? { id: owner.id, name: owner.name, email: owner.email } : null,
+      memberCount,
+      projectCount,
+    };
+  });
+  res.json(orgsWithDetails);
+});
+
+// Obtener una organización
+app.get("/organizations/:id", requireRole(["SUPER_ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const org = organizations.find((o) => o.id === req.params.id);
+  if (!org) return res.status(404).json({ error: "Organización no encontrada" });
+
+  const orgUsers = users.filter((u) => u.organizationId === org.id);
+  const owner = users.find((u) => u.id === org.ownerId);
+
+  res.json({
+    ...org,
+    owner: owner ? { id: owner.id, name: owner.name, email: owner.email } : null,
+    users: orgUsers.map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role })),
+  });
+});
+
+// Crear organización
+app.post("/organizations", requireRole(["SUPER_ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const { name, ownerEmail, ownerName } = req.body;
+  if (!name || !ownerEmail || !ownerName) {
+    return res.status(400).json({ error: "name, ownerEmail y ownerName requeridos" });
+  }
+
+  // Verificar que el email no exista
+  if (users.some((u) => u.email === ownerEmail)) {
+    return res.status(400).json({ error: "Email ya registrado" });
+  }
+
+  const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+  const orgId = uuid("org");
+
+  // Crear el usuario owner
+  const owner: User = {
+    id: uuid("u"),
+    email: ownerEmail,
+    name: ownerName,
+    role: "ADMIN",
+    organizationId: orgId,
+    defaultPayRate: 0,
+    passwordHash: hashPasswordSync("demo123"), // Password default temporal
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  users.push(owner);
+
+  // Crear la organización
+  const org: Organization = {
+    id: orgId,
+    name,
+    slug,
+    ownerId: owner.id,
+    isActive: true,
+    members: [owner.id],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  organizations.push(org);
+
+  res.json({ org, owner: { id: owner.id, name: owner.name, email: owner.email } });
+});
+
+// Actualizar organización
+app.put("/organizations/:id", requireRole(["SUPER_ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const org = organizations.find((o) => o.id === req.params.id);
+  if (!org) return res.status(404).json({ error: "Organización no encontrada" });
+
+  const { name, isActive } = req.body;
+  if (name) org.name = name;
+  if (typeof isActive === "boolean") org.isActive = isActive;
+  org.updatedAt = new Date();
+
+  res.json(org);
+});
+
+// Eliminar organización
+app.delete("/organizations/:id", requireRole(["SUPER_ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const index = organizations.findIndex((o) => o.id === req.params.id);
+  if (index === -1) return res.status(404).json({ error: "Organización no encontrada" });
+
+  const org = organizations[index];
+
+  // Eliminar usuarios de la org
+  const orgUsers = users.filter((u) => u.organizationId === org.id);
+  for (const u of orgUsers) {
+    const uIndex = users.findIndex((x) => x.id === u.id);
+    if (uIndex !== -1) users.splice(uIndex, 1);
+  }
+
+  organizations.splice(index, 1);
+  res.json({ ok: true });
+});
+
+// Usuarios de una organización
+app.get("/organizations/:id/users", requireRole(["SUPER_ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const org = organizations.find((o) => o.id === req.params.id);
+  if (!org) return res.status(404).json({ error: "Organización no encontrada" });
+
+  const orgUsers = users.filter((u) => u.organizationId === org.id);
+  res.json(orgUsers.map((u) => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    defaultPayRate: u.defaultPayRate,
+  })));
 });
 
 // ========== PROYECTOS (CRUD) ==========

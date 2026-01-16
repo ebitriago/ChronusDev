@@ -9,6 +9,7 @@ import Clients from '../components/Clients';
 import Team from '../components/Team';
 import Reports from '../components/Reports';
 import TeamEarningsReport from '../components/TeamEarningsReport';
+import SuperAdminPanel from '../components/SuperAdminPanel';
 import Login from '../components/Login';
 import { Skeleton } from '../components/Skeleton';
 import { ToastProvider, useToast } from '../components/Toast';
@@ -19,7 +20,7 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [view, setView] = useState<'dashboard' | 'projects' | 'kanban' | 'clients' | 'team' | 'reports' | 'earnings'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'projects' | 'kanban' | 'clients' | 'team' | 'reports' | 'earnings' | 'superadmin'>('dashboard');
   const [darkMode, setDarkMode] = useState(false);
 
   const loadProjects = useCallback(async () => {
@@ -131,7 +132,8 @@ export default function Home() {
     return <Login onLogin={checkAuth} />;
   }
 
-  const isAdmin = user.role === 'ADMIN';
+  const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+  const isSuperAdmin = user.role === 'SUPER_ADMIN';
 
   return (
     <ToastProvider>
@@ -241,6 +243,19 @@ export default function Home() {
                       <span className="text-lg">💰</span>
                       <span className="hidden md:inline">Nómina</span>
                     </button>
+                    {isSuperAdmin && (
+                      <button
+                        onClick={() => setView('superadmin')}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${view === 'superadmin'
+                          ? 'bg-white text-purple-600 shadow-sm'
+                          : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                          }`}
+                        title="Super Admin"
+                      >
+                        <span className="text-lg">👑</span>
+                        <span className="hidden md:inline">Orgs</span>
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -308,6 +323,7 @@ export default function Home() {
           {isAdmin && view === 'team' && <Team />}
           {isAdmin && view === 'reports' && <Reports />}
           {isAdmin && view === 'earnings' && <TeamEarningsReport />}
+          {isSuperAdmin && view === 'superadmin' && <SuperAdminPanel />}
 
           {isAdmin && view === 'projects' && (
             <div className="p-6 max-w-7xl mx-auto">

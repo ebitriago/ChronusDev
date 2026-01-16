@@ -5,6 +5,7 @@ import {
     getUsers,
     createUser,
     updateUser,
+    deleteUser,
     getActiveTimers,
     getTeamBalances,
     getUserBalance,
@@ -26,6 +27,8 @@ export default function Team() {
     const [activeTimers, setActiveTimers] = useState<ActiveTimer[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
     const [showPayModal, setShowPayModal] = useState(false);
     const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
     const [selectedUserBalance, setSelectedUserBalance] = useState<UserBalance | null>(null);
@@ -41,6 +44,11 @@ export default function Team() {
     const [payAmount, setPayAmount] = useState(0);
     const [payMonth, setPayMonth] = useState(format(new Date(), 'yyyy-MM'));
     const [payNote, setPayNote] = useState('');
+
+    // Edit Form
+    const [editName, setEditName] = useState('');
+    const [editRole, setEditRole] = useState<UserRole>('DEV');
+    const [editPayRate, setEditPayRate] = useState(25);
 
     useEffect(() => {
         loadData();
@@ -82,6 +90,39 @@ export default function Team() {
         try {
             await updateUser(userId, { defaultPayRate: newRate });
             showToast('Tarifa actualizada', 'success');
+            loadData();
+        } catch (err: any) {
+            showToast(err.message || 'Error', 'error');
+        }
+    }
+
+    function handleOpenEditModal(user: User) {
+        setEditingUser(user);
+        setEditName(user.name);
+        setEditRole(user.role);
+        setEditPayRate(user.defaultPayRate ?? 25);
+        setShowEditModal(true);
+    }
+
+    async function handleEditSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        if (!editingUser) return;
+        try {
+            await updateUser(editingUser.id, { name: editName, role: editRole, defaultPayRate: editPayRate });
+            showToast('Usuario actualizado', 'success');
+            setShowEditModal(false);
+            setEditingUser(null);
+            loadData();
+        } catch (err: any) {
+            showToast(err.message || 'Error', 'error');
+        }
+    }
+
+    async function handleDeleteUser(user: User) {
+        if (!confirm(`¿Eliminar a ${user.name}? Esta acción no se puede deshacer.`)) return;
+        try {
+            await deleteUser(user.id);
+            showToast(`${user.name} eliminado`, 'success');
             loadData();
         } catch (err: any) {
             showToast(err.message || 'Error', 'error');
@@ -238,13 +279,30 @@ export default function Team() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <button
-                                            onClick={() => handleOpenPayModal(user.id)}
-                                            disabled={(balance?.balance ?? 0) <= 0}
-                                            className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
-                                        >
-                                            💰 Pagar
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => handleOpenPayModal(user.id)}
+                                                disabled={(balance?.balance ?? 0) <= 0}
+                                                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                                                title="Pagar"
+                                            >
+                                                💰
+                                            </button>
+                                            <button
+                                                onClick={() => handleOpenEditModal(user)}
+                                                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-gray-500"
+                                                title="Editar"
+                                            >
+                                                ✏️
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteUser(user)}
+                                                className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors text-red-500"
+                                                title="Eliminar"
+                                            >
+                                                🗑️
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             );
@@ -351,6 +409,75 @@ export default function Team() {
                                     className="flex-1 bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-2 rounded-xl hover:shadow-lg hover:from-purple-700 hover:to-purple-800 transition-all font-medium"
                                 >
                                     Crear Miembro
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Modal */}
+            {showEditModal && editingUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Editar Miembro</h3>
+                            <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                        </div>
+
+                        <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={editName}
+                                    onChange={e => setEditName(e.target.value)}
+                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rol</label>
+                                    <select
+                                        value={editRole}
+                                        onChange={e => setEditRole(e.target.value as UserRole)}
+                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                                    >
+                                        <option value="DEV">Desarrollador</option>
+                                        <option value="ADMIN">Administrador</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tarifa/hora</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={editPayRate}
+                                            onChange={e => setEditPayRate(Number(e.target.value))}
+                                            className="w-full pl-8 pr-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEditModal(false)}
+                                    className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-xl hover:shadow-lg transition-all font-medium"
+                                >
+                                    Guardar Cambios
                                 </button>
                             </div>
                         </form>
