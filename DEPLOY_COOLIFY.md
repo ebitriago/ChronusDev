@@ -6,7 +6,8 @@
 
 1. En Coolify: **New Resource** → **Docker Compose**
 2. Conecta tu repositorio: `https://github.com/ebitriago/ChronusDev`
-3. Coolify detectará automáticamente el `docker-compose.yml`
+3. Coolify detectará automáticamente el `docker-compose.yml` o `docker-compose.yaml`
+   - ⚠️ **Nota**: El proyecto incluye ambos archivos (`.yml` y `.yaml`) para compatibilidad. Ambos apuntan al mismo contenido.
 
 ### Paso 2: Configurar Variables de Entorno
 
