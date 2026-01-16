@@ -32,6 +32,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Health check for Render
+app.get("/health", (req, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
+
 // ========== MIDDLEWARE DE AUTENTICACIÓN ==========
 
 import { verifyJWT, hashPassword, verifyPassword, generateJWT, hashPasswordSync, type JWTPayload } from "./auth.js";
