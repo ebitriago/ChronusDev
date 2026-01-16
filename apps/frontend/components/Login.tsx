@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { login } from '../app/api';
+import { login, register } from '../app/api';
 
 export default function Login({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [mounted, setMounted] = useState(false);
@@ -21,15 +24,19 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
     );
   }
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      await login(email);
+      if (isRegister) {
+        await register(email, password, name);
+      } else {
+        await login(email, password);
+      }
       onLogin();
     } catch (err: any) {
-      setError(err.message || 'Error al iniciar sesión');
+      setError(err.message || 'Error al procesar');
     } finally {
       setLoading(false);
     }
@@ -37,9 +44,10 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
 
   function handleQuickLogin(userEmail: string) {
     setEmail(userEmail);
+    setPassword('demo123');
     setLoading(true);
     setError('');
-    login(userEmail)
+    login(userEmail, 'demo123')
       .then(() => onLogin())
       .catch((err: any) => setError(err.message || 'Error al iniciar sesión'))
       .finally(() => setLoading(false));
@@ -72,12 +80,29 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
               ChronusDev
             </h1>
             <p className="text-white/60 mt-2 text-sm">
-              Gestión inteligente de tiempo y proyectos
+              {isRegister ? 'Crea tu cuenta' : 'Inicia sesión'}
             </p>
           </div>
 
           {/* Formulario */}
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {isRegister && (
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-white/80 mb-2">
+                  Nombre
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required={isRegister}
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent transition-all"
+                  placeholder="Tu nombre completo"
+                />
+              </div>
+            )}
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-white/80 mb-2">
                 Email
@@ -94,8 +119,31 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full pl-12 pr-4 py-3.5 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent transition-all"
+                  className="w-full pl-12 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent transition-all"
                   placeholder="tu@email.com"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-white/80 mb-2">
+                Contraseña
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <svg className="w-5 h-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full pl-12 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent transition-all"
+                  placeholder={isRegister ? 'Mínimo 6 caracteres' : '••••••••'}
                 />
               </div>
             </div>
@@ -118,11 +166,11 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
                 {loading ? (
                   <>
                     <span className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
-                    Iniciando...
+                    Procesando...
                   </>
                 ) : (
                   <>
-                    Iniciar sesión
+                    {isRegister ? 'Crear cuenta' : 'Iniciar sesión'}
                     <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                     </svg>
@@ -132,40 +180,57 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
             </button>
           </form>
 
+          {/* Toggle login/register */}
+          <div className="text-center mt-4">
+            <button
+              onClick={() => {
+                setIsRegister(!isRegister);
+                setError('');
+              }}
+              className="text-white/60 hover:text-white text-sm transition-colors"
+            >
+              {isRegister ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+            </button>
+          </div>
+
           {/* Divider */}
           <div className="flex items-center gap-4 my-6">
             <div className="flex-1 h-px bg-white/10" />
-            <span className="text-white/40 text-xs uppercase tracking-wider">Acceso rápido</span>
+            <span className="text-white/40 text-xs uppercase tracking-wider">Demo</span>
             <div className="flex-1 h-px bg-white/10" />
           </div>
 
           {/* Quick login buttons */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => handleQuickLogin('super@chronusdev.com')}
+              disabled={loading}
+              className="flex flex-col items-center justify-center gap-1 px-3 py-3 bg-white/5 border border-white/10 rounded-xl text-white/80 hover:bg-white/10 hover:border-white/20 transition-all text-xs font-medium disabled:opacity-50"
+            >
+              <span className="text-lg">👑</span>
+              Super Admin
+            </button>
             <button
               onClick={() => handleQuickLogin('admin@chronusdev.com')}
               disabled={loading}
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white/80 hover:bg-white/10 hover:border-white/20 transition-all text-sm font-medium disabled:opacity-50"
+              className="flex flex-col items-center justify-center gap-1 px-3 py-3 bg-white/5 border border-white/10 rounded-xl text-white/80 hover:bg-white/10 hover:border-white/20 transition-all text-xs font-medium disabled:opacity-50"
             >
-              <span className="w-6 h-6 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center text-xs">
-                👑
-              </span>
-              Admin
+              <span className="text-lg">🏢</span>
+              Admin Org
             </button>
             <button
               onClick={() => handleQuickLogin('juan@chronusdev.com')}
               disabled={loading}
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white/80 hover:bg-white/10 hover:border-white/20 transition-all text-sm font-medium disabled:opacity-50"
+              className="flex flex-col items-center justify-center gap-1 px-3 py-3 bg-white/5 border border-white/10 rounded-xl text-white/80 hover:bg-white/10 hover:border-white/20 transition-all text-xs font-medium disabled:opacity-50"
             >
-              <span className="w-6 h-6 bg-gradient-to-br from-blue-400 to-cyan-500 rounded-lg flex items-center justify-center text-xs">
-                💻
-              </span>
-              Dev (Juan)
+              <span className="text-lg">💻</span>
+              Dev
             </button>
           </div>
 
           {/* Footer */}
           <p className="text-center text-white/40 text-xs mt-6">
-            Demo MVP • Cualquier email crea una cuenta automáticamente
+            Password de demo: <span className="text-white/60 font-mono">demo123</span>
           </p>
         </div>
 

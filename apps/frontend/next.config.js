@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Configurar para abrir automáticamente
+  output: 'standalone', // Para Docker deploy
   devIndicators: {
     buildActivity: true,
   },

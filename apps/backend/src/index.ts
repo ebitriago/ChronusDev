@@ -33,8 +33,18 @@ app.use(express.json());
 
 // ========== MIDDLEWARE DE AUTENTICACIÓN ==========
 
+import { verifyJWT, hashPassword, verifyPassword, generateJWT, type JWTPayload } from "./auth.js";
+
 function getUserFromToken(token: string | undefined): User | undefined {
   if (!token) return undefined;
+
+  // Intentar verificar como JWT primero
+  const payload = verifyJWT(token);
+  if (payload) {
+    return users.find((u) => u.id === payload.id);
+  }
+
+  // Fallback: buscar token legacy
   return users.find((u) => u.token === token || u.id === token);
 }
 
@@ -49,10 +59,18 @@ function requireAuth(req: express.Request, res: express.Response): User | undefi
   return user;
 }
 
+// SUPER_ADMIN siempre tiene acceso a todo
 function requireRole(allowedRoles: UserRole[]) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const user = requireAuth(req, res);
     if (!user) return;
+
+    // SUPER_ADMIN puede hacer todo
+    if (user.role === "SUPER_ADMIN") {
+      next();
+      return;
+    }
+
     if (!allowedRoles.includes(user.role)) {
       res.status(403).json({ error: "Sin permisos" });
       return;
@@ -70,38 +88,80 @@ const authMiddleware = (req: express.Request, res: express.Response, next: expre
 
 // ========== AUTENTICACIÓN ==========
 
-// Login simple (para MVP)
-app.post("/auth/login", (req, res) => {
+// Registro de nuevos usuarios
+app.post("/auth/register", async (req, res) => {
+  const { email, password, name, organizationId } = req.body;
+
+  if (!email || !password || !name) {
+    return res.status(400).json({ error: "email, password y name requeridos" });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: "Password debe tener al menos 6 caracteres" });
+  }
+
+  if (users.some((u) => u.email === email)) {
+    return res.status(400).json({ error: "Email ya registrado" });
+  }
+
+  const passwordHash = await hashPassword(password);
+  const user: User = {
+    id: uuid("u"),
+    email,
+    name,
+    role: "DEV", // Por defecto son DEV, ADMIN promueve
+    organizationId: organizationId || undefined,
+    defaultPayRate: 25,
+    passwordHash,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  users.push(user);
+
+  const token = generateJWT(user);
+  res.json({
+    user: { ...user, passwordHash: undefined, password: undefined },
+    token
+  });
+});
+
+// Login con email y password
+app.post("/auth/login", async (req, res) => {
   const { email, password } = req.body;
-  // Para MVP, cualquier email funciona, sin password
+
   if (!email) return res.status(400).json({ error: "email requerido" });
 
-  let user = users.find((u) => u.email === email);
+  const user = users.find((u) => u.email === email);
   if (!user) {
-    // Crear usuario si no existe (simplificado para MVP)
-    user = {
-      id: uuid("u"),
-      email,
-      name: email.split("@")[0],
-      role: "DEV",
-      token: generateToken(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    users.push(user);
+    return res.status(401).json({ error: "Credenciales inválidas" });
   }
 
-  if (!user.token) {
-    user.token = generateToken();
+  // Verificar password si existe hash, sino aceptar cualquiera (compatibilidad)
+  if (user.passwordHash) {
+    if (!password) {
+      return res.status(400).json({ error: "password requerido" });
+    }
+    const valid = await verifyPassword(password, user.passwordHash);
+    if (!valid) {
+      return res.status(401).json({ error: "Credenciales inválidas" });
+    }
   }
 
-  res.json({ user: { ...user, password: undefined }, token: user.token });
+  const token = generateJWT(user);
+
+  // Guardar token para compatibilidad
+  user.token = token;
+
+  res.json({
+    user: { ...user, passwordHash: undefined, password: undefined, token: undefined },
+    token
+  });
 });
 
 // Obtener usuario actual
 app.get("/auth/me", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
-  res.json({ ...user, password: undefined, token: undefined });
+  res.json({ ...user, passwordHash: undefined, password: undefined, token: undefined });
 });
 
 // ========== CLIENTES (CRUD) ==========

@@ -1,6 +1,6 @@
 // Tipos y modelos de datos
 
-export type UserRole = "ADMIN" | "DEV" | "CLIENT";
+export type UserRole = "SUPER_ADMIN" | "ADMIN" | "DEV";
 
 export type ProjectStatus = "PLANNING" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
 
@@ -15,9 +15,11 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  organizationId?: string; // Null/undefined para SUPER_ADMIN
   defaultPayRate?: number; // Tarifa default por hora
-  password?: string; // Solo para creación/login
-  token?: string; // Token de sesión
+  passwordHash?: string; // bcrypt hash
+  password?: string; // Solo para creación (no se guarda)
+  token?: string; // Token legacy (para compatibilidad)
   createdAt: Date;
   updatedAt: Date;
 }

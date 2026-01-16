@@ -3,7 +3,7 @@ console.log('🔗 API configured at:', API_URL);
 
 // ========== TIPOS ==========
 
-export type UserRole = 'ADMIN' | 'DEV' | 'CLIENT';
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'DEV';
 export type ProjectStatus = 'PLANNING' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
 export type TaskStatus = 'BACKLOG' | 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
 
@@ -12,6 +12,8 @@ export type User = {
   email: string;
   name: string;
   role: UserRole;
+  organizationId?: string;
+  defaultPayRate?: number;
 };
 
 export type Client = {
@@ -123,13 +125,34 @@ function getHeaders(): HeadersInit {
 
 // ========== AUTENTICACIÓN ==========
 
-export async function login(email: string): Promise<{ user: User; token: string }> {
+export async function login(email: string, password: string): Promise<{ user: User; token: string }> {
   const res = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, password }),
   });
-  if (!res.ok) throw new Error('Login failed');
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Login failed');
+  }
+  const data = await res.json();
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('authToken', data.token);
+    localStorage.setItem('userId', data.user.id);
+  }
+  return data;
+}
+
+export async function register(email: string, password: string, name: string): Promise<{ user: User; token: string }> {
+  const res = await fetch(`${API_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, name }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Registration failed');
+  }
   const data = await res.json();
   if (typeof window !== 'undefined') {
     localStorage.setItem('authToken', data.token);

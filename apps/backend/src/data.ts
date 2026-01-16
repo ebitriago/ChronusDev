@@ -11,14 +11,32 @@ import type {
   Invitation,
   Payment,
 } from "./types.js";
+import { hashPasswordSync } from "./auth.js";
+
+// Password default para demo: "demo123"
+const DEFAULT_PASSWORD_HASH = hashPasswordSync("demo123");
 
 export const users: User[] = [
+  {
+    id: "u-super",
+    email: "super@chronusdev.com",
+    name: "Super Admin",
+    role: "SUPER_ADMIN",
+    // SUPER_ADMIN no pertenece a ninguna org
+    defaultPayRate: 0,
+    passwordHash: DEFAULT_PASSWORD_HASH,
+    token: "token-super-123",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
   {
     id: "u-admin",
     email: "admin@chronusdev.com",
     name: "Admin",
     role: "ADMIN",
-    defaultPayRate: 0, // Admin no cobra
+    organizationId: "org-main",
+    defaultPayRate: 0,
+    passwordHash: DEFAULT_PASSWORD_HASH,
     token: "token-admin-123",
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -28,7 +46,9 @@ export const users: User[] = [
     email: "juan@chronusdev.com",
     name: "Juan",
     role: "DEV",
-    defaultPayRate: 25, // $25/hr
+    organizationId: "org-main",
+    defaultPayRate: 25,
+    passwordHash: DEFAULT_PASSWORD_HASH,
     token: "token-juan-123",
     createdAt: new Date(),
     updatedAt: new Date(),
