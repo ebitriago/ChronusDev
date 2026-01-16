@@ -16,6 +16,8 @@ COPY apps/crm-frontend ./apps/crm-frontend
 # Variables de build
 ARG NEXT_PUBLIC_CRM_API_URL
 ENV NEXT_PUBLIC_CRM_API_URL=${NEXT_PUBLIC_CRM_API_URL}
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 # Build Next.js
 WORKDIR /app/apps/crm-frontend
