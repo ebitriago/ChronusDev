@@ -1,4 +1,5 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001';
+console.log('🔗 API configured at:', API_URL);
 
 // ========== TIPOS ==========
 
@@ -138,10 +139,20 @@ export async function login(email: string): Promise<{ user: User; token: string 
 }
 
 export async function getCurrentUser(): Promise<User> {
-  const res = await fetch(`${API_URL}/auth/me`, { headers: getHeaders() });
-  if (!res.ok) throw new Error('Not authenticated');
-  const data = await res.json();
-  return data;
+  try {
+    const res = await fetch(`${API_URL}/auth/me`, { headers: getHeaders() });
+    if (!res.ok) {
+      if (res.status === 401) {
+        logout();
+      }
+      throw new Error('Not authenticated');
+    }
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error('API Error (getCurrentUser):', err);
+    throw err;
+  }
 }
 
 export function logout() {
@@ -195,13 +206,90 @@ export async function getUsers(): Promise<User[]> {
   return res.json();
 }
 
-export async function createUser(data: { email: string; name: string; role?: UserRole }): Promise<User> {
+export async function createUser(data: { email: string; name: string; role?: UserRole; defaultPayRate?: number }): Promise<User> {
   const res = await fetch(`${API_URL}/users`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify(data),
   });
   return res.json();
+}
+
+export async function updateUser(id: string, data: { name?: string; role?: UserRole; defaultPayRate?: number }): Promise<User> {
+  const res = await fetch(`${API_URL}/users/${id}`, {
+    method: 'PUT',
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export type UserBalance = {
+  userId: string;
+  userName: string;
+  defaultPayRate: number;
+  totalHours: number;
+  totalDebt: number;
+  totalPaid: number;
+  balance: number;
+  payments: Payment[];
+};
+
+export type Payment = {
+  id: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  month: string;
+  note?: string;
+  createdBy: string;
+  createdAt: string;
+  userName?: string;
+  createdByName?: string;
+};
+
+export async function getUserBalance(id: string): Promise<UserBalance> {
+  const res = await fetch(`${API_URL}/users/${id}/balance`, { headers: getHeaders() });
+  return res.json();
+}
+
+// ========== PAGOS ==========
+
+export type TeamMemberBalance = {
+  userId: string;
+  userName: string;
+  defaultPayRate: number;
+  totalHours: number;
+  totalDebt: number;
+  totalPaid: number;
+  balance: number;
+};
+
+export async function getTeamBalances(): Promise<TeamMemberBalance[]> {
+  const res = await fetch(`${API_URL}/payments/team-summary`, { headers: getHeaders() });
+  return res.json();
+}
+
+export async function getPayments(userId?: string): Promise<Payment[]> {
+  const url = userId ? `${API_URL}/payments?userId=${userId}` : `${API_URL}/payments`;
+  const res = await fetch(url, { headers: getHeaders() });
+  return res.json();
+}
+
+export async function createPayment(data: { userId: string; amount: number; month?: string; note?: string }): Promise<Payment> {
+  const res = await fetch(`${API_URL}/payments`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function deletePayment(id: string): Promise<void> {
+  await fetch(`${API_URL}/payments/${id}`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+  });
 }
 
 // ========== PROYECTOS ==========
@@ -239,6 +327,23 @@ export async function updateProject(id: string, data: Partial<Project>): Promise
   });
   return res.json();
 }
+
+export async function assignProjectMember(projectId: string, data: { userId: string; payRate: number; billRate: number; role?: 'DEV' | 'MANAGER' | 'ADMIN' }): Promise<any> {
+  const res = await fetch(`${API_URL}/projects/${projectId}/members`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function removeProjectMember(projectId: string, userId: string): Promise<any> {
+  await fetch(`${API_URL}/projects/${projectId}/members/${userId}`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+  });
+}
+
 
 export async function getProjectSummary(id: string): Promise<ProjectSummary> {
   const res = await fetch(`${API_URL}/projects/${id}/summary`, { headers: getHeaders() });
@@ -359,9 +464,74 @@ export async function addNoteToTimer(timelogId: string, note: string): Promise<T
   return res.json();
 }
 
+// ========== ACTIVE TIMERS ==========
+
+export interface ActiveTimer {
+  id: string;
+  user: { id: string; name: string } | null;
+  task: { id: string; title: string } | null;
+  project: { id: string; name: string } | null;
+  start: string;
+}
+
+export async function getActiveTimers(): Promise<ActiveTimer[]> {
+  const res = await fetch(`${API_URL}/timelogs/active`, { headers: getHeaders() });
+  return res.json();
+}
+
 // ========== REPORTES ==========
 
 export function downloadPayrollCSV(projectId: string, month: string) {
   const url = `${API_URL}/reports/${projectId}/payroll.csv?month=${month}`;
   window.open(url, '_blank');
 }
+
+// ========== TEAM EARNINGS ==========
+
+export type TeamEarning = {
+  userId: string;
+  userName: string;
+  totalHours: number;
+  totalPay: number;
+  totalBill: number;
+  projects: { projectId: string; projectName: string; hours: number; pay: number }[];
+};
+
+export type TeamEarningsResponse = {
+  month: string;
+  earnings: TeamEarning[];
+};
+
+export async function getTeamEarnings(month: string): Promise<TeamEarningsResponse> {
+  const res = await fetch(`${API_URL}/reports/team-earnings?month=${month}`, { headers: getHeaders() });
+  if (!res.ok) throw new Error('Error al cargar reportes de equipo');
+  return res.json();
+}
+
+export function downloadMemberEarningsCSV(userId: string, month: string) {
+  const token = getAuthToken();
+  const url = `${API_URL}/reports/member/${userId}/earnings.csv?month=${month}`;
+  // Para descargar con auth, necesitamos hacer fetch y crear blob
+  fetch(url, { headers: getHeaders() })
+    .then(res => res.blob())
+    .then(blob => {
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `reporte_${month}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    });
+}
+
+// ========== DELETE TASK ==========
+
+export async function deleteTask(taskId: string): Promise<void> {
+  await fetch(`${API_URL}/tasks/${taskId}`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+  });
+}
+

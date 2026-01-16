@@ -15,6 +15,7 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  defaultPayRate?: number; // Tarifa default por hora
   password?: string; // Solo para creación/login
   token?: string; // Token de sesión
   createdAt: Date;
@@ -116,5 +117,17 @@ export interface Invitation {
   status: InvitationStatus;
   token: string; // Token único para aceptar
   expiresAt: Date;
+  createdAt: Date;
+}
+
+// Sistema de Pagos
+export interface Payment {
+  id: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  month: string; // YYYY-MM del periodo que cubre
+  note?: string;
+  createdBy: string; // Admin que registró el pago
   createdAt: Date;
 }

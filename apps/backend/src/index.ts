@@ -10,6 +10,7 @@ import {
   taskComments,
   timeLogs,
   invitations,
+  payments,
 } from "./data.js";
 import type {
   User,
@@ -22,6 +23,7 @@ import type {
   UserRole,
   TaskStatus,
   ProjectStatus,
+  Payment,
 } from "./types.js";
 import { uuid, generateToken, getAuthToken } from "./utils.js";
 
@@ -59,6 +61,13 @@ function requireRole(allowedRoles: UserRole[]) {
   };
 }
 
+const authMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const user = requireAuth(req, res);
+  if (user) {
+    next();
+  }
+};
+
 // ========== AUTENTICACIÓN ==========
 
 // Login simple (para MVP)
@@ -90,18 +99,18 @@ app.post("/auth/login", (req, res) => {
 });
 
 // Obtener usuario actual
-app.get("/auth/me", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/auth/me", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   res.json({ ...user, password: undefined, token: undefined });
 });
 
 // ========== CLIENTES (CRUD) ==========
 
-app.get("/clients", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/clients", authMiddleware, (req: express.Request, res: express.Response) => {
   res.json(clients);
 });
 
-app.get("/clients/:id", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/clients/:id", authMiddleware, (req: express.Request, res: express.Response) => {
   const client = clients.find((c) => c.id === req.params.id);
   if (!client) return res.status(404).json({ error: "Cliente no encontrado" });
   res.json(client);
@@ -154,7 +163,7 @@ app.get("/users", requireRole(["ADMIN"]) as any, (req: express.Request, res: exp
   res.json(safeUsers);
 });
 
-app.get("/users/:id", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/users/:id", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   const targetId = req.params.id;
 
@@ -170,7 +179,7 @@ app.get("/users/:id", requireAuth as any, (req: express.Request, res: express.Re
 });
 
 app.post("/users", requireRole(["ADMIN"]) as any, (req: express.Request, res: express.Response) => {
-  const { email, name, role = "DEV" } = req.body;
+  const { email, name, role = "DEV", defaultPayRate = 25 } = req.body;
   if (!email || !name) return res.status(400).json({ error: "email y name requeridos" });
 
   if (users.some((u) => u.email === email)) {
@@ -182,6 +191,7 @@ app.post("/users", requireRole(["ADMIN"]) as any, (req: express.Request, res: ex
     email,
     name,
     role: role as UserRole,
+    defaultPayRate: Number(defaultPayRate) || 25,
     token: generateToken(),
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -190,9 +200,52 @@ app.post("/users", requireRole(["ADMIN"]) as any, (req: express.Request, res: ex
   res.json({ ...user, password: undefined });
 });
 
+// Actualizar usuario (tarifa, nombre, rol)
+app.put("/users/:id", requireRole(["ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const target = users.find((u) => u.id === req.params.id);
+  if (!target) return res.status(404).json({ error: "Usuario no encontrado" });
+
+  const { name, role, defaultPayRate } = req.body;
+  if (name) target.name = name;
+  if (role) target.role = role as UserRole;
+  if (typeof defaultPayRate === "number") target.defaultPayRate = defaultPayRate;
+  target.updatedAt = new Date();
+
+  res.json({ ...target, password: undefined, token: undefined });
+});
+
+// Obtener balance de un usuario (deuda - pagos)
+app.get("/users/:id/balance", requireRole(["ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const target = users.find((u) => u.id === req.params.id);
+  if (!target) return res.status(404).json({ error: "Usuario no encontrado" });
+
+  // Calcular deuda total (timelogs completados)
+  const userLogs = timeLogs.filter((t) => t.userId === target.id && t.status === "STOPPED");
+  const totalDebt = userLogs.reduce((acc, t) => acc + (t.payCost ?? 0), 0);
+  const totalHours = userLogs.reduce((acc, t) => acc + (t.hours ?? 0), 0);
+
+  // Calcular pagos realizados
+  const userPayments = payments.filter((p) => p.userId === target.id);
+  const totalPaid = userPayments.reduce((acc, p) => acc + p.amount, 0);
+
+  // Saldo pendiente
+  const balance = Math.round((totalDebt - totalPaid) * 100) / 100;
+
+  res.json({
+    userId: target.id,
+    userName: target.name,
+    defaultPayRate: target.defaultPayRate ?? 0,
+    totalHours: Math.round(totalHours * 100) / 100,
+    totalDebt: Math.round(totalDebt * 100) / 100,
+    totalPaid: Math.round(totalPaid * 100) / 100,
+    balance,
+    payments: userPayments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+  });
+});
+
 // ========== PROYECTOS (CRUD) ==========
 
-app.get("/projects", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/projects", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   let filtered = projects;
 
@@ -213,7 +266,7 @@ app.get("/projects", requireAuth as any, (req: express.Request, res: express.Res
   res.json(enriched);
 });
 
-app.get("/projects/:id", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/projects/:id", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   const project = projects.find((p) => p.id === req.params.id);
   if (!project) return res.status(404).json({ error: "Proyecto no encontrado" });
@@ -309,10 +362,20 @@ app.post("/projects/:projectId/members", requireRole(["ADMIN"]) as any, (req: ex
   };
   projectMembers.push(member);
   res.json(member);
+  res.json(member);
+});
+
+// Eliminar miembro de proyecto
+app.delete("/projects/:projectId/members/:userId", requireRole(["ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const index = projectMembers.findIndex((pm) => pm.projectId === req.params.projectId && pm.userId === req.params.userId);
+  if (index === -1) return res.status(404).json({ error: "Miembro no encontrado en el proyecto" });
+
+  projectMembers.splice(index, 1);
+  res.json({ success: true });
 });
 
 // Listar miembros de un proyecto
-app.get("/projects/:projectId/members", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/projects/:projectId/members", authMiddleware, (req: express.Request, res: express.Response) => {
   const members = projectMembers.filter((pm) => pm.projectId === req.params.projectId);
   const enriched = members.map((pm) => {
     const user = users.find((u) => u.id === pm.userId);
@@ -323,7 +386,7 @@ app.get("/projects/:projectId/members", requireAuth as any, (req: express.Reques
 
 // ========== TAREAS (CRUD mejorado) ==========
 
-app.get("/tasks", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/tasks", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   const projectId = req.query.projectId as string | undefined;
 
@@ -355,7 +418,7 @@ app.get("/tasks", requireAuth as any, (req: express.Request, res: express.Respon
   res.json(enriched);
 });
 
-app.get("/tasks/:id", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/tasks/:id", authMiddleware, (req: express.Request, res: express.Response) => {
   const task = tasks.find((t) => t.id === req.params.id);
   if (!task) return res.status(404).json({ error: "Tarea no encontrada" });
 
@@ -371,7 +434,7 @@ app.get("/tasks/:id", requireAuth as any, (req: express.Request, res: express.Re
   res.json({ ...task, comments, assignedUser });
 });
 
-app.post("/tasks", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.post("/tasks", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   const { projectId, title, description, priority = "MEDIUM", estimatedHours } = req.body;
   if (!projectId || !title) return res.status(400).json({ error: "projectId y title requeridos" });
@@ -395,7 +458,7 @@ app.post("/tasks", requireAuth as any, (req: express.Request, res: express.Respo
   res.json(task);
 });
 
-app.put("/tasks/:id", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.put("/tasks/:id", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   const task = tasks.find((t) => t.id === req.params.id);
   if (!task) return res.status(404).json({ error: "Tarea no encontrada" });
@@ -404,7 +467,18 @@ app.put("/tasks/:id", requireAuth as any, (req: express.Request, res: express.Re
   if (title) task.title = title;
   if (description !== undefined) task.description = description;
   if (status) task.status = status as TaskStatus;
-  if (assignedTo !== undefined) task.assignedTo = assignedTo || undefined;
+
+  // Validar que assignedTo sea miembro del proyecto
+  if (assignedTo !== undefined) {
+    if (assignedTo) {
+      const isMember = projectMembers.some((pm) => pm.projectId === task.projectId && pm.userId === assignedTo);
+      if (!isMember) {
+        return res.status(400).json({ error: "El usuario no es miembro del proyecto" });
+      }
+    }
+    task.assignedTo = assignedTo || undefined;
+  }
+
   if (priority) task.priority = priority as any;
   if (estimatedHours !== undefined) task.estimatedHours = estimatedHours;
   if (dueDate) task.dueDate = new Date(dueDate);
@@ -413,8 +487,33 @@ app.put("/tasks/:id", requireAuth as any, (req: express.Request, res: express.Re
   res.json(task);
 });
 
+// Eliminar tarea
+app.delete("/tasks/:id", requireRole(["ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const index = tasks.findIndex((t) => t.id === req.params.id);
+  if (index === -1) return res.status(404).json({ error: "Tarea no encontrada" });
+
+  const taskId = tasks[index].id;
+
+  // Eliminar comentarios asociados
+  const commentIndices = taskComments
+    .map((c, i) => c.taskId === taskId ? i : -1)
+    .filter(i => i !== -1)
+    .reverse();
+  commentIndices.forEach(i => taskComments.splice(i, 1));
+
+  // Eliminar timelogs asociados
+  const timelogIndices = timeLogs
+    .map((t, i) => t.taskId === taskId ? i : -1)
+    .filter(i => i !== -1)
+    .reverse();
+  timelogIndices.forEach(i => timeLogs.splice(i, 1));
+
+  tasks.splice(index, 1);
+  res.json({ success: true });
+});
+
 // Tomar tarea (auto-asignación)
-app.post("/tasks/:id/assign", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.post("/tasks/:id/assign", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   const task = tasks.find((t) => t.id === req.params.id);
   if (!task) return res.status(404).json({ error: "Tarea no encontrada" });
@@ -427,7 +526,7 @@ app.post("/tasks/:id/assign", requireAuth as any, (req: express.Request, res: ex
 
 // ========== COMENTARIOS EN TAREAS ==========
 
-app.get("/tasks/:taskId/comments", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/tasks/:taskId/comments", authMiddleware, (req: express.Request, res: express.Response) => {
   const comments = taskComments
     .filter((tc) => tc.taskId === req.params.taskId)
     .map((tc) => {
@@ -439,7 +538,7 @@ app.get("/tasks/:taskId/comments", requireAuth as any, (req: express.Request, re
   res.json(comments);
 });
 
-app.post("/tasks/:taskId/comments", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.post("/tasks/:taskId/comments", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   const task = tasks.find((t) => t.id === req.params.taskId);
   if (!task) return res.status(404).json({ error: "Tarea no encontrada" });
@@ -469,7 +568,7 @@ function getRates(projectId: string, userId: string) {
   };
 }
 
-app.get("/timelogs/current", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/timelogs/current", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   const running = timeLogs.find((t) => t.userId === user.id && t.status === "RUNNING");
   if (!running) return res.json(null);
@@ -483,7 +582,7 @@ app.get("/timelogs/current", requireAuth as any, (req: express.Request, res: exp
   });
 });
 
-app.post("/timelogs/start", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.post("/timelogs/start", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   const { taskId } = req.body;
   if (!taskId) return res.status(400).json({ error: "taskId requerido" });
@@ -512,7 +611,23 @@ app.post("/timelogs/start", requireAuth as any, (req: express.Request, res: expr
   res.json(log);
 });
 
-app.post("/timelogs/stop", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/timelogs/active", authMiddleware, (req: express.Request, res: express.Response) => {
+  const active = timeLogs.filter((t) => t.status === "RUNNING").map(log => {
+    const user = users.find(u => u.id === log.userId);
+    const task = tasks.find(t => t.id === log.taskId);
+    const project = task ? projects.find(p => p.id === task.projectId) : undefined;
+    return {
+      id: log.id,
+      user: user ? { id: user.id, name: user.name } : null,
+      task: task ? { id: task.id, title: task.title } : null,
+      project: project ? { id: project.id, name: project.name } : null,
+      start: log.start
+    };
+  });
+  res.json(active);
+});
+
+app.post("/timelogs/stop", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   const { timelogId } = req.body;
   if (!timelogId) return res.status(400).json({ error: "timelogId requerido" });
@@ -542,18 +657,34 @@ app.post("/timelogs/stop", requireAuth as any, (req: express.Request, res: expre
   res.json(log);
 });
 
-app.put("/timelogs/:id/note", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.put("/timelogs/:id/note", authMiddleware, (req: express.Request, res: express.Response) => {
   const user = (req as any).user;
   const log = timeLogs.find((t) => t.id === req.params.id);
   if (!log) return res.status(404).json({ error: "Timelog no encontrado" });
   if (log.userId !== user.id && user.role !== "ADMIN") return res.status(403).json({ error: "No permitido" });
-  log.note = req.body.note || "";
+
+  const note = req.body.note || "";
+  log.note = note;
+
+  // Auto-create comment if note exists
+  if (note.trim()) {
+    const comment: TaskComment = {
+      id: uuid("tc"),
+      taskId: log.taskId,
+      userId: user.id,
+      content: `⏱️ Timer Note: ${note}`,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    taskComments.push(comment);
+  }
+
   res.json(log);
 });
 
 // ========== RESUMEN Y PROGRESO DE PROYECTOS ==========
 
-app.get("/projects/:id/summary", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/projects/:id/summary", authMiddleware, (req: express.Request, res: express.Response) => {
   const project = projects.find((p) => p.id === req.params.id);
   if (!project) return res.status(404).json({ error: "Proyecto no encontrado" });
 
@@ -590,7 +721,7 @@ app.get("/projects/:id/summary", requireAuth as any, (req: express.Request, res:
 
 // ========== REPORTES (mantener compatibilidad) ==========
 
-app.get("/reports/:projectId/payroll.csv", requireAuth as any, (req: express.Request, res: express.Response) => {
+app.get("/reports/:projectId/payroll.csv", authMiddleware, (req: express.Request, res: express.Response) => {
   const { projectId } = req.params;
   const project = projects.find((p) => p.id === projectId);
   if (!project) return res.status(404).json({ error: "Proyecto no encontrado" });
@@ -625,6 +756,210 @@ app.get("/reports/:projectId/payroll.csv", requireAuth as any, (req: express.Req
   res.send([header, ...rows].join("\n"));
 });
 
+// ========== REPORTES POR EQUIPO ==========
+
+// Reporte de ganancias del equipo completo
+app.get("/reports/team-earnings", requireRole(["ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const month = req.query.month as string | undefined;
+  const monthPrefix = month ?? new Date().toISOString().slice(0, 7);
+
+  // Filtrar timelogs del mes
+  const monthLogs = timeLogs.filter((t) => {
+    if (t.status !== "STOPPED" || !t.end) return false;
+    return t.end.toISOString().startsWith(monthPrefix);
+  });
+
+  // Agrupar por usuario
+  const userEarnings: Record<string, {
+    userId: string;
+    userName: string;
+    totalHours: number;
+    totalPay: number;
+    totalBill: number;
+    projects: { projectId: string; projectName: string; hours: number; pay: number }[];
+  }> = {};
+
+  for (const log of monthLogs) {
+    const user = users.find((u) => u.id === log.userId);
+    if (!user) continue;
+
+    const task = tasks.find((t) => t.id === log.taskId);
+    if (!task) continue;
+
+    const project = projects.find((p) => p.id === task.projectId);
+    if (!project) continue;
+
+    if (!userEarnings[user.id]) {
+      userEarnings[user.id] = {
+        userId: user.id,
+        userName: user.name,
+        totalHours: 0,
+        totalPay: 0,
+        totalBill: 0,
+        projects: [],
+      };
+    }
+
+    const entry = userEarnings[user.id];
+    entry.totalHours += log.hours ?? 0;
+    entry.totalPay += log.payCost ?? 0;
+    entry.totalBill += log.billCost ?? 0;
+
+    // Agregar o actualizar proyecto
+    let projEntry = entry.projects.find((p) => p.projectId === project.id);
+    if (!projEntry) {
+      projEntry = { projectId: project.id, projectName: project.name, hours: 0, pay: 0 };
+      entry.projects.push(projEntry);
+    }
+    projEntry.hours += log.hours ?? 0;
+    projEntry.pay += log.payCost ?? 0;
+  }
+
+  const result = Object.values(userEarnings).map((u) => ({
+    ...u,
+    totalHours: Math.round(u.totalHours * 100) / 100,
+    totalPay: Math.round(u.totalPay * 100) / 100,
+    totalBill: Math.round(u.totalBill * 100) / 100,
+  }));
+
+  res.json({ month: monthPrefix, earnings: result });
+});
+
+// Reporte individual de un miembro (CSV)
+app.get("/reports/member/:userId/earnings.csv", requireRole(["ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const { userId } = req.params;
+  const month = req.query.month as string | undefined;
+  const monthPrefix = month ?? new Date().toISOString().slice(0, 7);
+
+  const user = users.find((u) => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+
+  // Filtrar timelogs del usuario en el mes
+  const userLogs = timeLogs.filter((t) => {
+    if (t.status !== "STOPPED" || !t.end) return false;
+    if (t.userId !== userId) return false;
+    return t.end.toISOString().startsWith(monthPrefix);
+  });
+
+  const header = "fecha,proyecto,tarea,horas,pay_rate,pay_cost";
+  const rows = userLogs.map((l) => {
+    const task = tasks.find((t) => t.id === l.taskId);
+    const project = task ? projects.find((p) => p.id === task.projectId) : undefined;
+    return [
+      l.end?.toISOString().split("T")[0] ?? "",
+      project?.name ?? "",
+      task?.title ?? "",
+      l.hours ?? 0,
+      l.payRate ?? 0,
+      l.payCost ?? 0,
+    ].join(",");
+  });
+
+  // Agregar totales
+  const totalHours = userLogs.reduce((acc, l) => acc + (l.hours ?? 0), 0);
+  const totalPay = userLogs.reduce((acc, l) => acc + (l.payCost ?? 0), 0);
+  const summaryRow = `TOTAL,,,${totalHours.toFixed(2)},,${totalPay.toFixed(2)}`;
+
+  res.header("Content-Type", "text/csv");
+  res.header("Content-Disposition", `attachment; filename="${user.name.replace(/\s/g, "_")}_${monthPrefix}.csv"`);
+  res.send([header, ...rows, "", summaryRow].join("\n"));
+});
+
+// ========== PAGOS (Sistema de Nómina) ==========
+
+// Listar todos los pagos
+app.get("/payments", requireRole(["ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const userId = req.query.userId as string | undefined;
+
+  let filtered = payments;
+  if (userId) {
+    filtered = payments.filter((p) => p.userId === userId);
+  }
+
+  // Enriquecer con nombre de usuario
+  const enriched = filtered.map((p) => {
+    const user = users.find((u) => u.id === p.userId);
+    const createdByUser = users.find((u) => u.id === p.createdBy);
+    return {
+      ...p,
+      userName: user?.name ?? "Desconocido",
+      createdByName: createdByUser?.name ?? "Sistema",
+    };
+  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  res.json(enriched);
+});
+
+// Registrar un nuevo pago
+app.post("/payments", requireRole(["ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const admin = (req as any).user;
+  const { userId, amount, month, note } = req.body;
+
+  if (!userId || typeof amount !== "number" || amount <= 0) {
+    return res.status(400).json({ error: "userId y amount (positivo) requeridos" });
+  }
+
+  const user = users.find((u) => u.id === userId);
+  if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+
+  const payment: Payment = {
+    id: uuid("pay"),
+    userId,
+    amount: Math.round(amount * 100) / 100,
+    currency: "USD",
+    month: month ?? new Date().toISOString().slice(0, 7),
+    note: note ?? undefined,
+    createdBy: admin.id,
+    createdAt: new Date(),
+  };
+
+  payments.push(payment);
+  res.json({
+    ...payment,
+    userName: user.name,
+  });
+});
+
+// Eliminar un pago
+app.delete("/payments/:id", requireRole(["ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const index = payments.findIndex((p) => p.id === req.params.id);
+  if (index === -1) return res.status(404).json({ error: "Pago no encontrado" });
+
+  payments.splice(index, 1);
+  res.json({ success: true });
+});
+
+// Resumen de balances de todo el equipo
+app.get("/payments/team-summary", requireRole(["ADMIN"]) as any, (req: express.Request, res: express.Response) => {
+  const devUsers = users.filter((u) => u.role === "DEV");
+
+  const summary = devUsers.map((user) => {
+    // Calcular deuda total
+    const userLogs = timeLogs.filter((t) => t.userId === user.id && t.status === "STOPPED");
+    const totalDebt = userLogs.reduce((acc, t) => acc + (t.payCost ?? 0), 0);
+    const totalHours = userLogs.reduce((acc, t) => acc + (t.hours ?? 0), 0);
+
+    // Calcular pagos realizados
+    const userPayments = payments.filter((p) => p.userId === user.id);
+    const totalPaid = userPayments.reduce((acc, p) => acc + p.amount, 0);
+
+    // Saldo pendiente
+    const balance = totalDebt - totalPaid;
+
+    return {
+      userId: user.id,
+      userName: user.name,
+      defaultPayRate: user.defaultPayRate ?? 0,
+      totalHours: Math.round(totalHours * 100) / 100,
+      totalDebt: Math.round(totalDebt * 100) / 100,
+      totalPaid: Math.round(totalPaid * 100) / 100,
+      balance: Math.round(balance * 100) / 100,
+    };
+  });
+
+  res.json(summary);
+});
+
 // ========== SEED/DEMO ==========
 
 app.get("/seed", (_req, res) => {
@@ -639,8 +974,8 @@ app.get("/seed", (_req, res) => {
 
 // ========== SERVER ==========
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`ChronusDev API v2 escuchando en http://localhost:${PORT}`);
+const PORT = Number(process.env.PORT) || 3001;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`ChronusDev API v2 escuchando en http://0.0.0.0:${PORT}`);
   console.log(`Login disponible en POST /auth/login`);
 });

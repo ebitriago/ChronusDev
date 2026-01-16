@@ -9,6 +9,7 @@ import type {
   TaskComment,
   TimeLog,
   Invitation,
+  Payment,
 } from "./types.js";
 
 export const users: User[] = [
@@ -17,6 +18,7 @@ export const users: User[] = [
     email: "admin@chronusdev.com",
     name: "Admin",
     role: "ADMIN",
+    defaultPayRate: 0, // Admin no cobra
     token: "token-admin-123",
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -26,6 +28,7 @@ export const users: User[] = [
     email: "juan@chronusdev.com",
     name: "Juan",
     role: "DEV",
+    defaultPayRate: 25, // $25/hr
     token: "token-juan-123",
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -101,3 +104,5 @@ export const taskComments: TaskComment[] = [];
 export const timeLogs: TimeLog[] = [];
 
 export const invitations: Invitation[] = [];
+
+export const payments: Payment[] = [];
