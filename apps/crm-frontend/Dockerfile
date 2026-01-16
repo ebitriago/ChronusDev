@@ -3,22 +3,23 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copiar package files
+# Copy root package files for workspace
 COPY package*.json ./
-COPY apps/frontend/package*.json ./apps/frontend/
+COPY apps/crm-frontend/package*.json ./apps/crm-frontend/
 
-# Instalar dependencias
-RUN npm ci --workspace=apps/frontend
+# Install dependencies
+RUN npm ci --workspace=apps/crm-frontend || npm install
 
-# Copiar código fuente
-COPY apps/frontend ./apps/frontend
+# Copy source code
+COPY apps/crm-frontend ./apps/crm-frontend
 
 # Variables de build
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ARG NEXT_PUBLIC_CRM_API_URL
+ENV NEXT_PUBLIC_CRM_API_URL=${NEXT_PUBLIC_CRM_API_URL}
 
 # Build Next.js
-RUN npm run --workspace=apps/frontend build
+WORKDIR /app/apps/crm-frontend
+RUN npm run build
 
 # Production stage
 FROM node:20-alpine AS runner
@@ -26,19 +27,19 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=3003
 
-# Crear usuario no-root
+# Create non-root user
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copiar archivos necesarios
-COPY --from=builder /app/apps/frontend/public ./apps/frontend/public
-COPY --from=builder --chown=nextjs:nodejs /app/apps/frontend/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/frontend/.next/static ./apps/frontend/.next/static
+# Copy necessary files from builder
+COPY --from=builder /app/apps/crm-frontend/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/crm-frontend/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/crm-frontend/.next/static ./.next/static
 
 USER nextjs
 
-EXPOSE 3000
+EXPOSE 3003
 
-CMD ["node", "apps/frontend/server.js"]
+CMD ["node", "server.js"]

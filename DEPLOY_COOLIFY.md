@@ -1,6 +1,51 @@
 # ChronusDev + ChronusCRM - Guía de Despliegue en Coolify
 
-## 📦 Servicios a Desplegar (4 apps)
+## 🐳 Opción 1: Despliegue con Docker Compose (Recomendado)
+
+### Paso 1: Subir a Coolify como Docker Compose
+
+1. En Coolify: **New Resource** → **Docker Compose**
+2. Conecta tu repositorio: `https://github.com/ebitriago/ChronusDev`
+3. Coolify detectará automáticamente el `docker-compose.yml`
+
+### Paso 2: Configurar Variables de Entorno
+
+Copia el contenido de `.env.example` a las variables de Coolify:
+
+```env
+# Security
+JWT_SECRET=tu-clave-secreta-super-segura
+
+# URLs externas (dominios públicos)
+CHRONUSDEV_API_URL=https://api.chronusdev.com
+CHRONUSCRM_API_URL=https://api.crm.chronusdev.com
+
+# CRM -> Dev Integration
+CHRONUSDEV_TOKEN=token-admin-123
+
+# AssistAI
+ASSISTAI_API_URL=https://public.assistai.lat
+ASSISTAI_API_TOKEN=tu-token-de-assistai
+ASSISTAI_TENANT_DOMAIN=ce230715ba86721e
+ASSISTAI_ORG_CODE=d59b32edfb28e130
+```
+
+### Paso 3: Configurar Dominios en Coolify
+
+| Puerto | Servicio | Dominio Sugerido |
+|--------|----------|------------------|
+| 3000 | ChronusDev Frontend | `app.chronusdev.com` |
+| 3001 | ChronusDev Backend | `api.chronusdev.com` |
+| 3002 | ChronusCRM Backend | `api.crm.chronusdev.com` |
+| 3003 | ChronusCRM Frontend | `crm.chronusdev.com` |
+
+### Paso 4: Deploy
+
+Click **Deploy** y espera a que los 4 contenedores estén healthy.
+
+---
+
+## 📦 Opción 2: Servicios Individuales
 
 | Servicio | Puerto | Directorio |
 |----------|--------|------------|
