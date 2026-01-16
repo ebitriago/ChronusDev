@@ -21,6 +21,9 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
+# Instalar wget para health checks
+RUN apk add --no-cache wget
+
 # Copiar package files
 COPY package*.json ./
 COPY apps/backend/package*.json ./apps/backend/
