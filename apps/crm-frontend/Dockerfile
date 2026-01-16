@@ -34,8 +34,10 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Copy necessary files from builder
-COPY --from=builder /app/public ./public
+# In standalone mode, .next/standalone contains: server.js, .next/, public/, node_modules/
+# The .next directory inside standalone already has everything needed
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+# Copy static files to ensure they're accessible (standalone includes them but we copy explicitly)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
