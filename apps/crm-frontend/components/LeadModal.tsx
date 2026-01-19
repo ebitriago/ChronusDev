@@ -167,6 +167,39 @@ export default function LeadModal({ isOpen, onClose, onSuccess, leadToEdit }: Le
                     >
                         {loading ? 'Guardando...' : 'Guardar Lead'}
                     </button>
+
+                    {leadToEdit && (
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                if (!confirm('¿Estás seguro de convertir este lead en cliente? Se eliminará de leads.')) return;
+                                setLoading(true);
+                                try {
+                                    const res = await fetch(`${API_URL}/clients/from-lead/${leadToEdit.id}`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ plan: 'STARTER' })
+                                    });
+                                    if (res.ok) {
+                                        onSuccess();
+                                        onClose();
+                                        // Optional: Redirect to client page or show toast
+                                    } else {
+                                        alert('Error al convertir lead');
+                                    }
+                                } catch (err) {
+                                    console.error(err);
+                                    alert('Error de conexión');
+                                } finally {
+                                    setLoading(false);
+                                }
+                            }}
+                            className="w-full py-3 rounded-xl font-bold text-emerald-700 border border-emerald-200 hover:bg-emerald-50 transition-colors text-sm"
+                            disabled={loading}
+                        >
+                            ⚡ Convertir a Cliente
+                        </button>
+                    )}
                 </form>
             </div>
         </div>

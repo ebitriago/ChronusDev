@@ -19,6 +19,47 @@ export default function Developers() {
                 </div>
             </div>
 
+            {/* API Documentation Card - Featured */}
+            <div className="mb-8 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 rounded-2xl p-8 text-white shadow-xl shadow-indigo-500/30 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-32 translate-x-32" />
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24" />
+
+                <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+                    <div>
+                        <h3 className="text-2xl font-bold mb-2 flex items-center gap-2">
+                            📚 API Documentation
+                        </h3>
+                        <p className="text-white/80 max-w-lg">
+                            Documentación interactiva completa de todos los endpoints del CRM.
+                            Prueba las APIs directamente desde el navegador con Scalar.
+                        </p>
+                        <div className="flex flex-wrap gap-2 mt-4">
+                            <span className="px-3 py-1 bg-white/20 rounded-full text-xs font-medium">Customers</span>
+                            <span className="px-3 py-1 bg-white/20 rounded-full text-xs font-medium">Tickets</span>
+                            <span className="px-3 py-1 bg-white/20 rounded-full text-xs font-medium">AssistAI</span>
+                            <span className="px-3 py-1 bg-white/20 rounded-full text-xs font-medium">Inbox</span>
+                            <span className="px-3 py-1 bg-white/20 rounded-full text-xs font-medium">Notifications</span>
+                        </div>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                        <a
+                            href={`${API_URL}/api/docs`}
+                            target="_blank"
+                            className="px-6 py-3 bg-white text-indigo-700 rounded-xl font-bold hover:bg-indigo-50 transition-colors shadow-lg flex items-center gap-2"
+                        >
+                            <span>🚀</span> Abrir API Docs
+                        </a>
+                        <a
+                            href={`${API_URL}/api/openapi.json`}
+                            target="_blank"
+                            className="px-6 py-2 bg-white/20 text-white rounded-xl font-medium hover:bg-white/30 transition-colors text-center text-sm"
+                        >
+                            ⬇️ Descargar OpenAPI Spec
+                        </a>
+                    </div>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Auth & Config */}
                 <div className="space-y-6">

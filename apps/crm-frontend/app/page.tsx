@@ -48,8 +48,14 @@ type User = {
 };
 
 async function fetchUsers(): Promise<User[]> {
-  const res = await fetch(`${API_URL}/users`);
-  return res.json();
+  try {
+    const res = await fetch(`${API_URL}/users`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
 }
 
 async function fetchStats(): Promise<Stats> {

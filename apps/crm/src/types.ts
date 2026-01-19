@@ -9,6 +9,20 @@ export type InvoiceStatus = "DRAFT" | "SENT" | "PAID" | "OVERDUE" | "CANCELLED";
 
 export type CommunicationType = "EMAIL" | "WHATSAPP" | "CALL" | "NOTE";
 
+// Contact Identity - allows one client to have multiple contact methods
+export type ContactType = "phone" | "whatsapp" | "instagram" | "email" | "messenger";
+
+export interface ContactIdentity {
+    id: string;
+    clientId?: string;        // Linked client (null = unassigned lead)
+    type: ContactType;
+    value: string;            // @username, +phone, email
+    displayName?: string;     // Name from platform
+    verified: boolean;
+    lastMessageAt?: Date;
+    createdAt: Date;
+}
+
 // Cliente del SaaS
 export interface Customer {
     id: string;
@@ -20,11 +34,14 @@ export interface Customer {
     status: CustomerStatus;
     monthlyRevenue: number;
     currency: string;
+    // Multiple contact identities (IG, WhatsApp, etc.)
+    contactIds?: string[];  // IDs of linked ContactIdentity
     // Relación con ChronusDev
     chronusDevClientId?: string; // ID del cliente en ChronusDev
     chronusDevDefaultProjectId?: string; // Proyecto por defecto para tickets
     tags: string[];
     notes?: string;
+    source?: "lead" | "manual" | "chat";  // How the client was created
     createdAt: Date;
     updatedAt: Date;
 }

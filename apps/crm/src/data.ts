@@ -216,3 +216,64 @@ export const leads: Lead[] = [
         updatedAt: new Date(),
     },
 ];
+
+// ==========================================
+// AssistAI Data Persistence
+// ==========================================
+import * as fs from 'fs';
+import * as path from 'path';
+
+const ASSISTAI_DATA_FILE = path.join(process.cwd(), 'assistai_cache.json');
+
+export interface AssistAICache {
+    lastSync: string;
+    agents: any[];
+    conversations: any[];
+    agentConfigs: any[];
+}
+
+const defaultCache: AssistAICache = {
+    lastSync: '',
+    agents: [],
+    conversations: [],
+    agentConfigs: []
+};
+
+export function loadAssistAICache(): AssistAICache {
+    try {
+        if (fs.existsSync(ASSISTAI_DATA_FILE)) {
+            const data = fs.readFileSync(ASSISTAI_DATA_FILE, 'utf-8');
+            const parsed = JSON.parse(data);
+            console.log(`📂 Loaded AssistAI cache: ${parsed.agents?.length || 0} agents, ${parsed.conversations?.length || 0} conversations`);
+            return {
+                ...defaultCache,
+                ...parsed,
+            };
+        }
+    } catch (err) {
+        console.error('⚠️ Error loading AssistAI cache:', err);
+    }
+    return defaultCache;
+}
+
+export function saveAssistAICache(cache: AssistAICache): void {
+    try {
+        cache.lastSync = new Date().toISOString();
+        fs.writeFileSync(ASSISTAI_DATA_FILE, JSON.stringify(cache, null, 2));
+        console.log(`💾 Saved AssistAI cache: ${cache.agents?.length || 0} agents, ${cache.conversations?.length || 0} conversations`);
+    } catch (err) {
+        console.error('⚠️ Error saving AssistAI cache:', err);
+    }
+}
+
+export function getCacheInfo(): { exists: boolean; lastSync: string; stats: { agents: number; conversations: number } } {
+    const cache = loadAssistAICache();
+    return {
+        exists: !!cache.lastSync,
+        lastSync: cache.lastSync,
+        stats: {
+            agents: cache.agents?.length || 0,
+            conversations: cache.conversations?.length || 0
+        }
+    };
+}
