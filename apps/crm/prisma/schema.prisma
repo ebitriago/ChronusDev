@@ -1,0 +1,567 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ==================== AUTHENTICATION ====================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String?   // Null if using OAuth only
+  name          String
+  role          Role      @default(AGENT)
+  avatar        String?
+  phone         String?
+  
+  // AssistAI SSO
+  assistaiId    String?   @unique
+  assistaiToken String?
+  
+  // Relations
+  assignedTickets   Ticket[]    @relation("AssignedTickets")
+  createdTickets    Ticket[]    @relation("CreatedTickets")
+  createdLeads      Lead[]      @relation("CreatedLeads")
+  notifications     Notification[]
+  sessions          Session[]
+  activities        Activity[]
+  integrations      Integration[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  
+  @@index([email])
+  @@index([assistaiId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  
+  @@index([token])
+  @@index([userId])
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  AGENT
+  VIEWER
+}
+
+// ==================== CUSTOMERS ====================
+
+model Customer {
+  id              String    @id @default(cuid())
+  name            String
+  email           String    @unique
+  phone           String?
+  company         String?
+  plan            Plan      @default(FREE)
+  status          CustomerStatus @default(TRIAL)
+  monthlyRevenue  Float     @default(0)
+  currency        String    @default("USD")
+  notes           String?
+  customFields    Json?
+  
+  // External IDs
+  chronusDevClientId      String?
+  chronusDevDefaultProjectId String?
+  
+  // Relations
+  contacts      Contact[]
+  tickets       Ticket[]
+  invoices      Invoice[]
+  leads         Lead[]      @relation("ConvertedLeads")
+  conversations Conversation[]
+  transactions  Transaction[]
+  activities    Activity[]
+  tags          CustomerTag[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@index([email])
+  @@index([status])
+}
+
+model Contact {
+  id          String      @id @default(cuid())
+  customerId  String
+  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  type        ContactType
+  value       String
+  displayName String?
+  verified    Boolean     @default(false)
+  isPrimary   Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  
+  @@unique([type, value])
+  @@index([customerId])
+}
+
+enum Plan {
+  FREE
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+enum CustomerStatus {
+  TRIAL
+  ACTIVE
+  INACTIVE
+  CHURNED
+}
+
+enum ContactType {
+  EMAIL
+  PHONE
+  WHATSAPP
+  INSTAGRAM
+  TELEGRAM
+}
+
+// ==================== LEADS ====================
+
+model Lead {
+  id          String      @id @default(cuid())
+  name        String
+  email       String
+  phone       String?
+  company     String?
+  value       Float       @default(0)
+  status      LeadStatus  @default(NEW)
+  source      LeadSource  @default(MANUAL)
+  score       Int         @default(0)
+  notes       String?
+  customFields Json?
+  
+  // Relations
+  createdById String?
+  createdBy   User?       @relation("CreatedLeads", fields: [createdById], references: [id])
+  convertedToId String?
+  convertedTo Customer?   @relation("ConvertedLeads", fields: [convertedToId], references: [id])
+  tags        LeadTag[]
+  activities  Activity[]
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  convertedAt DateTime?
+  
+  @@index([email])
+  @@index([status])
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum LeadSource {
+  MANUAL
+  WEBHOOK
+  REFERRAL
+  ORGANIC
+  PAID
+  SOCIAL
+  ASSISTAI
+}
+
+// ==================== TICKETS ====================
+
+model Ticket {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  status      TicketStatus @default(OPEN)
+  priority    Priority     @default(MEDIUM)
+  
+  // Relations
+  customerId  String
+  customer    Customer     @relation(fields: [customerId], references: [id])
+  assignedToId String?
+  assignedTo  User?        @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  createdById String?
+  createdBy   User?        @relation("CreatedTickets", fields: [createdById], references: [id])
+  
+  // External
+  chronusDevTaskId String?
+  
+  customFields Json?
+  
+  // Relations
+  comments    TicketComment[]
+  activities  Activity[]
+  
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  resolvedAt  DateTime?
+  
+  @@index([customerId])
+  @@index([status])
+  @@index([assignedToId])
+}
+
+model TicketComment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  content   String
+  authorId  String?
+  isInternal Boolean @default(false)
+  createdAt DateTime @default(now())
+  
+  @@index([ticketId])
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// ==================== INVOICES ====================
+
+model Invoice {
+  id          String        @id @default(cuid())
+  number      String        @unique
+  customerId  String
+  customer    Customer      @relation(fields: [customerId], references: [id])
+  amount      Float
+  currency    String        @default("USD")
+  status      InvoiceStatus @default(DRAFT)
+  dueDate     DateTime
+  paidAt      DateTime?
+  notes       String?
+  
+  // Relations
+  items       InvoiceItem[]
+  payments    Payment[]
+  
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  @@index([customerId])
+  @@index([status])
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Int      @default(1)
+  unitPrice   Float
+  total       Float
+  
+  @@index([invoiceId])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice       @relation(fields: [invoiceId], references: [id])
+  amount      Float
+  method      PaymentMethod
+  reference   String?
+  paidAt      DateTime      @default(now())
+  
+  @@index([invoiceId])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  CARD
+  PAYPAL
+  CRYPTO
+  OTHER
+}
+
+// ==================== TRANSACTIONS ====================
+
+model Transaction {
+  id          String          @id @default(cuid())
+  type        TransactionType
+  amount      Float
+  currency    String          @default("USD")
+  description String?
+  category    String?
+  customerId  String?
+  customer    Customer?       @relation(fields: [customerId], references: [id])
+  date        DateTime        @default(now())
+  createdAt   DateTime        @default(now())
+  
+  @@index([type])
+  @@index([date])
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+// ==================== CONVERSATIONS ====================
+
+model Conversation {
+  id              String            @id @default(cuid())
+  sessionId       String            @unique
+  platform        Platform
+  customerName    String?
+  customerContact String
+  agentCode       String?
+  agentName       String?
+  status          ConversationStatus @default(ACTIVE)
+  
+  // Relations
+  customerId      String?
+  customer        Customer?         @relation(fields: [customerId], references: [id])
+  messages        Message[]
+  takeover        Takeover?
+  
+  // Metadata
+  metadata        Json?
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  @@index([sessionId])
+  @@index([customerId])
+  @@index([platform])
+}
+
+model Message {
+  id              String        @id @default(cuid())
+  conversationId  String
+  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  content         String
+  sender          MessageSender
+  senderName      String?
+  mediaUrl        String?
+  mediaType       MediaType?
+  status          MessageStatus @default(SENT)
+  metadata        Json?
+  
+  createdAt       DateTime      @default(now())
+  
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+model Takeover {
+  id              String       @id @default(cuid())
+  conversationId  String       @unique
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  takenById       String
+  durationMinutes Int          @default(30)
+  expiresAt       DateTime
+  createdAt       DateTime     @default(now())
+}
+
+enum Platform {
+  WHATSAPP
+  INSTAGRAM
+  MESSENGER
+  ASSISTAI
+  WEB
+}
+
+enum ConversationStatus {
+  ACTIVE
+  RESOLVED
+  ARCHIVED
+}
+
+enum MessageSender {
+  USER
+  AGENT
+  AI
+}
+
+enum MediaType {
+  IMAGE
+  AUDIO
+  VIDEO
+  DOCUMENT
+}
+
+enum MessageStatus {
+  SENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  
+  @@index([userId])
+  @@index([read])
+}
+
+enum NotificationType {
+  LEAD
+  CLIENT
+  TICKET
+  MESSAGE
+  CONVERSION
+  SYSTEM
+}
+
+// ==================== ACTIVITY LOG ====================
+
+model Activity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  description String
+  
+  // Polymorphic relations
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id])
+  customerId  String?
+  customer    Customer?    @relation(fields: [customerId], references: [id])
+  leadId      String?
+  lead        Lead?        @relation(fields: [leadId], references: [id])
+  ticketId    String?
+  ticket      Ticket?      @relation(fields: [ticketId], references: [id])
+  
+  metadata    Json?
+  createdAt   DateTime     @default(now())
+  
+  @@index([customerId])
+  @@index([leadId])
+  @@index([ticketId])
+  @@index([createdAt])
+}
+
+enum ActivityType {
+  CREATED
+  UPDATED
+  DELETED
+  STATUS_CHANGE
+  ASSIGNMENT
+  COMMENT
+  EMAIL_SENT
+  CALL
+  MEETING
+  NOTE
+}
+
+// ==================== TAGS ====================
+
+model Tag {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  color       String        @default("#6B7280")
+  customers   CustomerTag[]
+  leads       LeadTag[]
+  createdAt   DateTime      @default(now())
+}
+
+model CustomerTag {
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tagId       String
+  tag         Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  
+  @@id([customerId, tagId])
+}
+
+model LeadTag {
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tagId       String
+  tag         Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  
+  @@id([leadId, tagId])
+}
+
+// ==================== CHANNELS ====================
+
+model Channel {
+  id          String       @id @default(cuid())
+  name        String
+  platform    Platform
+  mode        ChannelMode  @default(HYBRID)
+  enabled     Boolean      @default(true)
+  
+  // AssistAI config
+  assistaiAgentCode String?
+  autoResumeMinutes Int      @default(30)
+  
+  // Provider config
+  config      Json?
+  
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+enum ChannelMode {
+  AI_ONLY
+  HUMAN_ONLY
+  HYBRID
+}
+
+// ==================== INTEGRATIONS ====================
+
+model Integration {
+  id          String   @id @default(cuid())
+  userId      String?  // If null, it's system-wide
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider    String   // 'GOOGLE', 'GMAIL', 'ASSISTAI', etc.
+  credentials Json     // Stores clientId, clientSecret, etc.
+  isEnabled   Boolean  @default(true)
+  metadata    Json?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([userId, provider])
+}

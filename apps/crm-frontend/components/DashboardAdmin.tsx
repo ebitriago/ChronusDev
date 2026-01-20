@@ -14,6 +14,13 @@ export default function DashboardAdmin() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // AI Predictions state
+  const [predictions, setPredictions] = useState<{
+    mrr: { current: number; forecast: { month: string; mrr: number }[]; projectedAnnual: number };
+    churn: { atRiskCount: number; atRiskMRR: number; customers: { id: string; name: string; riskLevel: string; reason: string }[] };
+    pipeline: { totalValue: number; hotLeadsCount: number; avgScore: number };
+  } | null>(null);
+
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
@@ -55,6 +62,18 @@ export default function DashboardAdmin() {
         }
       }
       setSummaries(sums);
+
+      // Load AI Predictions
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+        const predRes = await fetch(`${API_URL}/analytics/predictions`);
+        if (predRes.ok) {
+          const predData = await predRes.json();
+          setPredictions(predData);
+        }
+      } catch (predErr) {
+        console.warn('Could not load predictions:', predErr);
+      }
     } catch (err: any) {
       console.error('Error loading data:', err);
       setError(err.message || 'Error al cargar los datos');
@@ -464,6 +483,101 @@ export default function DashboardAdmin() {
           </ResponsiveContainer>
         </div>
       )}
+
+      {/* AI Predictions Widget */}
+      {predictions && (
+        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl border border-purple-100 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center text-white text-lg">
+              ✨
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Predicciones IA</h2>
+              <p className="text-gray-500 text-sm">Insights inteligentes del CRM</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* MRR Forecast */}
+            <div className="bg-white rounded-xl p-4 border border-purple-100">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">📈</span>
+                <span className="font-bold text-gray-800">MRR Forecast</span>
+              </div>
+              <div className="text-2xl font-bold text-emerald-600 mb-2">
+                ${predictions.mrr.current.toLocaleString()}
+              </div>
+              <div className="space-y-1">
+                {predictions.mrr.forecast.slice(1).map((f, i) => (
+                  <div key={i} className="flex justify-between text-xs">
+                    <span className="text-gray-500">{f.month}</span>
+                    <span className="font-mono font-bold text-gray-700">${f.mrr.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <span className="text-xs text-gray-500">Proyección Anual:</span>
+                <span className="ml-2 text-sm font-bold text-purple-600">${Math.round(predictions.mrr.projectedAnnual).toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Churn Risk */}
+            <div className="bg-white rounded-xl p-4 border border-purple-100">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">⚠️</span>
+                <span className="font-bold text-gray-800">Riesgo Churn</span>
+              </div>
+              <div className="flex items-baseline gap-2 mb-3">
+                <span className={`text-2xl font-bold ${predictions.churn.atRiskCount > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                  {predictions.churn.atRiskCount}
+                </span>
+                <span className="text-sm text-gray-500">clientes en riesgo</span>
+              </div>
+              {predictions.churn.atRiskMRR > 0 && (
+                <div className="mb-3 p-2 bg-red-50 rounded-lg">
+                  <span className="text-xs text-red-600">MRR en riesgo:</span>
+                  <span className="ml-2 font-bold text-red-700">${predictions.churn.atRiskMRR.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="space-y-2">
+                {predictions.churn.customers.slice(0, 3).map((c, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-700 truncate max-w-[100px]">{c.name}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${c.riskLevel === 'HIGH' ? 'bg-red-100 text-red-700' :
+                        c.riskLevel === 'MEDIUM' ? 'bg-amber-100 text-amber-700' :
+                          'bg-gray-100 text-gray-600'
+                      }`}>
+                      {c.reason}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Pipeline */}
+            <div className="bg-white rounded-xl p-4 border border-purple-100">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">🎯</span>
+                <span className="font-bold text-gray-800">Pipeline Leads</span>
+              </div>
+              <div className="text-2xl font-bold text-blue-600 mb-2">
+                ${predictions.pipeline.totalValue.toLocaleString()}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-orange-50 rounded-lg p-2 text-center">
+                  <div className="text-lg font-bold text-orange-600">{predictions.pipeline.hotLeadsCount}</div>
+                  <div className="text-[10px] text-orange-500 font-medium">Hot Leads</div>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-2 text-center">
+                  <div className="text-lg font-bold text-blue-600">{predictions.pipeline.avgScore}</div>
+                  <div className="text-[10px] text-blue-500 font-medium">Score Promedio</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Nueva Proyecto */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">

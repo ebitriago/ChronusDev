@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useToast } from './Toast';
+import ClientProfile from './ClientProfile';
 
 const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
 
@@ -16,6 +17,7 @@ type ChatMessage = {
     mediaUrl?: string;
     mediaType?: 'image' | 'audio' | 'document';
     timestamp: string;
+    status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 };
 
 type Conversation = {
@@ -81,6 +83,7 @@ export default function Inbox() {
     const [syncing, setSyncing] = useState(false);
     const [lastPoll, setLastPoll] = useState<string | null>(null);
     const [newMessageCount, setNewMessageCount] = useState(0);
+    const [searchTerm, setSearchTerm] = useState('');
 
     // Client matching state
     const [matchedClient, setMatchedClient] = useState<{ id: string; name: string; contacts: any[] } | null>(null);
@@ -92,6 +95,35 @@ export default function Inbox() {
         company: '',
         notes: ''
     });
+
+    // Link to existing client state
+    const [showLinkClientModal, setShowLinkClientModal] = useState(false);
+    const [clientSearchTerm, setClientSearchTerm] = useState('');
+
+    // New Chat State
+    const [showNewChatModal, setShowNewChatModal] = useState(false);
+    const [newChatPhone, setNewChatPhone] = useState('');
+    const [newChatPlatform, setNewChatPlatform] = useState<'assistai' | 'whatsapp'>('assistai');
+    const [initiatingChat, setInitiatingChat] = useState(false);
+    const [clientSearchResults, setClientSearchResults] = useState<{ id: string; name: string; email: string }[]>([]);
+    const [allClients, setAllClients] = useState<{ id: string; name: string; email: string }[]>([]);
+
+    // Client 360 View state
+    const [show360View, setShow360View] = useState(false);
+
+    // Takeover state (hybrid AI/human control)
+    const [takeoverStatus, setTakeoverStatus] = useState<{
+        active: boolean;
+        takenBy?: string;
+        remainingMinutes?: number;
+        expiresAt?: string;
+    } | null>(null);
+    const [takingOver, setTakingOver] = useState(false);
+
+    // AI Suggestions state
+    const [aiSuggestions, setAiSuggestions] = useState<{ text: string; tone: string }[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
     // Load subscribed agents from localStorage on mount
     useEffect(() => {
@@ -112,11 +144,13 @@ export default function Inbox() {
     useEffect(() => {
         Promise.all([
             fetch(`${API_URL}/conversations`).then(r => r.json()),
-            fetch(`${API_URL}/assistai/agents`).then(r => r.ok ? r.json() : { data: [] })
+            fetch(`${API_URL}/assistai/agents`).then(r => r.ok ? r.json() : { data: [] }),
+            fetch(`${API_URL}/clients`).then(r => r.ok ? r.json() : [])
         ])
-            .then(([convData, agentsData]) => {
+            .then(([convData, agentsData, clientsData]) => {
                 setConversations(convData);
                 setAgents(agentsData.data || []);
+                setAllClients(Array.isArray(clientsData) ? clientsData : []);
                 setLoading(false);
             })
             .catch(err => {
@@ -145,8 +179,13 @@ export default function Inbox() {
                     setConversations(convData);
                 }
             }
-        } catch (err) {
-            console.error('Poll error:', err);
+        } catch (err: any) {
+            // Suppress noisy network errors (ERR_NETWORK_CHANGED, etc.)
+            if (err?.message?.includes('Failed to fetch')) {
+                // Silent - network temporarily unavailable
+            } else {
+                console.warn('Poll issue:', err?.message || err);
+            }
         }
     }, [lastPoll]);
 
@@ -192,6 +231,24 @@ export default function Inbox() {
         newSocket.on('inbox_refresh', () => {
             // Reload conversations when sync happens
             fetch(`${API_URL}/conversations`).then(r => r.json()).then(setConversations);
+        });
+
+        // Takeover events
+        newSocket.on('takeover_started', ({ sessionId: sid, takeover }) => {
+            if (selectedConversation?.sessionId === sid) {
+                setTakeoverStatus({
+                    active: true,
+                    takenBy: takeover.takenBy,
+                    remainingMinutes: Math.round((new Date(takeover.expiresAt).getTime() - Date.now()) / 60000),
+                    expiresAt: takeover.expiresAt
+                });
+            }
+        });
+
+        newSocket.on('takeover_ended', ({ sessionId: sid }) => {
+            if (selectedConversation?.sessionId === sid) {
+                setTakeoverStatus({ active: false });
+            }
         });
 
         return () => { newSocket.disconnect(); };
@@ -247,9 +304,17 @@ export default function Inbox() {
 
     // Create client from chat
     const handleCreateClientFromChat = async () => {
-        if (!selectedConversation || !newClientData.name.trim()) return;
+        console.log('[DEBUG] handleCreateClientFromChat called');
+        console.log('[DEBUG] selectedConversation:', selectedConversation);
+        console.log('[DEBUG] newClientData:', newClientData);
+
+        if (!selectedConversation || !newClientData.name.trim()) {
+            console.log('[DEBUG] Early return - missing data');
+            return;
+        }
 
         try {
+            console.log('[DEBUG] Sending POST request to /clients/from-chat');
             const res = await fetch(`${API_URL}/clients/from-chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -265,18 +330,110 @@ export default function Inbox() {
                 })
             });
 
+            console.log('[DEBUG] Response status:', res.status);
             if (res.ok) {
                 const data = await res.json();
+                console.log('[DEBUG] Success:', data);
                 setMatchedClient(data.client);
                 setShowCreateClientModal(false);
                 setNewClientData({ name: '', email: '', phone: '', company: '', notes: '' });
                 showToast('Cliente creado exitosamente', 'success');
             } else {
+                console.log('[DEBUG] Error response:', await res.text());
                 showToast('Error al crear cliente', 'error');
             }
         } catch (err) {
-            console.error('Error creating client:', err);
+            console.error('[DEBUG] Error creating client:', err);
             showToast('Error de conexión', 'error');
+        }
+    };
+
+    // Link conversation contact to existing client
+    const handleLinkToClient = async (clientId: string) => {
+        if (!selectedConversation) return;
+
+        try {
+            const res = await fetch(`${API_URL}/clients/${clientId}/contacts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: selectedConversation.platform,
+                    value: selectedConversation.customerContact
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setMatchedClient(data.client);
+                setShowLinkClientModal(false);
+                setClientSearchTerm('');
+                showToast(`Contacto vinculado a ${data.client.name}`, 'success');
+            } else {
+                showToast('Error al vincular contacto', 'error');
+            }
+        } catch (err) {
+            console.error('Error linking contact:', err);
+            showToast('Error de conexión', 'error');
+        }
+    };
+
+    // Filter clients for search
+    const filteredClients = clientSearchTerm.trim()
+        ? allClients.filter(c =>
+            c.name.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
+            c.email?.toLowerCase().includes(clientSearchTerm.toLowerCase())
+        )
+        : allClients;
+
+    // Check takeover status for a conversation
+    const checkTakeoverStatus = async (sessionId: string) => {
+        try {
+            const res = await fetch(`${API_URL}/conversations/${sessionId}/takeover-status`);
+            const data = await res.json();
+            setTakeoverStatus(data);
+        } catch (err) {
+            console.error('Error checking takeover status:', err);
+            setTakeoverStatus({ active: false });
+        }
+    };
+
+    // Take control from AI
+    const handleTakeover = async () => {
+        if (!selectedConversation) return;
+        setTakingOver(true);
+        try {
+            const res = await fetch(`${API_URL}/conversations/${selectedConversation.sessionId}/takeover`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: 'admin', durationMinutes: 60 })
+            });
+            if (res.ok) {
+                await checkTakeoverStatus(selectedConversation.sessionId);
+                showToast('Has tomado el control de la conversación', 'success');
+            } else {
+                showToast('Error al tomar control', 'error');
+            }
+        } catch (err) {
+            console.error('Error taking over:', err);
+            showToast('Error de conexión', 'error');
+        } finally {
+            setTakingOver(false);
+        }
+    };
+
+    // Release control back to AI
+    const handleRelease = async () => {
+        if (!selectedConversation) return;
+        try {
+            const res = await fetch(`${API_URL}/conversations/${selectedConversation.sessionId}/release`, {
+                method: 'POST'
+            });
+            if (res.ok) {
+                setTakeoverStatus({ active: false });
+                showToast('IA retomó el control de la conversación', 'info');
+            }
+        } catch (err) {
+            console.error('Error releasing:', err);
         }
     };
 
@@ -290,6 +447,8 @@ export default function Inbox() {
         if (conv.customerContact) {
             fetchClientMatch(conv.customerContact);
         }
+        // Check takeover status
+        checkTakeoverStatus(conv.sessionId);
     };
 
     // Send reply
@@ -298,29 +457,147 @@ export default function Inbox() {
 
         setSending(true);
         try {
-            const res = await fetch(`${API_URL}/chat/send`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sessionId: selectedConversation.sessionId,
-                    content: replyText.trim()
-                })
-            });
+            // Check if this is an AssistAI/WhatsApp/Instagram conversation
+            const isAssistAI = ['assistai', 'whatsapp', 'instagram'].includes(selectedConversation.platform);
+
+            let res;
+            if (isAssistAI && selectedConversation.sessionId) {
+                // Use AssistAI API to send message
+                res = await fetch(`${API_URL}/assistai/conversations/${selectedConversation.sessionId}/messages`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        content: replyText.trim(),
+                        senderName: 'Agente CRM'
+                    })
+                });
+            } else {
+                // Fallback to generic chat endpoint
+                res = await fetch(`${API_URL}/chat/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: selectedConversation.sessionId,
+                        content: replyText.trim()
+                    })
+                });
+            }
 
             if (res.ok) {
+                const data = await res.json();
                 setReplyText('');
+                showToast('Mensaje enviado a AssistAI', 'success');
+
+                // Add message to local state for immediate feedback
+                const newMessage: ChatMessage = {
+                    id: `msg-${Date.now()}`,
+                    sessionId: selectedConversation.sessionId,
+                    from: 'agent',
+                    platform: selectedConversation.platform,
+                    content: replyText.trim(),
+                    sender: 'agent',
+                    timestamp: new Date().toISOString()
+                };
+                setSelectedConversation({
+                    ...selectedConversation,
+                    messages: [...selectedConversation.messages, newMessage]
+                });
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                showToast(`Error: ${errData.error || 'No se pudo enviar'}`, 'error');
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
+            showToast('Error enviando mensaje', 'error');
         } finally {
             setSending(false);
         }
     };
 
-    // Filter conversations by subscribed agents
-    const filteredConversations = subscribedAgents.length === 0
-        ? conversations
-        : conversations.filter(c => subscribedAgents.includes(c.agentCode || ''));
+    // AI Suggestions - fetch contextual reply suggestions
+    const handleGetSuggestions = async () => {
+        if (!selectedConversation) return;
+        setLoadingSuggestions(true);
+        setShowSuggestions(true);
+        try {
+            const res = await fetch(`${API_URL}/ai/suggest-reply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId: selectedConversation.sessionId,
+                    lastMessages: selectedConversation.messages.slice(-5)
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setAiSuggestions(data.suggestions || []);
+            }
+        } catch (err) {
+            console.error('Error getting suggestions:', err);
+            setAiSuggestions([]);
+        } finally {
+            setLoadingSuggestions(false);
+        }
+    };
+
+    const handleUseSuggestion = (text: string) => {
+        setReplyText(text);
+        setShowSuggestions(false);
+    };
+
+    // Initiate Chat
+    const handleInitiateChat = async () => {
+        if (!newChatPhone.trim()) {
+            showToast('Ingresa un número de teléfono', 'error');
+            return;
+        }
+        setInitiatingChat(true);
+        try {
+            const res = await fetch(`${API_URL}/conversations/lookup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: newChatPhone.trim(), platform: newChatPlatform })
+            });
+            const data = await res.json();
+
+            if (res.ok && data.found) {
+                const existing = conversations.find(c => c.sessionId === data.sessionId);
+                if (existing) {
+                    setSelectedConversation(existing);
+                } else {
+                    setConversations(prev => [data.conversation, ...prev]);
+                    setSelectedConversation(data.conversation);
+                }
+                setShowNewChatModal(false);
+                setNewChatPhone('');
+                showToast('Conversación abierta', 'success');
+            } else {
+                showToast(data.error || 'No se encontró conversación. Asegúrate que el cliente haya escrito antes.', 'error');
+            }
+        } catch (err: any) {
+            showToast(err.message || 'Error iniciando chat', 'error');
+        } finally {
+            setInitiatingChat(false);
+        }
+    };
+
+    // Filter conversations by subscribed agents AND search term
+    const filteredConversations = conversations.filter(c => {
+        // Agent filter
+        if (subscribedAgents.length > 0 && !subscribedAgents.includes(c.agentCode || '')) {
+            return false;
+        }
+        // Search filter (fast client-side)
+        if (searchTerm.trim()) {
+            const term = searchTerm.toLowerCase();
+            const matchesName = c.customerName?.toLowerCase().includes(term);
+            const matchesContact = c.customerContact?.toLowerCase().includes(term);
+            const matchesAgent = c.agentName?.toLowerCase().includes(term);
+            const matchesMessage = c.messages.some(m => m.content.toLowerCase().includes(term));
+            return matchesName || matchesContact || matchesAgent || matchesMessage;
+        }
+        return true;
+    });
 
     return (
         <>
@@ -331,6 +608,25 @@ export default function Inbox() {
                         <div className="flex items-center justify-between mb-2">
                             <h3 className="font-bold text-gray-800">Inbox Unificado</h3>
                             <div className="flex items-center gap-2">
+                                {/* Search Input */}
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        value={searchTerm}
+                                        onChange={e => setSearchTerm(e.target.value)}
+                                        placeholder="Buscar..."
+                                        className="w-32 sm:w-40 pl-7 pr-6 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
+                                    />
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
+                                    {searchTerm && (
+                                        <button
+                                            onClick={() => setSearchTerm('')}
+                                            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
                                 {newMessageCount > 0 && (
                                     <span className="px-2 py-0.5 bg-red-500 text-white rounded-full text-[10px] font-bold animate-pulse">
                                         {newMessageCount} nuevo{newMessageCount > 1 ? 's' : ''}
@@ -342,6 +638,13 @@ export default function Inbox() {
                                     title="Configurar agentes"
                                 >
                                     ⚙️
+                                </button>
+                                <button
+                                    onClick={() => setShowNewChatModal(true)}
+                                    className="p-1.5 rounded-lg bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-colors"
+                                    title="Nuevo Chat"
+                                >
+                                    ➕
                                 </button>
                             </div>
                         </div>
@@ -483,14 +786,42 @@ export default function Inbox() {
                                         </button>
                                     )}
 
-                                    {/* Agent Info */}
+                                    {/* Takeover Control - AI/Human Indicator */}
                                     {selectedConversation.agentName && (
-                                        <div className="flex items-center gap-2 bg-purple-50 px-3 py-2 rounded-xl border border-purple-100">
-                                            <span className="text-lg">🤖</span>
+                                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${takeoverStatus?.active
+                                            ? 'bg-orange-50 border-orange-200'
+                                            : 'bg-purple-50 border-purple-100'
+                                            }`}>
+                                            <span className="text-lg">{takeoverStatus?.active ? '👤' : '🤖'}</span>
                                             <div>
-                                                <p className="text-xs font-bold text-purple-700">{selectedConversation.agentName}</p>
-                                                <p className="text-[10px] text-purple-500">Agente AssistAI</p>
+                                                <p className={`text-xs font-bold ${takeoverStatus?.active ? 'text-orange-700' : 'text-purple-700'}`}>
+                                                    {takeoverStatus?.active ? 'Control Humano' : selectedConversation.agentName}
+                                                </p>
+                                                <p className={`text-[10px] ${takeoverStatus?.active ? 'text-orange-500' : 'text-purple-500'}`}>
+                                                    {takeoverStatus?.active
+                                                        ? `${takeoverStatus.remainingMinutes || 0} min restantes`
+                                                        : 'IA Activa'
+                                                    }
+                                                </p>
                                             </div>
+                                            {takeoverStatus?.active ? (
+                                                <button
+                                                    onClick={handleRelease}
+                                                    className="ml-2 px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white text-[10px] font-bold rounded-lg transition-colors"
+                                                    title="Devolver control a la IA"
+                                                >
+                                                    🤖 Devolver a IA
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={handleTakeover}
+                                                    disabled={takingOver}
+                                                    className="ml-2 px-2.5 py-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-[10px] font-bold rounded-lg transition-colors"
+                                                    title="Tomar control de la conversación"
+                                                >
+                                                    {takingOver ? '...' : '👤 Tomar Control'}
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -522,10 +853,16 @@ export default function Inbox() {
                                                 }`}>
                                                 {msg.content && <p>{msg.content}</p>}
                                                 {renderMedia(msg)}
-                                                <div className={`flex items-center gap-2 mt-1 ${msg.sender === 'agent' ? 'justify-end' : ''}`}>
+                                                <div className={`flex items-center gap-1 ${msg.sender === 'agent' ? 'justify-end' : ''}`}>
                                                     <span className={`text-[10px] ${msg.sender === 'agent' ? 'text-emerald-100' : 'text-gray-400'}`}>
                                                         {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                     </span>
+                                                    {msg.sender === 'agent' && (
+                                                        <span className={`text-[10px] font-bold ${msg.status === 'read' ? 'text-blue-200' : 'text-emerald-200'}`} title={msg.status}>
+                                                            {msg.status === 'read' || msg.status === 'delivered' ? '✓✓' : (msg.status === 'sent' ? '✓' : '🕒')}
+                                                            {msg.status === 'failed' && '❌'}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -536,14 +873,49 @@ export default function Inbox() {
 
                             {/* Reply Input */}
                             <div className="p-4 border-t border-gray-100 bg-white">
+                                {/* AI Suggestions Panel */}
+                                {showSuggestions && (
+                                    <div className="mb-3 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-bold text-purple-700">✨ Sugerencias IA</span>
+                                            <button onClick={() => setShowSuggestions(false)} className="text-purple-400 hover:text-purple-600 text-xs">✕</button>
+                                        </div>
+                                        {loadingSuggestions ? (
+                                            <div className="text-center py-4">
+                                                <span className="inline-block w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></span>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {aiSuggestions.map((s, i) => (
+                                                    <button
+                                                        key={i}
+                                                        onClick={() => handleUseSuggestion(s.text)}
+                                                        className="w-full text-left p-2.5 bg-white hover:bg-purple-100 rounded-lg border border-purple-100 transition-colors group"
+                                                    >
+                                                        <p className="text-sm text-gray-700">{s.text}</p>
+                                                        <span className="text-[10px] text-purple-500 font-medium mt-1 inline-block capitalize">{s.tone}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                                 <div className="flex gap-2 items-center">
+                                    {/* AI Suggestions Button */}
+                                    <button
+                                        onClick={handleGetSuggestions}
+                                        disabled={loadingSuggestions}
+                                        title="Obtener sugerencias de IA"
+                                        className="p-3 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 rounded-xl text-white transition-all shadow-lg shadow-purple-500/20 disabled:opacity-50"
+                                    >
+                                        ✨
+                                    </button>
                                     {/* Attachment Button */}
                                     <button
                                         title="Adjuntar archivo"
                                         className="p-3 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-600 transition-colors"
                                         onClick={() => {
-                                            // TODO: Implement file upload
-                                            alert('Próximamente: Subida de archivos. Por ahora, usa URLs de imágenes.');
+                                            alert('Próximamente: Subida de archivos.');
                                         }}
                                     >
                                         📎
@@ -577,35 +949,77 @@ export default function Inbox() {
                 </div>
 
                 {/* Right: Context Panel */}
-                <div className="w-72 border-l border-gray-100 bg-white p-6 hidden xl:flex flex-col">
+                <div className="w-64 xl:w-72 border-l border-gray-100 bg-white p-4 xl:p-5 hidden lg:flex flex-col overflow-y-auto">
                     {selectedConversation ? (
                         <>
-                            <div className="text-center mb-6">
-                                <div className={`w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl text-white shadow-lg ${PLATFORM_CONFIG[selectedConversation.platform]?.color}`}>
+                            {/* Contact Avatar & Info */}
+                            <div className="text-center mb-4 pb-4 border-b border-gray-100">
+                                <div className={`w-14 h-14 xl:w-16 xl:h-16 rounded-full mx-auto mb-2 flex items-center justify-center text-xl xl:text-2xl text-white shadow-lg ${PLATFORM_CONFIG[selectedConversation.platform]?.color}`}>
                                     {selectedConversation.customerName?.charAt(0) || '?'}
                                 </div>
-                                <h3 className="font-bold text-gray-900">{selectedConversation.customerName || 'Visitante'}</h3>
-                                <p className="text-xs text-gray-500">{selectedConversation.customerContact}</p>
+                                <h3 className="font-bold text-gray-900 text-sm">{selectedConversation.customerName || 'Visitante'}</h3>
+                                <p className="text-xs text-gray-500 truncate">{selectedConversation.customerContact}</p>
                             </div>
 
-                            <div className="space-y-3">
-                                <div className="p-3 bg-gray-50 rounded-xl">
-                                    <h4 className="font-bold text-gray-800 text-xs mb-1">Canal</h4>
-                                    <p className="text-sm text-gray-600">{PLATFORM_CONFIG[selectedConversation.platform]?.label}</p>
+                            {/* Client Status */}
+                            <div className="mb-4">
+                                {matchedClient ? (
+                                    <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-lg">✅</span>
+                                            <span className="text-xs font-bold text-emerald-700">Cliente Vinculado</span>
+                                        </div>
+                                        <p className="text-sm font-bold text-emerald-800">{matchedClient.name}</p>
+                                        <button
+                                            onClick={() => setShow360View(true)}
+                                            className="mt-2 text-xs text-emerald-600 hover:text-emerald-700 font-bold underline"
+                                        >
+                                            Ver Vista 360° →
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-lg">❓</span>
+                                            <span className="text-xs font-bold text-amber-700">Contacto Nuevo</span>
+                                        </div>
+                                        <button
+                                            onClick={() => setShowCreateClientModal(true)}
+                                            className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-lg font-bold w-full hover:bg-amber-600 transition-colors"
+                                        >
+                                            + Crear Cliente
+                                        </button>
+                                        <button
+                                            onClick={() => setShowLinkClientModal(true)}
+                                            className="mt-2 text-xs bg-white text-amber-600 px-3 py-1.5 rounded-lg border border-amber-300 font-bold w-full hover:bg-amber-50 transition-colors"
+                                        >
+                                            🔗 Vincular a Cliente
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Channel & Stats */}
+                            <div className="space-y-2 mb-4">
+                                <div className="p-2.5 bg-gray-50 rounded-lg flex justify-between items-center">
+                                    <span className="text-xs text-gray-600">Canal</span>
+                                    <span className="text-xs font-bold text-gray-800">{PLATFORM_CONFIG[selectedConversation.platform]?.label}</span>
                                 </div>
-                                <div className="p-3 bg-gray-50 rounded-xl">
-                                    <h4 className="font-bold text-gray-800 text-xs mb-1">Mensajes</h4>
-                                    <p className="text-sm text-gray-600">{selectedConversation.messages.length}</p>
+                                <div className="p-2.5 bg-gray-50 rounded-lg flex justify-between items-center">
+                                    <span className="text-xs text-gray-600">Mensajes</span>
+                                    <span className="text-xs font-bold text-gray-800">{selectedConversation.messages.length}</span>
                                 </div>
-                                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
-                                    <h4 className="font-bold text-blue-800 text-xs mb-1">Acciones</h4>
-                                    <button className="mt-2 text-xs bg-white text-blue-600 px-3 py-1.5 rounded border border-blue-200 font-bold w-full hover:bg-blue-50 transition-colors">
-                                        + Crear Lead
-                                    </button>
-                                    <button className="mt-2 text-xs bg-white text-orange-600 px-3 py-1.5 rounded border border-orange-200 font-bold w-full hover:bg-orange-50 transition-colors">
-                                        + Crear Ticket
-                                    </button>
-                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                                <h4 className="font-bold text-blue-800 text-xs mb-2">Acciones</h4>
+                                <button className="text-xs bg-white text-blue-600 px-3 py-1.5 rounded border border-blue-200 font-bold w-full hover:bg-blue-50 transition-colors">
+                                    + Crear Lead
+                                </button>
+                                <button className="mt-2 text-xs bg-white text-orange-600 px-3 py-1.5 rounded border border-orange-200 font-bold w-full hover:bg-orange-50 transition-colors">
+                                    + Crear Ticket
+                                </button>
                             </div>
                         </>
                     ) : (
@@ -711,6 +1125,120 @@ export default function Inbox() {
                         </div>
                     </div>
                 )}
+
+            {/* Link to Existing Client Modal */}
+            {showLinkClientModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="p-5 border-b border-gray-100 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-gray-900">🔗 Vincular a Cliente Existente</h3>
+                            <button onClick={() => setShowLinkClientModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                        </div>
+                        <div className="p-5">
+                            <p className="text-sm text-gray-600 mb-4">
+                                Busca un cliente existente para vincular el contacto
+                                <span className="font-bold text-gray-800 ml-1">{selectedConversation?.customerContact}</span>
+                            </p>
+                            <input
+                                type="text"
+                                value={clientSearchTerm}
+                                onChange={e => setClientSearchTerm(e.target.value)}
+                                placeholder="Buscar por nombre o email..."
+                                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none text-sm mb-4"
+                                autoFocus
+                            />
+                            <div className="max-h-60 overflow-y-auto space-y-2">
+                                {filteredClients.length === 0 ? (
+                                    <p className="text-center text-gray-400 py-6 text-sm">No hay clientes</p>
+                                ) : (
+                                    filteredClients.map(client => (
+                                        <button
+                                            key={client.id}
+                                            onClick={() => handleLinkToClient(client.id)}
+                                            className="w-full p-3 text-left bg-gray-50 hover:bg-amber-50 hover:border-amber-200 border border-gray-200 rounded-xl transition-all flex items-center gap-3"
+                                        >
+                                            <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-white font-bold">
+                                                {client.name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-gray-900 text-sm">{client.name}</p>
+                                                <p className="text-xs text-gray-500">{client.email || 'Sin email'}</p>
+                                            </div>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Client 360 View Modal */}
+            {show360View && matchedClient && (
+                <ClientProfile
+                    clientId={matchedClient.id}
+                    onClose={() => setShow360View(false)}
+                    onOpenChat={(contactValue) => {
+                        setShow360View(false);
+                        // Find and select conversation with this contact
+                        const conv = conversations.find(c => c.customerContact === contactValue);
+                        if (conv) {
+                            setSelectedConversation(conv);
+                        }
+                    }}
+                />
+            )}
+            {/* New Chat Modal */}
+            {showNewChatModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+                        <div className="p-5 border-b border-gray-100 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-gray-900">✨ Nuevo Chat</h3>
+                            <button onClick={() => setShowNewChatModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Plataforma</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setNewChatPlatform('assistai')}
+                                        className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-all ${newChatPlatform === 'assistai' ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
+                                    >
+                                        🤖 AssistAI
+                                    </button>
+                                    <button
+                                        onClick={() => setNewChatPlatform('whatsapp')}
+                                        className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-all ${newChatPlatform === 'whatsapp' ? 'bg-green-50 border-green-500 text-green-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
+                                    >
+                                        📱 WhatsApp
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Número de Teléfono</label>
+                                <input
+                                    type="text"
+                                    placeholder="+58414..."
+                                    value={newChatPhone}
+                                    onChange={e => setNewChatPhone(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none font-medium"
+                                    autoFocus
+                                />
+                                <p className="text-[10px] text-gray-400 mt-1">Incluye el código de país (ej. +58)</p>
+                            </div>
+
+                            <button
+                                onClick={handleInitiateChat}
+                                disabled={initiatingChat || !newChatPhone.trim()}
+                                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+                            >
+                                {initiatingChat ? 'Buscando...' : 'Iniciar Conversación'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }

@@ -80,8 +80,52 @@ Cada cliente incluye:
 
 1. Clic en **"+ Nuevo Cliente"**
 2. Completa el formulario con los datos
-3. Selecciona el plan correspondiente
+3. Guarda los cambios
+
+### Editar Cliente
+
+1. Pasa el mouse sobre la tarjeta del cliente
+2. Haz clic en el ícono ✏️
+3. Modifica los campos deseados
 4. Guarda los cambios
+
+### Eliminar Cliente
+
+1. Pasa el mouse sobre la tarjeta del cliente
+2. Haz clic en el ícono 🗑️
+3. Confirma la eliminación
+
+> ⚠️ **Advertencia**: Eliminar un cliente también elimina sus tickets asociados.
+
+---
+
+## Vista 360° del Cliente
+
+La **Vista 360°** te permite ver toda la información de un cliente en un solo lugar.
+
+### Cómo Acceder
+1. Desde el **Inbox**, selecciona una conversación con un cliente vinculado
+2. Haz clic en **"Ver Vista 360° →"** en el panel derecho
+
+### Funciones Disponibles
+
+| Tab | Contenido |
+|-----|--------|
+| **Información** | Datos del cliente, canales de contacto vinculados |
+| **Tickets** | Lista de tickets del cliente, crear nuevos |
+| **Notas** | Notas internas sobre el cliente |
+| **Facturas** | Historial de facturación |
+
+### Acciones Rápidas
+- **💬 Abrir Chat**: Ir directamente a la conversación del cliente
+- **🎫 Crear Ticket**: Abrir un ticket de soporte
+- **📋 Crear Tarea ChronusDev**: Enviar tarea al sistema de desarrollo
+
+### Vincular Canales Adicionales
+Si un cliente te contacta por un nuevo canal (ej: primero por WhatsApp, luego por Instagram):
+1. Desde la conversación nueva, haz clic en **"🔗 Vincular a Cliente"**
+2. Busca el cliente existente
+3. El nuevo canal quedará vinculado a ese cliente
 
 ---
 
@@ -113,10 +157,23 @@ El **Inbox Unificado** centraliza todas las conversaciones de diferentes canales
 | Función | Cómo Usarla |
 |---------|-------------|
 | **Sincronizar** | Botón "🔄 Sincronizar" para traer mensajes nuevos |
+| **Buscar** | 🔍 Campo de búsqueda para filtrar por nombre, contacto o mensaje |
 | **Filtrar por Agente** | ⚙️ Configurar qué agentes de IA ver |
 | **Responder** | Escribe en el campo inferior y presiona Enter |
 | **Ver Cliente** | Si el contacto está vinculado, aparece su info |
 | **Crear Cliente** | Botón "➕ Crear Cliente" para nuevos contactos |
+
+### Búsqueda Rápida
+
+El buscador en el Inbox filtra en tiempo real por:
+- Nombre del cliente
+- Número de teléfono / Usuario de Instagram
+- Nombre del agente IA
+- Contenido de los mensajes
+
+**Tips**:
+- Escribe `+584` para filtrar por prefijo de teléfono
+- Escribe `@usuario` para buscar usuarios de Instagram
 
 ### Identificación de Clientes
 

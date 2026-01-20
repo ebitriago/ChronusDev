@@ -41,6 +41,7 @@ export interface Customer {
     chronusDevDefaultProjectId?: string; // Proyecto por defecto para tickets
     tags: string[];
     notes?: string;
+    customFields?: Record<string, any>;
     source?: "lead" | "manual" | "chat";  // How the client was created
     createdAt: Date;
     updatedAt: Date;
@@ -58,6 +59,7 @@ export interface Ticket {
     chronusDevTaskId?: string; // Se llena cuando se crea tarea
     chronusDevProjectId?: string;
     assignedTo?: string;
+    customFields?: Record<string, any>;
     resolvedAt?: Date;
     createdAt: Date;
     updatedAt: Date;
@@ -121,6 +123,60 @@ export interface Lead {
     status: "NEW" | "CONTACTED" | "QUALIFIED" | "NEGOTIATION" | "WON" | "LOST";
     value: number; // Potential Revenue
     notes?: string;
+    customFields?: Record<string, any>;
+    tags?: string[];  // Flexible tagging
+    score?: number;   // Lead score (0-100)
     createdAt: Date;
     updatedAt: Date;
 }
+
+// Sistema de Etiquetas Global
+export interface Tag {
+    id: string;
+    name: string;
+    color: string;  // Hex color
+    category: 'lead' | 'customer' | 'ticket' | 'general';
+    createdAt: Date;
+}
+
+// Ticket Categories for auto-classification
+export type TicketCategory = 'technical' | 'billing' | 'feature_request' | 'general' | 'urgent';
+
+// WhatsApp Provider Configuration
+export interface WhatsAppProvider {
+    id: string;
+    name: string;
+    type: 'whatsmeow' | 'meta';  // WhatsMeow (open source) o Meta Business API
+    enabled: boolean;
+    config: {
+        // WhatsMeow config
+        apiUrl?: string;             // URL del servidor WhatsMeow (Bernardo's API)
+        apiKey?: string;             // API Key para autenticación
+        sessionId?: string;          // ID de sesión
+        // Meta Business API config  
+        phoneNumberId?: string;      // Meta Phone Number ID
+        accessToken?: string;        // Meta Access Token
+        businessAccountId?: string;  // WABA ID
+        webhookVerifyToken?: string; // Token para verificar webhooks
+    };
+    status: 'disconnected' | 'connecting' | 'connected' | 'error';
+    lastError?: string;
+    connectedAt?: Date;
+    createdAt: Date;
+}
+
+// WhatsApp Message (unified format for both providers)
+export interface WhatsAppMessage {
+    id: string;
+    providerId: string;              // ID del proveedor usado
+    from: string;                    // Número del remitente
+    to: string;                      // Número del destinatario
+    content: string;
+    mediaType?: 'text' | 'image' | 'audio' | 'video' | 'document';
+    mediaUrl?: string;
+    timestamp: Date;
+    status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+    direction: 'inbound' | 'outbound';
+    metadata?: Record<string, any>;  // Datos adicionales del proveedor
+}
+

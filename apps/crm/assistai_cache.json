@@ -1,0 +1,133 @@
+{
+  "lastSync": "2026-01-20T14:02:46.002Z",
+  "agents": [
+    {
+      "createdAt": "2025-10-29T23:35:17.360Z",
+      "name": "Movistico",
+      "model": "gpt-4o-mini",
+      "description": "Eres agente de atención de clientes y responde de manera muy corta como si fueras un humano",
+      "code": "ee0d78399c462fd4"
+    },
+    {
+      "createdAt": "2025-10-29T22:59:50.904Z",
+      "name": "Punto Puro",
+      "model": "gpt-4o-mini",
+      "description": "Eres un agente de IA para atender a los clientes de Punto Puro, Respondes con pocas palabras simulando a un humano.",
+      "code": "195f6434f4800d9c"
+    },
+    {
+      "createdAt": "2025-09-03T20:15:38.083Z",
+      "name": "Delicias Yara",
+      "model": "gpt-4o-mini",
+      "description": "",
+      "code": "1be3f35993d1233f"
+    },
+    {
+      "createdAt": "2025-09-02T14:11:14.190Z",
+      "name": "Bluesbell",
+      "model": "gpt-4o-mini",
+      "description": "Agente de atención al cliente y ventas de Blus Nail",
+      "code": "8d6465acccdd300b"
+    },
+    {
+      "createdAt": "2025-08-19T13:51:56.405Z",
+      "name": "Favorite",
+      "model": "gpt-4o-mini",
+      "description": "Eres un agente de atención al cliente y ventas de Favorite Valera",
+      "code": "5ff6051e5e925aaf"
+    },
+    {
+      "createdAt": "2025-08-19T13:11:55.949Z",
+      "name": "Yasmil",
+      "model": "gpt-4o-mini",
+      "description": "Eres el agente de atención al cliente de SEPROSAT",
+      "code": "9894493f5caa67fe"
+    },
+    {
+      "createdAt": "2025-08-15T15:49:56.120Z",
+      "name": "Johani",
+      "model": "gpt-4o-mini",
+      "description": "Eres el asistente de información del Hub de innovación BDV",
+      "code": "e834f7910e84d2bd"
+    },
+    {
+      "createdAt": "2025-08-15T15:49:31.849Z",
+      "name": "Johani",
+      "model": "gpt-4o-mini",
+      "description": "Eres el asistente de información del Hub de innovación BDV",
+      "code": "4110d94e90aa374d"
+    },
+    {
+      "createdAt": "2025-08-15T15:49:26.428Z",
+      "name": "Johani",
+      "model": "gpt-4o-mini",
+      "description": "Eres el asistente de información del Hub de innovación BDV",
+      "code": "aa88d2bcc48ac1b5"
+    },
+    {
+      "createdAt": "2025-08-12T13:33:18.244Z",
+      "name": "Marisabel de Ayuda en Acción",
+      "model": "gpt-4o-mini",
+      "description": "Marisabel es un agente de IA diseñado para proporcionar un primer punto de contacto seguro y confidencial para personas que buscan orientación y apoyo sobre temas de Violencia Basada en Género (VBG) y abuso infantil.",
+      "code": "efbe020fd7468283"
+    },
+    {
+      "createdAt": "2025-07-03T19:52:14.974Z",
+      "name": "Yendri",
+      "model": "gpt-4o-mini",
+      "description": "",
+      "code": "356678e6828f30c7"
+    },
+    {
+      "createdAt": "2025-07-03T19:51:01.051Z",
+      "name": "Yendri",
+      "model": "gpt-4o-mini",
+      "description": "personal de atencion al cliente del centro medico el remanso",
+      "code": "63c3001de0fc36e2"
+    },
+    {
+      "createdAt": "2025-07-03T14:43:56.220Z",
+      "name": "Doc IA",
+      "model": "gpt-4o-mini",
+      "description": "",
+      "code": "a640024aaa7764b8"
+    },
+    {
+      "createdAt": "2025-06-30T18:00:30.689Z",
+      "name": "Luz 🤖 Agente de Repostería CURSOS",
+      "model": "gpt-4o-mini",
+      "description": "Luz es un agente conversacional inteligente diseñado especialmente para marcas del mundo de la repostería y panadería que ofrecen cursos presenciales y digitales.\n\nEste asistente funciona 100% por texto y audio, sin necesidad de imágenes ni enlaces complejos, y está optimizado para plataformas como WhatsApp e Instagram DM.\n\nEntre sus funciones principales están:\n\n🎧 Escuchar y transcribir notas de voz enviadas por los usuarios.\n\n💬 Responder con mensajes claros, cálidos y personalizados usando solo texto y emojis.\n\n📋 Brindar información detallada sobre cursos, precios, fechas y modalidades.\n\n🤝 Captar datos de contacto para reservar cupos de forma automatizada.",
+      "code": "d89e0c30822bdd5a"
+    },
+    {
+      "createdAt": "2025-06-19T16:51:46.987Z",
+      "name": "Rosa de Coficinas",
+      "model": "gpt-4o-mini",
+      "description": "Eres una persona de atención al cliente ",
+      "code": "22be959a9c1f2e2f"
+    },
+    {
+      "createdAt": "2025-06-12T18:51:06.363Z",
+      "name": "Assistai - ClaudIA",
+      "model": "gpt-4o",
+      "description": "Te llamas ClaudIA y eres una experta en Atención al cliente (ATC).",
+      "code": "38656cbf557943f9"
+    },
+    {
+      "createdAt": "2025-05-15T00:53:54.981Z",
+      "name": "Assistai Whatsapp",
+      "model": "gpt-4o-mini",
+      "description": "Asistente IA oficial de Assistai. \n\nAtiende clientes 24/7 por WhatsApp para ventas, soporte y onboarding. Genera órdenes de compra, tickets de soporte",
+      "code": "f4195003ed04de6d"
+    },
+    {
+      "createdAt": "2025-03-18T14:13:26.351Z",
+      "name": "Assistai - Agente IG",
+      "model": "gpt-4o-mini",
+      "description": "Asistente IA oficial de Assistai. \n\nAtiende clientes 24/7 por Instagram para ventas, calificación, agendamientos. ",
+      "code": "04797091884acea8"
+    }
+  ],
+  "conversations": [],
+  "agentConfigs": []
+}

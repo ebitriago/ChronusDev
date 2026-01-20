@@ -14,6 +14,8 @@ type Lead = {
     status: string;
     notes?: string;
     source: string;
+    tags?: string[];
+    score?: number;
     createdAt: string;
 };
 
@@ -128,13 +130,34 @@ export default function LeadsKanban() {
                                     >
                                         <div className="flex justify-between items-start mb-2">
                                             <h4 className="font-bold text-gray-800 text-sm">{lead.name}</h4>
-                                            {lead.value > 0 && (
-                                                <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                                                    ${lead.value.toLocaleString()}
-                                                </span>
-                                            )}
+                                            <div className="flex items-center gap-1">
+                                                {/* Lead Score Badge */}
+                                                {lead.score !== undefined && (
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${lead.score >= 70 ? 'bg-emerald-100 text-emerald-700' :
+                                                            lead.score >= 40 ? 'bg-amber-100 text-amber-700' :
+                                                                'bg-red-100 text-red-600'
+                                                        }`}>
+                                                        📊 {lead.score}
+                                                    </span>
+                                                )}
+                                                {lead.value > 0 && (
+                                                    <span className="text-xs font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                                        ${lead.value.toLocaleString()}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                         <p className="text-xs text-gray-500 mb-2 truncate">{lead.company || lead.email}</p>
+                                        {/* Tags */}
+                                        {lead.tags && lead.tags.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mb-2">
+                                                {lead.tags.slice(0, 3).map((tag, i) => (
+                                                    <span key={i} className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium">
+                                                        {tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                         <div className="flex justify-between items-center text-[10px] text-gray-400">
                                             <span>{new Date(lead.createdAt).toLocaleDateString()}</span>
                                             <span className="uppercase tracking-wider font-semibold opacity-60">{lead.source}</span>

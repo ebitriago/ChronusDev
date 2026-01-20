@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-type View = 'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'settings' | 'developers';
+type View = 'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'channels' | 'settings' | 'developers';
 
 interface SidebarProps {
     currentView: View;
@@ -16,6 +16,7 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
         { id: 'inbox', label: 'Inbox Unificado', icon: '💬' },
         { id: 'assistai', label: 'AssistAI', icon: '🤖' },
+        { id: 'channels', label: 'Canales', icon: '📱' },
         { id: 'leads', label: 'Leads Pipeline', icon: '🎯' },
         { id: 'customers', label: 'Clientes', icon: '👥' },
         { id: 'tickets', label: 'Tickets', icon: '🎫' },

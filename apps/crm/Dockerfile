@@ -1,47 +1,23 @@
-# Build stage
+# Build Stage
 FROM node:20-alpine AS builder
-
 WORKDIR /app
-
-# Copy package files
-COPY apps/crm/package*.json ./
-
-# Install ALL dependencies (including dev for TypeScript)
+COPY package*.json ./
+COPY prisma ./prisma/
 RUN npm ci
+COPY . .
+RUN npx prisma generate
+RUN npm run build 
+# Note: Ensure "build" script in package.json runs tsc
 
-# Copy source code
-COPY apps/crm/src ./src
-COPY apps/crm/public ./public
-COPY apps/crm/tsconfig.json ./
-
-# Build TypeScript
-RUN npm run build
-
-# Production stage
-FROM node:20-alpine AS runner
-
+# Production Stage
+FROM node:20-alpine
 WORKDIR /app
-
-# Instalar wget para health checks
-RUN apk add --no-cache wget
-
-ENV NODE_ENV=production
-ENV PORT=3002
-
-# Copy package files and install production deps only
-COPY apps/crm/package*.json ./
-RUN npm ci --only=production
-
-# Copy built files and public folder
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/public ./public
+COPY --from=builder /app/prisma ./prisma
+# Copy public assets if any
+COPY --from=builder /app/public ./public 
 
-# Expose port
 EXPOSE 3002
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget -q --spider http://localhost:3002/health || exit 1
-
-# Start the server
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]

@@ -1,5 +1,5 @@
 // Datos iniciales del CRM
-import type { Customer, Ticket, Invoice, Communication, Transaction, Lead } from "./types.js";
+import type { Customer, Ticket, Invoice, Communication, Transaction, Lead, Tag } from "./types.js";
 
 export const customers: Customer[] = [
     {
@@ -200,6 +200,8 @@ export const leads: Lead[] = [
         status: "NEW",
         value: 5000,
         notes: "Interesado en plan Enterprise",
+        tags: ["enterprise", "hot-lead"],
+        score: 85,
         createdAt: new Date(),
         updatedAt: new Date(),
     },
@@ -212,10 +214,82 @@ export const leads: Lead[] = [
         status: "CONTACTED",
         value: 299,
         notes: "Llamada programada para mañana",
+        tags: ["startup", "seguimiento"],
+        score: 60,
         createdAt: new Date(),
         updatedAt: new Date(),
     },
 ];
+
+// ==========================================
+// GLOBAL TAGS SYSTEM
+// ==========================================
+
+export const tags: Tag[] = [
+    // Lead tags
+    { id: 'tag-hot', name: 'Hot Lead', color: '#ef4444', category: 'lead', createdAt: new Date() },
+    { id: 'tag-cold', name: 'Cold Lead', color: '#3b82f6', category: 'lead', createdAt: new Date() },
+    { id: 'tag-followup', name: 'Seguimiento', color: '#f59e0b', category: 'lead', createdAt: new Date() },
+
+    // Customer tags
+    { id: 'tag-enterprise', name: 'Enterprise', color: '#8b5cf6', category: 'customer', createdAt: new Date() },
+    { id: 'tag-startup', name: 'Startup', color: '#10b981', category: 'customer', createdAt: new Date() },
+    { id: 'tag-priority', name: 'Prioridad', color: '#ec4899', category: 'customer', createdAt: new Date() },
+    { id: 'tag-vip', name: 'VIP', color: '#f59e0b', category: 'customer', createdAt: new Date() },
+
+    // Ticket tags  
+    { id: 'tag-urgent', name: 'Urgente', color: '#dc2626', category: 'ticket', createdAt: new Date() },
+    { id: 'tag-billing', name: 'Facturación', color: '#059669', category: 'ticket', createdAt: new Date() },
+    { id: 'tag-technical', name: 'Técnico', color: '#2563eb', category: 'ticket', createdAt: new Date() },
+    { id: 'tag-feature', name: 'Feature Request', color: '#7c3aed', category: 'ticket', createdAt: new Date() },
+
+    // General
+    { id: 'tag-trial', name: 'Trial', color: '#6b7280', category: 'general', createdAt: new Date() },
+    { id: 'tag-churn-risk', name: 'Riesgo Churn', color: '#dc2626', category: 'general', createdAt: new Date() },
+];
+
+// ==========================================
+// CHANNEL CONFIGURATIONS (Hybrid AI/Human)
+// ==========================================
+
+export type ChannelConfig = {
+    id: string;
+    channelValue: string;        // "+584144314817" or "@username"
+    platform: 'whatsapp' | 'instagram';
+    mode: 'ai-only' | 'human-only' | 'hybrid';
+    assignedAgentId?: string;    // AssistAI agent ID
+    assignedAgentName?: string;  // For display
+    humanTakeoverDuration: number; // minutes
+    autoResumeAI: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+};
+
+export const channelConfigs: ChannelConfig[] = [
+    {
+        id: 'channel-1',
+        channelValue: '+584144314817',
+        platform: 'whatsapp',
+        mode: 'hybrid',
+        assignedAgentId: 'agent-claudia',
+        assignedAgentName: 'Claudia (AssistAI)',
+        humanTakeoverDuration: 60,
+        autoResumeAI: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    }
+];
+
+// Conversation takeover state (tracks when humans take control)
+export type ConversationTakeover = {
+    sessionId: string;
+    takenBy: string;       // user ID
+    takenAt: Date;
+    expiresAt: Date;
+    previousMode: 'ai-only' | 'hybrid';
+};
+
+export const conversationTakeovers: Map<string, ConversationTakeover> = new Map();
 
 // ==========================================
 // AssistAI Data Persistence
@@ -277,3 +351,41 @@ export function getCacheInfo(): { exists: boolean; lastSync: string; stats: { ag
         }
     };
 }
+
+// ==========================================
+// WHATSAPP PROVIDERS (Dual Integration)
+// ==========================================
+
+import { WhatsAppProvider } from "./types.js";
+
+export const whatsappProviders: WhatsAppProvider[] = [
+    // WhatsMeow Provider (Bernardo's API)
+    {
+        id: 'whatsmeow-main',
+        name: 'WhatsApp (WhatsMeow)',
+        type: 'whatsmeow',
+        enabled: false, // Habilitar cuando Bernardo proporcione la URL
+        config: {
+            apiUrl: 'http://localhost:8080',  // URL del servidor WhatsMeow de Bernardo
+            apiKey: '',                        // API Key a configurar
+            sessionId: 'crm-session-1'
+        },
+        status: 'disconnected',
+        createdAt: new Date()
+    },
+    // Meta Business API Provider
+    {
+        id: 'meta-business',
+        name: 'WhatsApp Business (Meta)',
+        type: 'meta',
+        enabled: false, // Habilitar cuando se configuren credenciales
+        config: {
+            phoneNumberId: '',        // ID del número de teléfono de Meta
+            accessToken: '',          // Token de acceso de Meta
+            businessAccountId: '',    // WABA ID
+            webhookVerifyToken: 'crm_verify_token_2024'
+        },
+        status: 'disconnected',
+        createdAt: new Date()
+    }
+];

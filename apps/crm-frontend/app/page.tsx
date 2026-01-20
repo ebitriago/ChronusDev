@@ -80,9 +80,15 @@ import CustomerDetail from '../components/CustomerDetail';
 import LeadsKanban from '../components/LeadsKanban';
 import Inbox from '../components/Inbox';
 import AssistAI from '../components/AssistAI';
+import ChannelSettings from '../components/ChannelSettings';
+import OnboardingTour from '../components/OnboardingTour';
+import Settings from '../components/Settings';
+import Invoices from '../components/Invoices';
+import NotificationBell from '../components/NotificationBell';
+import AuthPage from '../components/AuthPage';
 
 export default function CRMPage() {
-  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'settings' | 'developers'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'channels' | 'settings' | 'developers'>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -92,6 +98,11 @@ export default function CRMPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [predictions, setPredictions] = useState<{
+    mrr: { current: number; forecast: { month: string; mrr: number }[]; projectedAnnual: number };
+    churn: { atRiskCount: number; atRiskMRR: number; customers: { name: string; riskLevel: string; reason: string }[] };
+    pipeline: { totalValue: number; hotLeadsCount: number; avgScore: number };
+  } | null>(null);
 
   // Selection State
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -101,6 +112,59 @@ export default function CRMPage() {
   const [newTicket, setNewTicket] = useState<{ title: string; description: string; customerId: string; priority: string; assignedTo: string }>({
     title: '', description: '', customerId: '', priority: 'MEDIUM', assignedTo: ''
   });
+
+  // Customer Modal State
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({ name: '', email: '', phone: '', company: '' });
+
+  // Onboarding state
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Auth state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string; role: string } | null>(null);
+
+  // Check authentication on load
+  useEffect(() => {
+    const token = localStorage.getItem('crm_token');
+    const userStr = localStorage.getItem('crm_user');
+    if (token && userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+      } catch {
+        localStorage.removeItem('crm_token');
+        localStorage.removeItem('crm_user');
+      }
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  // Handle login success
+  const handleLogin = (token: string, user: any) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    loadData();
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    localStorage.removeItem('crm_token');
+    localStorage.removeItem('crm_user');
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+  };
+
+  // Check if onboarding is needed on first load
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const completed = localStorage.getItem('crm_onboarding_complete');
+    if (!completed) {
+      setShowOnboarding(true);
+    }
+  }, [isAuthenticated]);
 
   const loadData = useCallback(async () => {
     try {
@@ -114,6 +178,12 @@ export default function CRMPage() {
       setCustomers(customersData);
       setTickets(ticketsData);
       setUsers(usersData);
+
+      // Load predictions
+      try {
+        const predRes = await fetch(`${API_URL}/analytics/predictions`);
+        if (predRes.ok) setPredictions(await predRes.json());
+      } catch { /* ignore */ }
     } catch (err) {
       console.error('Error loading data:', err);
     } finally {
@@ -122,8 +192,10 @@ export default function CRMPage() {
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (isAuthenticated) {
+      loadData();
+    }
+  }, [loadData, isAuthenticated]);
 
 
   async function handleCreateTicket() {
@@ -138,6 +210,24 @@ export default function CRMPage() {
       if (res.ok) {
         setShowTicketModal(false);
         setNewTicket({ title: '', description: '', customerId: '', priority: 'MEDIUM', assignedTo: '' });
+        loadData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleCreateCustomer() {
+    if (!newCustomer.name) return;
+    try {
+      const res = await fetch(`${API_URL}/customers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCustomer),
+      });
+      if (res.ok) {
+        setShowCustomerModal(false);
+        setNewCustomer({ name: '', email: '', phone: '', company: '' });
         loadData();
       }
     } catch (err) {
@@ -169,7 +259,7 @@ export default function CRMPage() {
     CLOSED: 'bg-gray-100 text-gray-700',
   };
 
-  if (loading) {
+  if (loading && isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
@@ -178,6 +268,11 @@ export default function CRMPage() {
         </div>
       </div>
     );
+  }
+
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return <AuthPage onLogin={handleLogin} />;
   }
 
   return (
@@ -238,11 +333,38 @@ export default function CRMPage() {
               </div>
 
               {/* User Profile Tiny */}
-              <div className="flex items-center gap-3 bg-white p-2 pr-4 rounded-full border border-gray-200 shadow-sm">
-                <div className="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-bold text-sm">
-                  AD
+              <div className="flex items-center gap-3">
+                {/* Help/Tour Button */}
+                <button
+                  onClick={() => setShowOnboarding(true)}
+                  title="Ver tour de ayuda"
+                  className="w-9 h-9 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center text-lg hover:bg-purple-100 transition-colors"
+                >
+                  ?
+                </button>
+                {/* Notification Bell */}
+                <NotificationBell />
+                {/* User Profile */}
+                <div className="flex items-center gap-2 bg-white p-2 pr-4 rounded-full border border-gray-200 shadow-sm group relative">
+                  <div className="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-bold text-sm">
+                    {currentUser?.name?.charAt(0) || 'U'}
+                  </div>
+                  <div className="text-sm font-medium text-gray-700">{currentUser?.name || 'Usuario'}</div>
+                  {/* Dropdown */}
+                  <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                    <div className="p-3 border-b border-gray-100">
+                      <p className="text-xs text-gray-500">Conectado como</p>
+                      <p className="text-sm font-bold text-gray-800 truncate">{currentUser?.email}</p>
+                      <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full mt-1 inline-block">{currentUser?.role}</span>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full p-3 text-left text-sm text-red-600 hover:bg-red-50 rounded-b-xl flex items-center gap-2 transition-colors"
+                    >
+                      <span>🚪</span> Cerrar Sesión
+                    </button>
+                  </div>
                 </div>
-                <div className="text-sm font-medium text-gray-700">Admin User</div>
               </div>
             </div>
 
@@ -317,6 +439,73 @@ export default function CRMPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* AI Predictions Widget */}
+                {predictions && (
+                  <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl border border-purple-100 p-6" data-tour="predictions">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center text-white text-lg">
+                        ✨
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-bold text-gray-900">Predicciones IA</h2>
+                        <p className="text-gray-500 text-xs">Insights inteligentes del CRM</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* MRR Forecast */}
+                      <div className="bg-white rounded-xl p-4 border border-purple-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span>📈</span>
+                          <span className="font-bold text-gray-800 text-sm">MRR Forecast</span>
+                        </div>
+                        <div className="text-xl font-bold text-emerald-600">${predictions.mrr.current.toLocaleString()}</div>
+                        <div className="mt-2 space-y-1">
+                          {predictions.mrr.forecast.slice(1, 3).map((f, i) => (
+                            <div key={i} className="flex justify-between text-xs">
+                              <span className="text-gray-500">{f.month}</span>
+                              <span className="font-mono font-bold text-gray-700">${f.mrr.toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Churn Risk */}
+                      <div className="bg-white rounded-xl p-4 border border-purple-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span>⚠️</span>
+                          <span className="font-bold text-gray-800 text-sm">Riesgo Churn</span>
+                        </div>
+                        <div className={`text-xl font-bold ${predictions.churn.atRiskCount > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                          {predictions.churn.atRiskCount} clientes
+                        </div>
+                        {predictions.churn.atRiskMRR > 0 && (
+                          <div className="mt-2 text-xs text-red-600">
+                            MRR en riesgo: ${predictions.churn.atRiskMRR.toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Pipeline */}
+                      <div className="bg-white rounded-xl p-4 border border-purple-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span>🎯</span>
+                          <span className="font-bold text-gray-800 text-sm">Pipeline</span>
+                        </div>
+                        <div className="text-xl font-bold text-blue-600">${predictions.pipeline.totalValue.toLocaleString()}</div>
+                        <div className="mt-2 flex gap-2">
+                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
+                            🔥 {predictions.pipeline.hotLeadsCount} hot
+                          </span>
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                            Avg: {predictions.pipeline.avgScore}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -338,7 +527,10 @@ export default function CRMPage() {
                       />
                       <span className="absolute left-3 top-2.5 text-gray-400">🔍</span>
                     </div>
-                    <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl transition-colors text-sm font-bold shadow-lg shadow-emerald-500/20">
+                    <button
+                      onClick={() => setShowCustomerModal(true)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl transition-colors text-sm font-bold shadow-lg shadow-emerald-500/20"
+                    >
                       + Nuevo Cliente
                     </button>
                   </div>
@@ -433,6 +625,9 @@ export default function CRMPage() {
 
             {/* AssistAI View */}
             {view === 'assistai' && <AssistAI />}
+
+            {/* Channel Settings View */}
+            {view === 'channels' && <ChannelSettings />}
 
             {/* Tickets View */}
             {
@@ -662,16 +857,11 @@ export default function CRMPage() {
             {/* Developers View */}
             {view === 'developers' && <Developers />}
 
-            {/* Settings / Invoices Placeholders */}
-            {
-              (view === 'invoices' || view === 'settings') && (
-                <div className="flex flex-col items-center justify-center h-96 bg-white rounded-2xl border border-gray-100 shadow-sm">
-                  <div className="text-6xl mb-4 opacity-20">🏗️</div>
-                  <h3 className="text-xl font-bold text-gray-900">Módulo en construcción</h3>
-                  <p className="text-gray-500 mt-2">Estamos trabajando en las funciones de {view}.</p>
-                </div>
-              )
-            }
+            {/* Invoices View */}
+            {view === 'invoices' && <Invoices />}
+
+            {/* Settings View */}
+            {view === 'settings' && <Settings />}
           </main >
         </div>
 
@@ -683,6 +873,80 @@ export default function CRMPage() {
         .animate-fadeIn { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
       `}</style>
       </div >
+
+      {/* Customer Creation Modal */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-gray-900">Nuevo Cliente</h3>
+              <button onClick={() => setShowCustomerModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                <input
+                  type="text"
+                  value={newCustomer.name}
+                  onChange={e => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                  placeholder="Nombre del cliente o empresa"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={newCustomer.email}
+                  onChange={e => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                  placeholder="contacto@empresa.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                <input
+                  type="tel"
+                  value={newCustomer.phone}
+                  onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                  placeholder="+58 412 123 4567"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
+                <input
+                  type="text"
+                  value={newCustomer.company}
+                  onChange={e => setNewCustomer({ ...newCustomer, company: e.target.value })}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                  placeholder="Nombre de la empresa"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowCustomerModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateCustomer}
+                  disabled={!newCustomer.name}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-xl font-medium transition-all"
+                >
+                  Crear Cliente
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Onboarding Tour */}
+      {showOnboarding && (
+        <OnboardingTour onComplete={() => setShowOnboarding(false)} />
+      )}
     </div>
   );
 }
