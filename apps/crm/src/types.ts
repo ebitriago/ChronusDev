@@ -180,3 +180,66 @@ export interface WhatsAppMessage {
     metadata?: Record<string, any>;  // Datos adicionales del proveedor
 }
 
+
+// ==========================================
+// ASSISTAI INTEGRATION TYPES
+// ==========================================
+
+export interface AssistAIAgentConfig {
+    id: number;
+    user_id: number;
+    name: string;
+    role: string;
+    flow_id: number;
+    created_at: string;
+    updated_at: string;
+    flow: {
+        id: number;
+        user_id: number;
+        name: string;
+        description: string;
+        prompt: string;
+        created_at: string;
+        updated_at: string;
+    };
+    tools: AssistAITool[];
+}
+
+export interface AssistAITool {
+    id: number;
+    name: string;
+    description: string;
+    type: string;
+    config?: any;
+}
+
+// ==========================================
+// CHAT & CONVERSATION TYPES
+// ==========================================
+
+export type ChatMessage = {
+    id: string;
+    sessionId: string;
+    from: string;    // Display name
+    content: string;
+    platform: 'whatsapp' | 'instagram' | 'assistai'; // Origin
+    sender: 'user' | 'agent'; // Direction
+    timestamp: Date;
+    status?: 'sent' | 'delivered' | 'read';
+    mediaUrl?: string;
+    mediaType?: 'image' | 'video' | 'audio' | 'document';
+};
+
+export type Conversation = {
+    sessionId: string;
+    platform: 'whatsapp' | 'instagram' | 'assistai';
+    agentCode?: string;
+    agentName?: string;
+    customerName: string;
+    customerContact: string; // phone or ig username
+    messages: ChatMessage[];
+    status: 'active' | 'resolved';
+    createdAt: Date;
+    updatedAt: Date;
+    metadata?: any;       // Added for provider info
+};

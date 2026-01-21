@@ -2,16 +2,17 @@
 
 import { useState } from 'react';
 
-type View = 'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'channels' | 'settings' | 'developers';
+type View = 'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'channels' | 'settings' | 'developers' | 'super-admin';
 
 interface SidebarProps {
     currentView: View;
     onChangeView: (view: View) => void;
     isCollapsed: boolean;
     toggleCollapse: () => void;
+    userRole?: string;
 }
 
-export default function Sidebar({ currentView, onChangeView, isCollapsed, toggleCollapse }: SidebarProps) {
+export default function Sidebar({ currentView, onChangeView, isCollapsed, toggleCollapse, userRole }: SidebarProps) {
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
         { id: 'inbox', label: 'Inbox Unificado', icon: '💬' },
@@ -23,6 +24,7 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
         { id: 'invoices', label: 'Facturas', icon: '💰' },
         { id: 'finances', label: 'Finanzas', icon: '💵' },
         { id: 'developers', label: 'Developers', icon: '🛠️' },
+        ...(userRole === 'SUPER_ADMIN' ? [{ id: 'super-admin', label: 'Organizaciones', icon: '🏢' }] : []),
         { id: 'settings', label: 'Configuración', icon: '⚙️' },
     ];
 

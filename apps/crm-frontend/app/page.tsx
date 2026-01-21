@@ -47,30 +47,52 @@ type User = {
   role: string;
 };
 
-async function fetchUsers(): Promise<User[]> {
+// Helper for authenticated requests
+async function secureFetch(endpoint: string) {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('crm_token') : null;
+  const headers: any = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   try {
-    const res = await fetch(`${API_URL}/users`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
+    const res = await fetch(`${API_URL}${endpoint}`, { headers });
+    if (!res.ok) {
+      if (res.status === 401) {
+        // Let component handle logout if needed, or just return empty
+        return null;
+      }
+      return null;
+    }
+    return res.json();
+  } catch (e) {
+    console.error(`Error fetching ${endpoint}`, e);
+    return null;
   }
 }
 
+async function fetchUsers(): Promise<User[]> {
+  const data = await secureFetch('/users');
+  return Array.isArray(data) ? data : [];
+}
+
 async function fetchStats(): Promise<Stats> {
-  const res = await fetch(`${API_URL}/stats`);
-  return res.json();
+  const data = await secureFetch('/stats');
+  return data || {
+    activeCustomers: 0, trialCustomers: 0, mrr: 0,
+    openTickets: 0, overdueInvoices: 0, totalCustomers: 0
+  };
 }
 
 async function fetchCustomers(): Promise<Customer[]> {
-  const res = await fetch(`${API_URL}/customers`);
-  return res.json();
+  const data = await secureFetch('/customers');
+  return Array.isArray(data) ? data : [];
 }
 
 async function fetchTickets(): Promise<Ticket[]> {
-  const res = await fetch(`${API_URL}/tickets`);
-  return res.json();
+  try {
+    // Tickets might fail if endpoint doesn't exist yet or is renamed
+    const data = await secureFetch('/tickets');
+    return Array.isArray(data) ? data : [];
+  } catch { return []; }
 }
 
 import Developers from '../components/Developers';
@@ -86,12 +108,14 @@ import Settings from '../components/Settings';
 import Invoices from '../components/Invoices';
 import NotificationBell from '../components/NotificationBell';
 import AuthPage from '../components/AuthPage';
+import SuperAdminPanel from '../components/SuperAdminPanel';
 
 export default function CRMPage() {
-  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'channels' | 'settings' | 'developers'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'channels' | 'settings' | 'developers' | 'super-admin'>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false); // Separate data loading state
 
   // Data State
   const [stats, setStats] = useState<Stats | null>(null);
@@ -126,8 +150,10 @@ export default function CRMPage() {
 
   // Check authentication on load
   useEffect(() => {
+    // Only check localStorage on mount
     const token = localStorage.getItem('crm_token');
     const userStr = localStorage.getItem('crm_user');
+
     if (token && userStr) {
       try {
         const user = JSON.parse(userStr);
@@ -137,16 +163,17 @@ export default function CRMPage() {
         localStorage.removeItem('crm_token');
         localStorage.removeItem('crm_user');
       }
-    } else {
-      setLoading(false);
     }
+    // Stop loading immediately so showing the page is fast
+    setLoading(false);
   }, []);
 
   // Handle login success
   const handleLogin = (token: string, user: any) => {
     setCurrentUser(user);
     setIsAuthenticated(true);
-    loadData();
+    setLoading(false);
+    // Data will load via effect
   };
 
   // Handle logout
@@ -167,29 +194,35 @@ export default function CRMPage() {
   }, [isAuthenticated]);
 
   const loadData = useCallback(async () => {
+    if (!isAuthenticated) return;
+    setDataLoading(true); // Don't block full UI, just show indicators if needed
     try {
-      const [statsData, customersData, ticketsData, usersData] = await Promise.all([
+      // Fetch logic in parallel but safe
+      // We do this AFTER the UI is already rendered
+      const [statsData, customersData, usersData] = await Promise.all([
         fetchStats(),
         fetchCustomers(),
-        fetchTickets(),
-        fetchUsers(),
+        fetchUsers()
       ]);
+
       setStats(statsData);
       setCustomers(customersData);
-      setTickets(ticketsData);
       setUsers(usersData);
 
-      // Load predictions
-      try {
-        const predRes = await fetch(`${API_URL}/analytics/predictions`);
-        if (predRes.ok) setPredictions(await predRes.json());
-      } catch { /* ignore */ }
+      // Fetch tickets separately to not block others if it fails or is slow
+      fetchTickets().then(setTickets);
+
+      // Load predictions lazily
+      secureFetch('/analytics/predictions').then(pred => {
+        if (pred) setPredictions(pred);
+      });
+
     } catch (err) {
       console.error('Error loading data:', err);
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -293,6 +326,7 @@ export default function CRMPage() {
           onChangeView={(v) => { setView(v); setMobileMenuOpen(false); }}
           isCollapsed={sidebarCollapsed}
           toggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          userRole={currentUser?.role}
         />
       </div>
 
@@ -862,6 +896,9 @@ export default function CRMPage() {
 
             {/* Settings View */}
             {view === 'settings' && <Settings />}
+
+            {/* Super Admin View */}
+            {view === 'super-admin' && <SuperAdminPanel />}
           </main >
         </div>
 

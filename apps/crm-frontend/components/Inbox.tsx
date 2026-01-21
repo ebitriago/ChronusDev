@@ -140,32 +140,51 @@ export default function Inbox() {
         localStorage.setItem('inbox_subscribed_agents', JSON.stringify(subscribedAgents));
     }, [subscribedAgents]);
 
+    // Helper for auth headers
+    function getAuthHeaders() {
+        const token = localStorage.getItem('crm_token');
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    }
+
     // Fetch conversations and agents
     useEffect(() => {
+        const token = localStorage.getItem('crm_token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
         Promise.all([
-            fetch(`${API_URL}/conversations`).then(r => r.json()),
-            fetch(`${API_URL}/assistai/agents`).then(r => r.ok ? r.json() : { data: [] }),
-            fetch(`${API_URL}/clients`).then(r => r.ok ? r.json() : [])
+            fetch(`${API_URL}/conversations`, { headers }).then(r => r.ok ? r.json() : []),
+            fetch(`${API_URL}/assistai/agents`, { headers }).then(r => r.ok ? r.json() : { data: [] }),
+            fetch(`${API_URL}/clients`, { headers }).then(r => r.ok ? r.json() : [])
         ])
             .then(([convData, agentsData, clientsData]) => {
-                setConversations(convData);
+                // Ensure convData is array
+                if (Array.isArray(convData)) {
+                    setConversations(convData);
+                } else {
+                    console.error('Conversations format invalid:', convData);
+                    setConversations([]);
+                }
                 setAgents(agentsData.data || []);
                 setAllClients(Array.isArray(clientsData) ? clientsData : []);
                 setLoading(false);
             })
             .catch(err => {
                 console.error(err);
+                setConversations([]); // Fallback
                 setLoading(false);
             });
     }, []);
 
     // Auto-poll for new messages
     const pollForUpdates = useCallback(async () => {
+        const headers = getAuthHeaders();
         try {
             const url = lastPoll
                 ? `${API_URL}/assistai/poll?since=${encodeURIComponent(lastPoll)}`
                 : `${API_URL}/assistai/poll`;
-            const res = await fetch(url);
+
+            // Cast headers to any to avoid strict TS 'undefined' index signature issue for now
+            const res = await fetch(url, { headers: headers as any });
             const data = await res.json();
 
             if (data.success) {
@@ -174,15 +193,17 @@ export default function Inbox() {
                 if (totalNew > 0) {
                     setNewMessageCount(prev => prev + totalNew);
                     // Refresh conversations list
-                    const convRes = await fetch(`${API_URL}/conversations`);
-                    const convData = await convRes.json();
-                    setConversations(convData);
+                    const convRes = await fetch(`${API_URL}/conversations`, { headers: headers as any });
+                    if (convRes.ok) {
+                        const convData = await convRes.json();
+                        if (Array.isArray(convData)) setConversations(convData);
+                    }
                 }
             }
         } catch (err: any) {
-            // Suppress noisy network errors (ERR_NETWORK_CHANGED, etc.)
+            // Suppress noisy network errors 
             if (err?.message?.includes('Failed to fetch')) {
-                // Silent - network temporarily unavailable
+                // Silent
             } else {
                 console.warn('Poll issue:', err?.message || err);
             }
@@ -204,19 +225,41 @@ export default function Inbox() {
 
         newSocket.on('connect', () => console.log('🔌 Connected to chat server'));
 
-        newSocket.on('inbox_update', (data: { sessionId: string; message: ChatMessage }) => {
+        newSocket.on('inbox_update', async (data: { sessionId: string; message: ChatMessage }) => {
             // Update conversation in list
             setConversations(prev => {
                 const updated = [...prev];
                 const idx = updated.findIndex(c => c.sessionId === data.sessionId);
+
                 if (idx >= 0) {
+                    // Update existing
                     updated[idx].messages.push(data.message);
                     updated[idx].updatedAt = new Date().toISOString();
                     // Move to top
                     const [conv] = updated.splice(idx, 1);
                     updated.unshift(conv);
+                    return updated;
+                } else {
+                    // New conversation, we need to fetch it if we don't have it
+                    // We can't do async inside setState updater properly, so we return prev
+                    // and trigger a fetch outside
+                    return prev;
                 }
-                return updated;
+            });
+
+            // Handle new conversation fetching outside state updater
+            setConversations(prev => {
+                const exists = prev.some(c => c.sessionId === data.sessionId);
+                if (!exists) {
+                    // Fetch generic info for this conversation
+                    // Since we don't have a single conversation fetch endpoint yet that returns one conv fully formatted
+                    // we will trigger a quick refresh of the list or implement a fetch
+
+                    // Option A: Just trigger poll immediately
+                    pollForUpdates();
+                    return prev;
+                }
+                return prev;
             });
 
             // Update selected if viewing
@@ -230,7 +273,10 @@ export default function Inbox() {
 
         newSocket.on('inbox_refresh', () => {
             // Reload conversations when sync happens
-            fetch(`${API_URL}/conversations`).then(r => r.json()).then(setConversations);
+            const headers = getAuthHeaders() as any;
+            fetch(`${API_URL}/conversations`, { headers }).then(r => r.ok ? r.json() : []).then(data => {
+                if (Array.isArray(data)) setConversations(data);
+            });
         });
 
         // Takeover events
@@ -252,7 +298,7 @@ export default function Inbox() {
         });
 
         return () => { newSocket.disconnect(); };
-    }, [selectedConversation?.sessionId]);
+    }, [selectedConversation?.sessionId, pollForUpdates]);
 
     // Auto-scroll
     useEffect(() => {
@@ -271,14 +317,19 @@ export default function Inbox() {
     // Manual sync
     const handleManualSync = async () => {
         setSyncing(true);
+        const headers = getAuthHeaders() as any;
         try {
-            await fetch(`${API_URL}/assistai/sync-all`, { method: 'POST' });
-            const convRes = await fetch(`${API_URL}/conversations`);
-            const convData = await convRes.json();
-            setConversations(convData);
-            setNewMessageCount(0);
+            await fetch(`${API_URL}/assistai/sync-all`, { method: 'POST', headers });
+            const convRes = await fetch(`${API_URL}/conversations`, { headers });
+            if (convRes.ok) {
+                const convData = await convRes.json();
+                if (Array.isArray(convData)) {
+                    setConversations(convData);
+                    setNewMessageCount(0);
+                }
+            }
         } catch (err) {
-            console.error(err);
+            console.error('Sync failed', err);
         } finally {
             setSyncing(false);
         }

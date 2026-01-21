@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react';
 import { useToast } from './Toast';
 import { Skeleton } from './Skeleton';
 
-// API functions para organizations
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001';
+// API functions
+const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
 
 function getHeaders() {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (typeof window !== 'undefined') {
-        const token = localStorage.getItem('authToken');
+        const token = localStorage.getItem('crm_token');
         if (token) headers['Authorization'] = `Bearer ${token}`;
     }
     return headers;
@@ -20,378 +20,336 @@ type Organization = {
     id: string;
     name: string;
     slug: string;
-    isActive: boolean;
-    owner: { id: string; name: string; email: string } | null;
-    memberCount: number;
-    projectCount: number;
+    users?: any[]; // Simplified for list
+};
+
+type User = {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    organizationId?: string;
+    organization?: { id: string; name: string };
     createdAt: string;
 };
 
-type OrgWithUsers = Organization & {
-    users: { id: string; name: string; email: string; role: string; defaultPayRate?: number }[];
-};
-
-async function getOrganizations(): Promise<Organization[]> {
-    const res = await fetch(`${API_URL}/organizations`, { headers: getHeaders() });
-    if (!res.ok) throw new Error('Error loading organizations');
-    return res.json();
-}
-
-async function getOrganization(id: string): Promise<OrgWithUsers> {
-    const res = await fetch(`${API_URL}/organizations/${id}`, { headers: getHeaders() });
-    if (!res.ok) throw new Error('Error loading organization');
-    return res.json();
-}
-
-async function createOrganization(data: { name: string; ownerEmail: string; ownerName: string }): Promise<any> {
-    const res = await fetch(`${API_URL}/organizations`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Error creating organization');
-    }
-    return res.json();
-}
-
-async function updateOrganization(id: string, data: { name?: string; isActive?: boolean }): Promise<any> {
-    const res = await fetch(`${API_URL}/organizations/${id}`, {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Error updating organization');
-    return res.json();
-}
-
-async function deleteOrganization(id: string): Promise<void> {
-    const res = await fetch(`${API_URL}/organizations/${id}`, {
-        method: 'DELETE',
-        headers: getHeaders(),
-    });
-    if (!res.ok) throw new Error('Error deleting organization');
-}
-
 export default function SuperAdminPanel() {
-    const [orgs, setOrgs] = useState<Organization[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [showCreate, setShowCreate] = useState(false);
-    const [showDetail, setShowDetail] = useState<string | null>(null);
-    const [detailOrg, setDetailOrg] = useState<OrgWithUsers | null>(null);
+    const [activeTab, setActiveTab] = useState<'orgs' | 'users'>('orgs');
     const { showToast } = useToast();
 
-    // Create form
-    const [newName, setNewName] = useState('');
-    const [newOwnerName, setNewOwnerName] = useState('');
-    const [newOwnerEmail, setNewOwnerEmail] = useState('');
+    // Data State
+    const [orgs, setOrgs] = useState<Organization[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    // Modals
+    const [showOrgModal, setShowOrgModal] = useState(false);
+    const [showUserModal, setShowUserModal] = useState(false);
+
+    // Form State (Org)
+    const [newOrgName, setNewOrgName] = useState('');
+    const [newOrgSlug, setNewOrgSlug] = useState('');
+
+    // Form State (User)
+    const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'ADMIN', organizationId: '' });
 
     useEffect(() => {
-        loadOrgs();
-    }, []);
+        loadData();
+    }, [activeTab]);
 
-    async function loadOrgs() {
+    async function loadData() {
+        setLoading(true);
         try {
-            setLoading(true);
-            const data = await getOrganizations();
-            setOrgs(data);
-        } catch (err: any) {
-            showToast(err.message || 'Error cargando organizaciones', 'error');
+            if (activeTab === 'orgs') {
+                const res = await fetch(`${API_URL}/organizations`, { headers: getHeaders() });
+                if (res.ok) setOrgs(await res.json());
+            } else {
+                const res = await fetch(`${API_URL}/admin/users`, { headers: getHeaders() });
+                if (res.ok) setUsers(await res.json());
+
+                // Ensure orgs are loaded for dropdown
+                if (orgs.length === 0) {
+                    const resOrgs = await fetch(`${API_URL}/organizations`, { headers: getHeaders() });
+                    if (resOrgs.ok) setOrgs(await resOrgs.json());
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('Error cargando datos', 'error');
         } finally {
             setLoading(false);
         }
     }
 
-    async function handleCreate(e: React.FormEvent) {
-        e.preventDefault();
+    async function handleCreateOrg() {
         try {
-            await createOrganization({ name: newName, ownerName: newOwnerName, ownerEmail: newOwnerEmail });
-            showToast('Organización creada', 'success');
-            setShowCreate(false);
-            setNewName('');
-            setNewOwnerName('');
-            setNewOwnerEmail('');
-            loadOrgs();
-        } catch (err: any) {
-            showToast(err.message, 'error');
-        }
+            const res = await fetch(`${API_URL}/organizations`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({ name: newOrgName, slug: newOrgSlug }),
+            });
+            if (res.ok) {
+                showToast('Organización creada', 'success');
+                setShowOrgModal(false);
+                setNewOrgName('');
+                setNewOrgSlug('');
+                loadData();
+            } else {
+                const err = await res.json();
+                showToast(err.error || 'Error', 'error');
+            }
+        } catch (e) { showToast('Error de conexión', 'error'); }
     }
 
-    async function handleToggleActive(org: Organization) {
+    async function handleCreateUser() {
         try {
-            await updateOrganization(org.id, { isActive: !org.isActive });
-            showToast(org.isActive ? 'Organización desactivada' : 'Organización activada', 'success');
-            loadOrgs();
-        } catch (err: any) {
-            showToast(err.message, 'error');
-        }
+            const res = await fetch(`${API_URL}/admin/users`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify(newUser),
+            });
+            if (res.ok) {
+                showToast('Usuario creado exitosamente', 'success');
+                setShowUserModal(false);
+                setNewUser({ name: '', email: '', password: '', role: 'ADMIN', organizationId: '' });
+                loadData();
+            } else {
+                const err = await res.json();
+                showToast(err.error || 'Error', 'error');
+            }
+        } catch (e) { showToast('Error de conexión', 'error'); }
     }
-
-    async function handleDelete(org: Organization) {
-        if (!confirm(`¿Eliminar "${org.name}" y todos sus usuarios?`)) return;
-        try {
-            await deleteOrganization(org.id);
-            showToast('Organización eliminada', 'success');
-            loadOrgs();
-        } catch (err: any) {
-            showToast(err.message, 'error');
-        }
-    }
-
-    async function handleViewDetail(orgId: string) {
-        try {
-            const data = await getOrganization(orgId);
-            setDetailOrg(data);
-            setShowDetail(orgId);
-        } catch (err: any) {
-            showToast(err.message, 'error');
-        }
-    }
-
-    if (loading) return (
-        <div className="p-6 max-w-7xl mx-auto space-y-4">
-            <Skeleton height="40px" width="300px" />
-            <div className="space-y-3">
-                {[1, 2, 3].map(i => <Skeleton key={i} height="100px" variant="rect" />)}
-            </div>
-        </div>
-    );
 
     return (
-        <div className="p-6 max-w-7xl mx-auto animate-fadeIn">
+        <div className="space-y-6 animate-fadeIn">
             {/* Header */}
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        👑 Panel Super Admin
-                    </h2>
-                    <p className="text-gray-500 dark:text-gray-400">Gestiona todas las organizaciones del sistema</p>
+                    <h2 className="text-2xl font-bold text-gray-900">SaaS Admin Panel</h2>
+                    <p className="text-gray-500 text-sm">Gestiona organizaciones y usuarios de la plataforma</p>
                 </div>
-                <button
-                    onClick={() => setShowCreate(true)}
-                    className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-purple-500/30 flex items-center gap-2 font-medium"
-                >
-                    + Nueva Organización
-                </button>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
-                    <div className="text-3xl font-bold text-purple-600">{orgs.length}</div>
-                    <div className="text-gray-500 text-sm">Organizaciones</div>
-                </div>
-                <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
-                    <div className="text-3xl font-bold text-green-600">{orgs.filter(o => o.isActive).length}</div>
-                    <div className="text-gray-500 text-sm">Activas</div>
-                </div>
-                <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
-                    <div className="text-3xl font-bold text-blue-600">{orgs.reduce((acc, o) => acc + o.memberCount, 0)}</div>
-                    <div className="text-gray-500 text-sm">Usuarios Totales</div>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setActiveTab('orgs')}
+                        className={`px-4 py-2 rounded-xl font-bold transition-all ${activeTab === 'orgs' ? 'bg-slate-900 text-white shadow-lg' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                    >
+                        🏢 Organizaciones
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        className={`px-4 py-2 rounded-xl font-bold transition-all ${activeTab === 'users' ? 'bg-slate-900 text-white shadow-lg' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                    >
+                        👥 Usuarios Globales
+                    </button>
                 </div>
             </div>
 
-            {/* Organizations Table */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm">
-                <table className="w-full">
-                    <thead>
-                        <tr className="bg-gray-50 dark:bg-slate-900/50 border-b border-gray-100 dark:border-slate-700 text-left">
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Organización</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Admin</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Usuarios</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Proyectos</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Estado</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-                        {orgs.map(org => (
-                            <tr key={org.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-xl flex items-center justify-center text-white font-bold shadow-md">
-                                            {org.name.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <span className="font-medium text-gray-900 dark:text-white">{org.name}</span>
-                                            <p className="text-xs text-gray-400">{org.slug}</p>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                    {org.owner ? (
-                                        <div>
-                                            <span className="font-medium text-gray-900 dark:text-white">{org.owner.name}</span>
-                                            <p className="text-xs text-gray-400">{org.owner.email}</p>
-                                        </div>
-                                    ) : (
-                                        <span className="text-gray-400">Sin admin</span>
-                                    )}
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                                        {org.memberCount}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                    <span className="text-gray-600 dark:text-gray-300">{org.projectCount}</span>
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${org.isActive
-                                            ? 'bg-green-100 text-green-800'
-                                            : 'bg-red-100 text-red-800'
-                                        }`}>
-                                        {org.isActive ? '✓ Activa' : '✕ Inactiva'}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => handleViewDetail(org.id)}
-                                            className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                                            title="Ver usuarios"
-                                        >
-                                            👥
-                                        </button>
-                                        <button
-                                            onClick={() => handleToggleActive(org)}
-                                            className={`p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors ${org.isActive ? 'text-orange-500' : 'text-green-500'
-                                                }`}
-                                            title={org.isActive ? 'Desactivar' : 'Activar'}
-                                        >
-                                            {org.isActive ? '⏸️' : '▶️'}
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(org)}
-                                            className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors text-red-500"
-                                            title="Eliminar"
-                                        >
-                                            🗑️
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Create Modal */}
-            {showCreate && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Nueva Organización</h3>
-                            <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            {/* Content Area */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden min-h-[500px]">
+                {loading ? (
+                    <div className="p-10 space-y-4">
+                        <Skeleton className="h-12 w-full" />
+                        <Skeleton className="h-12 w-full" />
+                        <Skeleton className="h-12 w-full" />
+                    </div>
+                ) : activeTab === 'orgs' ? (
+                    // ORGANIZATIONS VIEW
+                    <div className="p-6">
+                        <div className="flex justify-between mb-6">
+                            <h3 className="text-lg font-bold">Listado de Empresas</h3>
+                            <button
+                                onClick={() => setShowOrgModal(true)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-md"
+                            >
+                                + Nueva Organización
+                            </button>
                         </div>
+                        <table className="w-full">
+                            <thead className="bg-gray-50 text-left">
+                                <tr>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Nombre</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Slug / Subdominio</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">ID</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {orgs.map(org => (
+                                    <tr key={org.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 font-medium text-gray-900">{org.name}</td>
+                                        <td className="px-6 py-4 text-gray-600 font-mono text-xs">{org.slug}</td>
+                                        <td className="px-6 py-4 text-gray-400 text-xs font-mono">{org.id}</td>
+                                        <td className="px-6 py-4">
+                                            <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">Editar</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    // USERS VIEW
+                    <div className="p-6">
+                        <div className="flex justify-between mb-6">
+                            <h3 className="text-lg font-bold">Usuarios de la Plataforma</h3>
+                            <button
+                                onClick={() => setShowUserModal(true)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-md"
+                            >
+                                + Crear Usuario / Invitar
+                            </button>
+                        </div>
+                        <table className="w-full">
+                            <thead className="bg-gray-50 text-left">
+                                <tr>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Usuario</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Rol</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Organización</th>
+                                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Fecha Registro</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {users.map(u => (
+                                    <tr key={u.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center font-bold text-slate-600 text-xs">
+                                                    {u.name.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <p className="font-semibold text-gray-900 text-sm">{u.name}</p>
+                                                    <p className="text-xs text-gray-400">{u.email}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2 py-1 rounded text-[10px] font-bold ${u.role === 'SUPER_ADMIN' ? 'bg-purple-100 text-purple-700' :
+                                                u.role === 'ADMIN' ? 'bg-blue-100 text-blue-700' :
+                                                    'bg-gray-100 text-gray-600'
+                                                }`}>
+                                                {u.role}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {u.organization ? (
+                                                <span className="flex items-center gap-1 text-sm text-gray-700 font-medium">
+                                                    🏢 {u.organization.name}
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs text-gray-400 italic">Sin organización</span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 text-xs text-gray-500">
+                                            {new Date(u.createdAt).toLocaleDateString()}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
 
-                        <form onSubmit={handleCreate} className="p-6 space-y-4">
+            {/* CREATE ORG MODAL */}
+            {showOrgModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-fadeIn">
+                        <h3 className="text-xl font-bold mb-4">Nueva Organización</h3>
+                        <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Nombre de la Organización
-                                </label>
+                                <label className="block text-sm font-medium mb-1">Nombre Empresa</label>
                                 <input
-                                    type="text"
-                                    required
-                                    value={newName}
-                                    onChange={e => setNewName(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                                    placeholder="Ej: Acme Inc"
+                                    className="w-full p-2 border rounded-lg"
+                                    value={newOrgName}
+                                    onChange={e => setNewOrgName(e.target.value)}
+                                    placeholder="Ej: Acme Corp"
                                 />
                             </div>
-
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Nombre del Admin
-                                </label>
+                                <label className="block text-sm font-medium mb-1">Slug (URL)</label>
                                 <input
-                                    type="text"
-                                    required
-                                    value={newOwnerName}
-                                    onChange={e => setNewOwnerName(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                                    placeholder="Ej: John Doe"
+                                    className="w-full p-2 border rounded-lg"
+                                    value={newOrgSlug}
+                                    onChange={e => setNewOrgSlug(e.target.value)}
+                                    placeholder="ej: acme-corp"
                                 />
                             </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Email del Admin
-                                </label>
-                                <input
-                                    type="email"
-                                    required
-                                    value={newOwnerEmail}
-                                    onChange={e => setNewOwnerEmail(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                                    placeholder="admin@acme.com"
-                                />
+                            <div className="flex gap-3 pt-2">
+                                <button onClick={() => setShowOrgModal(false)} className="flex-1 py-2 border rounded-xl">Cancelar</button>
+                                <button onClick={handleCreateOrg} className="flex-1 py-2 bg-slate-900 text-white rounded-xl font-bold">Crear</button>
                             </div>
-
-                            <p className="text-xs text-gray-500">
-                                Se creará un usuario Admin con password temporal: <code className="bg-gray-100 dark:bg-slate-800 px-1 rounded">demo123</code>
-                            </p>
-
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowCreate(false)}
-                                    className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-2 rounded-xl hover:shadow-lg transition-all font-medium"
-                                >
-                                    Crear Organización
-                                </button>
-                            </div>
-                        </form>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* Detail Modal */}
-            {showDetail && detailOrg && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center">
+            {/* CREATE USER MODAL */}
+            {showUserModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-fadeIn">
+                        <h3 className="text-xl font-bold mb-4">Nuevo Usuario / Invitación</h3>
+                        <div className="space-y-4">
                             <div>
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{detailOrg.name}</h3>
-                                <p className="text-gray-500 text-sm">Usuarios de esta organización</p>
+                                <label className="block text-sm font-medium mb-1">Nombre Completo</label>
+                                <input
+                                    className="w-full p-2 border rounded-lg"
+                                    value={newUser.name}
+                                    onChange={e => setNewUser({ ...newUser, name: e.target.value })}
+                                />
                             </div>
-                            <button onClick={() => setShowDetail(null)} className="text-gray-400 hover:text-gray-600">✕</button>
-                        </div>
-
-                        <div className="p-6 max-h-96 overflow-y-auto">
-                            {detailOrg.users.length === 0 ? (
-                                <p className="text-gray-500 text-center py-8">No hay usuarios</p>
-                            ) : (
-                                <div className="space-y-3">
-                                    {detailOrg.users.map(user => (
-                                        <div key={user.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-xl">
-                                            <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold">
-                                                {user.name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <span className="font-medium text-gray-900 dark:text-white">{user.name}</span>
-                                                <p className="text-xs text-gray-400 truncate">{user.email}</p>
-                                            </div>
-                                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${user.role === 'ADMIN'
-                                                    ? 'bg-amber-100 text-amber-800'
-                                                    : 'bg-blue-100 text-blue-800'
-                                                }`}>
-                                                {user.role}
-                                            </span>
-                                            {user.defaultPayRate ? (
-                                                <span className="text-sm text-gray-500">${user.defaultPayRate}/hr</span>
-                                            ) : null}
-                                        </div>
-                                    ))}
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Email</label>
+                                <input
+                                    className="w-full p-2 border rounded-lg"
+                                    type="email"
+                                    value={newUser.email}
+                                    onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Contraseña Inicial</label>
+                                <input
+                                    className="w-full p-2 border rounded-lg"
+                                    type="password"
+                                    value={newUser.password}
+                                    onChange={e => setNewUser({ ...newUser, password: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Rol</label>
+                                    <select
+                                        className="w-full p-2 border rounded-lg bg-white"
+                                        value={newUser.role}
+                                        onChange={e => setNewUser({ ...newUser, role: e.target.value })}
+                                    >
+                                        <option value="AGENT">Agente</option>
+                                        <option value="MANAGER">Manager</option>
+                                        <option value="ADMIN">Admin</option>
+                                        <option value="SUPER_ADMIN">Super Admin</option>
+                                    </select>
                                 </div>
-                            )}
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Organización</label>
+                                    <select
+                                        className="w-full p-2 border rounded-lg bg-white"
+                                        value={newUser.organizationId}
+                                        onChange={e => setNewUser({ ...newUser, organizationId: e.target.value })}
+                                    >
+                                        <option value="">-- Sin Org --</option>
+                                        {orgs.map(o => (
+                                            <option key={o.id} value={o.id}>{o.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-2">
+                                <button onClick={() => setShowUserModal(false)} className="flex-1 py-2 border rounded-xl">Cancelar</button>
+                                <button onClick={handleCreateUser} className="flex-1 py-2 bg-emerald-600 text-white rounded-xl font-bold">Crear Usuario</button>
+                            </div>
                         </div>
                     </div>
                 </div>

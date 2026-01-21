@@ -2,10 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { useToast } from './Toast';
-import WhatsAppConfig from './WhatsAppConfig';
+import TeamSettings from './TeamSettings';
 import Integrations from './Integrations';
+import WhatsAppConfig from './WhatsAppConfig';
+import OrgSettings from './OrgSettings';
 
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+// ... (existing imports, skipping to avoid clutter)
+
+// Inside Settings component return statement
+// Add 'team' to tabs array if user is ADMIN or SUPER_ADMIN (or even MANAGER if allowed)
+// For now restricted to ADMIN and SUPER_ADMIN of the organization
+// ...
+
+// Actually I will provide the full replacement for the tabs section and import 
+
 
 type Tag = {
     id: string;
@@ -15,13 +25,19 @@ type Tag = {
     createdAt: string;
 };
 
+
+const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || "http://localhost:3002";
+
 export default function Settings() {
-    const [activeTab, setActiveTab] = useState<'profile' | 'tags' | 'whatsapp' | 'integrations' | 'notifications'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'tags' | 'whatsapp' | 'integrations' | 'notifications' | 'organization'>('profile');
     const [tags, setTags] = useState<Tag[]>([]);
     const [loading, setLoading] = useState(false);
     const [showTagModal, setShowTagModal] = useState(false);
     const [newTag, setNewTag] = useState({ name: '', color: '#10b981', category: 'general' as const });
     const { showToast } = useToast();
+
+    // Auth state for internal role check
+    const [userRole, setUserRole] = useState<string | null>(null);
 
     // Profile settings (local storage simulation)
     const [profile, setProfile] = useState({
@@ -33,6 +49,15 @@ export default function Settings() {
     });
 
     useEffect(() => {
+        // Get user role from local storage
+        const userStr = localStorage.getItem('crm_user');
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                setUserRole(user.role);
+            } catch (e) { console.error(e); }
+        }
+
         if (activeTab === 'tags') {
             fetchTags();
         }
@@ -112,18 +137,26 @@ export default function Settings() {
                     { id: 'tags', label: 'Etiquetas', icon: '🏷️' },
                     { id: 'integrations', label: 'Integraciones', icon: '🔌' },
                     { id: 'whatsapp', label: 'WhatsApp', icon: '📱' },
-                    { id: 'notifications', label: 'Notificaciones', icon: '🔔' }
-                ].map(tab => (
+                    { id: 'notifications', label: 'Notificaciones', icon: '🔔' },
+                    // Conditional Tab for Admin
+                    ...(userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' ? [
+                        { id: 'team', label: 'Equipo', icon: '👥' },
+                        { id: 'organization', label: 'Organización', icon: '🏢' }
+                    ] : [])
+                ].map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as any)}
-                        className={`px-4 py-2 rounded-xl font-medium text-sm transition-all flex items-center gap-2 ${activeTab === tab.id
-                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20'
-                            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${activeTab === tab.id
+                            ? 'bg-slate-900 text-white shadow-lg shadow-slate-200 transform scale-[1.02]'
+                            : 'text-gray-500 hover:bg-white hover:shadow-sm hover:text-gray-900'
                             }`}
                     >
-                        <span>{tab.icon}</span>
-                        {tab.label}
+                        <span className="text-xl">{tab.icon}</span>
+                        <span className="font-semibold text-sm">{tab.label}</span>
+                        {activeTab === tab.id && (
+                            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        )}
                     </button>
                 ))}
             </div>
@@ -280,6 +313,9 @@ export default function Settings() {
                     </div>
                 </div>
             )}
+
+            {/* Organization Tab */}
+            {activeTab === 'organization' && <OrgSettings />}
 
             {/* Create Tag Modal */}
             {showTagModal && (
