@@ -162,6 +162,34 @@ export default function Integrations() {
                         Configurar
                     </button>
                 </div>
+
+                {/* AssistAI Integration */}
+                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
+                            <span className="text-2xl">🤖</span>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-gray-900">AssistAI</h4>
+                            <p className="text-xs text-gray-500 mb-1">Conecta tus agentes de IA</p>
+                            {integrations['ASSISTAI']?.isEnabled ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Conectado
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
+                                    No conectado
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => handleEdit('ASSISTAI')}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                    >
+                        Configurar
+                    </button>
+                </div>
             </div>
 
             {/* Config Modal */}
@@ -170,7 +198,7 @@ export default function Integrations() {
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-fadeIn">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold text-gray-900">
-                                Configurar {editingProvider === 'GOOGLE' ? 'Google Calendar' : 'Gmail'}
+                                Configurar {editingProvider === 'GOOGLE' ? 'Google Calendar' : editingProvider === 'GMAIL' ? 'Gmail' : 'AssistAI'}
                             </h3>
                             <button onClick={() => setEditingProvider(null)} className="text-gray-400 hover:text-gray-600">✕</button>
                         </div>
@@ -230,6 +258,44 @@ export default function Integrations() {
                                             onChange={e => setFormData({ ...formData, appPassword: e.target.value })}
                                             className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
                                             placeholder="xxxx xxxx xxxx xxxx"
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            {editingProvider === 'ASSISTAI' && (
+                                <>
+                                    <div className="bg-purple-50 text-purple-800 text-xs p-3 rounded-lg mb-4">
+                                        ℹ️ Ingresa las credenciales de tu organización de AssistAI.
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">API Token</label>
+                                        <input
+                                            type="password"
+                                            value={formData.apiToken || ''}
+                                            onChange={e => setFormData({ ...formData, apiToken: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="JWT Token"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Tenant Domain</label>
+                                        <input
+                                            type="text"
+                                            value={formData.tenantDomain || ''}
+                                            onChange={e => setFormData({ ...formData, tenantDomain: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="e.g. ce230715ba86721e"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Organization Code</label>
+                                        <input
+                                            type="text"
+                                            value={formData.organizationCode || ''}
+                                            onChange={e => setFormData({ ...formData, organizationCode: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="e.g. d59b32edfb28e130"
                                         />
                                     </div>
                                 </>

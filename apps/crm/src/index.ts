@@ -8,8 +8,8 @@ import { fileURLToPath } from "url";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { apiReference } from '@scalar/express-api-reference';
-import { customers, tickets, invoices, communications, transactions, leads, tags, loadAssistAICache, saveAssistAICache, channelConfigs, conversationTakeovers, type AssistAICache, type ChannelConfig, type ConversationTakeover } from "./data.js";
-import type { Customer, Ticket, Invoice, Communication, TicketStatus, Transaction, Lead, Tag } from "./types.js";
+import { customers, tickets, invoices, communications, transactions, leads, tags, loadAssistAICache, saveAssistAICache, channelConfigs, conversationTakeovers, type AssistAICache, type ChannelConfig, type ConversationTakeover, conversations, initConversations, saveOrganizationConfig, getOrganizationConfig } from "./data.js";
+import type { Customer, Ticket, Invoice, Communication, TicketStatus, Transaction, Lead, Tag, ChatMessage, Conversation } from "./types.js";
 import { authMiddleware, optionalAuth, requireRole, handleLogin, handleRegister, handleLogout, getAssistAIAuthUrl, handleAssistAICallback } from "./auth.js";
 import { prisma } from "./db.js";
 import { logActivity, getCustomerActivities, getLeadActivities, getTicketActivities, getRecentActivities, activityTypeLabels, activityTypeIcons } from "./activity.js";
@@ -17,6 +17,8 @@ import { sendEmail, verifyEmailConnection, emailTemplates } from "./email.js";
 import { getGoogleAuthUrl, handleGoogleCallback, createEvent, listEvents, createClientMeeting, createFollowUpReminder } from "./calendar.js";
 import { getUserIntegrations, saveUserIntegration } from "./integrations.js";
 import { generateInvoicePDF, generateAnalyticsPDF } from "./reports.js";
+import { AssistAIService } from "./services/assistai.js";
+import bcrypt from "bcryptjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,53 +56,9 @@ const authLimiter = rateLimit({
 app.use(limiter);
 app.use("/auth/login", authLimiter);
 
-// ========== LIVE CHAT DATA STRUCTURES ==========
 
-type ChatMessage = {
-    id: string;
-    sessionId: string;
-    from: string;       // User identifier (phone, email, etc)
-    content: string;
-    platform: 'assistai' | 'whatsapp' | 'instagram' | 'messenger';
-    sender: 'user' | 'agent';
-    mediaUrl?: string;  // URL of image, audio, or document
-    mediaType?: 'image' | 'audio' | 'document' | 'video'; // Added video
-    timestamp: Date;
-    metadata?: any;     // Added for provider info
-    status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
-};
 
-type Conversation = {
-    sessionId: string;
-    platform: 'assistai' | 'whatsapp' | 'instagram' | 'messenger';
-    customerName?: string;
-    customerContact: string;
-    agentCode?: string;   // AssistAI agent code
-    agentName?: string;   // AssistAI agent name (e.g., "Claudia")
-    messages: ChatMessage[];
-    status: 'active' | 'resolved';
-    createdAt: Date;
-    updatedAt: Date;
-    metadata?: any;       // Added for provider info
-};
 
-// In-memory conversations store
-const conversations: Map<string, Conversation> = new Map();
-
-// AssistAI Config (from environment variables or defaults from provided credentials)
-const ASSISTAI_CONFIG = {
-    baseUrl: process.env.ASSISTAI_API_URL || 'https://public.assistai.lat',
-    apiToken: process.env.ASSISTAI_API_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFzc2lzdGFpLmxhdEBnbWFpbC5jb20iLCJzdWIiOjU0LCJkYXRhIjp7InVzZXIiOnsiaWQiOjU0LCJlbWFpbCI6ImFzc2lzdGFpLmxhdEBnbWFpbC5jb20iLCJmaXJzdG5hbWUiOiJBc3Npc3RhaSIsImxhc3RuYW1lIjoiTWFya2V0aW5nIHkgc29wb3J0ZSIsInBob3RvVXJsIjoiaHR0cHM6Ly9tdWx0aW1lZGlhLmFzc2lzdGFpLmxhdC91cGxvYWRzL2Q5NGM0ZjJiNWYyNjQwNDBhMGJhMGMxYmVkY2Y5NzkzIiwicGhvbmVOdW1iZXIiOm51bGwsImNhbkNyZWF0ZU9yZ2FuaXphdGlvbnMiOnRydWV9fSwiaWF0IjoxNzY4ODU2NDg5LCJleHAiOjE3NzE0NDg0ODl9.ZqL9ayDBJMrhjrMN1M7MEjPfupItxw0yOu0v-2rKOsc',
-    tenantDomain: process.env.ASSISTAI_TENANT_DOMAIN || 'ce230715ba86721e',
-    organizationCode: process.env.ASSISTAI_ORG_CODE || 'd59b32edfb28e130',
-    // Default sender metadata
-    senderMetadata: {
-        id: 54,
-        email: 'assistai.lat@gmail.com',
-        firstname: 'Assistai',
-        lastname: 'Marketing y soporte'
-    }
-};
 
 // Cached agents from AssistAI
 let cachedAgents: any[] = [];
@@ -164,7 +122,47 @@ io.on("connection", (socket) => {
 });
 
 // Health check
+// Health check
 app.get("/health", (req, res) => res.json({ status: "ok", service: "chronus-crm" }));
+
+// ========== ASSISTAI PROXY ==========
+
+app.get("/api/assistai/agent-config/:agentId", async (req, res) => {
+    const { agentId } = req.params;
+
+    // Check if configuration is present
+    if (!ASSISTAI_CONFIG.apiToken || !ASSISTAI_CONFIG.tenantDomain || !ASSISTAI_CONFIG.organizationCode) {
+        return res.status(500).json({
+            error: 'Configuration missing',
+            details: 'ASSISTAI_API_TOKEN, ASSISTAI_TENANT_DOMAIN, or ASSISTAI_ORG_CODE not set'
+        });
+    }
+
+    try {
+        const response = await fetch(`${ASSISTAI_CONFIG.baseUrl}/api/v1/agents/${agentId}/configuration`, {
+            headers: {
+                'x-tenant-domain': ASSISTAI_CONFIG.tenantDomain,
+                'x-organization-code': ASSISTAI_CONFIG.organizationCode,
+                'Authorization': `Bearer ${ASSISTAI_CONFIG.apiToken}`
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`[AssistAI] Config Error for agent ${agentId}:`, response.status, errorText);
+            return res.status(response.status).json({
+                error: 'Failed to fetch agent config',
+                details: errorText
+            });
+        }
+
+        const data = await response.json();
+        res.json(data);
+    } catch (error: any) {
+        console.error('[AssistAI] Config Exception:', error);
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+    }
+});
 
 // ========== CUSTOMERS ==========
 
@@ -1748,22 +1746,24 @@ app.post("/chat/send", async (req, res) => {
                 }
             }
         } else if (conversation.platform === 'assistai') {
-            // Send via AssistAI
-            // Ensure we use the configuration compatible with the new documentation
-            const messageData = {
-                content,
-                senderMetadata: ASSISTAI_CONFIG.senderMetadata // Use default metadata for now
-            };
-
-            // We assume sessionId is the conversation UUID required by AssistAI
+            // Send via AssistAI Service
             try {
-                await assistaiPost(`/conversations/${sessionId}/messages`, messageData);
+                // Get config for organization (default for now)
+                const orgConfig = getOrganizationConfig('org-default');
+                // Construct required config
+                const config = {
+                    baseUrl: process.env.ASSISTAI_API_URL || 'https://public.assistai.lat',
+                    apiToken: orgConfig?.apiToken || process.env.ASSISTAI_API_TOKEN || '',
+                    tenantDomain: orgConfig?.tenantDomain || process.env.ASSISTAI_TENANT_DOMAIN || '',
+                    organizationCode: orgConfig?.organizationCode || process.env.ASSISTAI_ORG_CODE || ''
+                };
+
+                await AssistAIService.sendMessage(config, sessionId, content, 'User');
                 console.log(`[AssistAI] Sent via Unified Send to ${sessionId}`);
                 newMessage.status = 'sent';
             } catch (error: any) {
                 console.error(`[AssistAI] Failed to send:`, error.message);
                 newMessage.status = 'failed';
-                // We proceed to save it as failed so user sees error
             }
         }
 
@@ -1784,10 +1784,40 @@ app.post("/chat/send", async (req, res) => {
 });
 
 // Get all conversations (for Inbox list)
-app.get("/conversations", (req, res) => {
-    const list = Array.from(conversations.values())
-        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-    res.json(list);
+app.get("/conversations", authMiddleware, async (req: any, res) => { // Now protected
+    try {
+        // Fetch from Prisma with messages
+        const dbConversations = await prisma.conversation.findMany({
+            include: { messages: { orderBy: { createdAt: 'asc' } } },
+            orderBy: { updatedAt: 'desc' }
+        });
+
+        const list = dbConversations.map(c => ({
+            sessionId: c.sessionId,
+            platform: c.platform.toLowerCase(),
+            customerName: c.customerName,
+            customerContact: c.customerContact,
+            agentCode: c.agentCode,
+            agentName: c.agentName,
+            status: c.status,
+            updatedAt: c.createdAt.toISOString(), // or updatedAt if available
+            messages: c.messages.map(m => ({
+                id: m.id,
+                sessionId: c.sessionId,
+                from: m.sender === 'AGENT' ? (c.agentName || 'Agent') : (c.customerName || 'User'),
+                content: m.content,
+                platform: c.platform.toLowerCase(),
+                sender: m.sender === 'AGENT' ? 'agent' : 'user',
+                timestamp: m.createdAt.toISOString(),
+                status: 'delivered' // default
+            }))
+        }));
+
+        res.json(list);
+    } catch (err: any) {
+        console.error('Error fetching conversations:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Get single conversation history
@@ -2237,805 +2267,276 @@ app.get("/conversations/:sessionId/takeover-status", (req, res) => {
 });
 
 // ========== ASSISTAI INTEGRATION ==========
+import { assistaiRouter } from "./routes/assistai.js";
 
-// AssistAI Config (from environment variables or defaults from provided credentials)
+// Mount AssistAI Router
+app.use("/api/assistai", assistaiRouter);
+// Also support legacy paths if needed, or redirect/alias. 
+// For now, we mapped everything to be under /api/assistai in the router or we can mount it at root if we want to keep exact paths.
+// The router was written with relative paths like /agents.
+// If we mount at /assistai, then /assistai/agents works.
+// Note: Frontend uses /assistai/agents directly?
+// Let's verify frontend usage.
+// If frontend calls /assistai/agents, allow mounting at /assistai too.
+app.use("/assistai", assistaiRouter);
 
-
-// Helper for AssistAI GET requests
-async function assistaiFetch(endpoint: string) {
-    const headers: Record<string, string> = {
-        'Authorization': `Bearer ${ASSISTAI_CONFIG.apiToken}`,
-        'x-tenant-domain': ASSISTAI_CONFIG.tenantDomain,
-        'x-organization-code': ASSISTAI_CONFIG.organizationCode,
-        'Content-Type': 'application/json',
-    };
-    const res = await fetch(`${ASSISTAI_CONFIG.baseUrl}/api/v1${endpoint}`, { headers });
-    if (!res.ok) throw new Error(`AssistAI error: ${res.status}`);
-    return res.json();
+// Helper to get AssistAI Config for a User (Moved logic to Service if needed, or keep for Auth/limited use)
+// For now keeping this as it touches Prisma and User model directly which Service might not have access to yet without circular deps?
+// Actually we can keep this for Multi-tenancy support if specialized.
+async function getUserAssistAIConfig(userId?: string): Promise<any> {
+    // ... simplified or deprecated
+    if (!userId) return {}; // Default is handled in service
+    // This logic is specific to per-user config override. 
+    // We can refactor this later.
+    return {};
 }
 
-// Helper for AssistAI POST requests
-async function assistaiPost(endpoint: string, body: any) {
-    const headers: Record<string, string> = {
-        'Authorization': `Bearer ${ASSISTAI_CONFIG.apiToken}`,
-        'x-tenant-domain': ASSISTAI_CONFIG.tenantDomain,
-        'x-organization-code': ASSISTAI_CONFIG.organizationCode,
-        'Content-Type': 'application/json',
-    };
-    const res = await fetch(`${ASSISTAI_CONFIG.baseUrl}/api/v1${endpoint}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body)
-    });
-    if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || `AssistAI error: ${res.status}`);
-    }
-    return res.json();
-}
+// ========== ORGANIZATIONS (MULTI-TENANCY) ==========
 
-// Send message to AssistAI conversation (from CRM Inbox)
-app.post("/assistai/conversations/:conversationId/messages", async (req, res) => {
-    const { conversationId } = req.params;
-    const { content, senderName, senderEmail } = req.body;
-
-    if (!content) {
-        return res.status(400).json({ error: "content es requerido" });
-    }
-
+// Create Organization (Super Admin)
+app.post("/organizations", authMiddleware, requireRole('SUPER_ADMIN'), async (req: any, res) => {
     try {
-        const messageData = {
-            content,
-            senderMetadata: {
-                id: ASSISTAI_CONFIG.senderMetadata.id,
-                email: senderEmail || ASSISTAI_CONFIG.senderMetadata.email,
-                firstname: senderName?.split(' ')[0] || ASSISTAI_CONFIG.senderMetadata.firstname,
-                lastname: senderName?.split(' ').slice(1).join(' ') || ASSISTAI_CONFIG.senderMetadata.lastname
-            }
-        };
+        const { name, slug } = req.body;
+        if (!name || !slug) return res.status(400).json({ error: "Name and slug required" });
 
-        const result = await assistaiPost(`/conversations/${conversationId}/messages`, messageData);
-
-        console.log(`[AssistAI] Mensaje enviado a conversación ${conversationId}: ${content.substring(0, 50)}...`);
-
-        // Emit socket event for real-time update
-        io.emit('message_sent', {
-            conversationId,
-            content,
-            sender: 'agent',
-            timestamp: new Date().toISOString()
+        const org = await prisma.organization.create({
+            data: { name, slug }
         });
 
-        res.json({ success: true, data: result });
+        res.status(201).json(org);
     } catch (err: any) {
-        console.error('[AssistAI] Error enviando mensaje:', err.message);
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// Update Organization AssistAI Config
+app.patch("/organizations/:id/assistai", authMiddleware, requireRole('ADMIN'), async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const { apiToken, organizationCode, tenantDomain } = req.body;
+
+        // Security check: only allow updating own org if not SUPER_ADMIN
+        const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+        if (user?.role !== 'SUPER_ADMIN' && user?.organizationId !== id) {
+            return res.status(403).json({ error: "No autorizado" });
+        }
+
+        const org = await prisma.organization.update({
+            where: { id },
+            data: {
+                assistaiConfig: { apiToken, organizationCode, tenantDomain }
+            }
+        });
+
+        res.json({ success: true, message: "Configuración actualizada" });
+    } catch (err: any) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// List Organizations (Super Admin)
+app.get("/organizations", authMiddleware, requireRole('SUPER_ADMIN'), async (req, res) => {
+    const orgs = await prisma.organization.findMany();
+    res.json(orgs);
+});
+
+
+
+
+
+
+
+
+// ==================== SAAS ADMIN (USERS) ====================
+
+// List All Users (Super Admin)
+app.get("/admin/users", authMiddleware, requireRole('SUPER_ADMIN'), async (req, res) => {
+    try {
+        const users = await prisma.user.findMany({
+            include: { organization: { select: { id: true, name: true } } },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        // Sanitize passwords
+        const sanitized = users.map(u => {
+            const { password, ...rest } = u;
+            return rest;
+        });
+
+        res.json(sanitized);
+    } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// GET AssistAI Agents
-app.get("/assistai/agents", async (req, res) => {
+// Create User (Super Admin)
+app.post("/admin/users", authMiddleware, requireRole('SUPER_ADMIN'), async (req: any, res) => {
     try {
-        console.log('[AssistAI] Fetching agents...');
-        // Timeout promise
-        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout connecting to AssistAI')), 5000));
+        const { name, email, password, role, organizationId } = req.body;
 
-        // Race between fetch and timeout
-        const data: any = await Promise.race([
-            assistaiFetch('/agents'),
-            timeout
+        if (!email || !password || !name) {
+            return res.status(400).json({ error: "Email, password y nombre son requeridos" });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const user = await prisma.user.create({
+            data: {
+                name,
+                email,
+                password: hashedPassword,
+                role: role || 'AGENT',
+                organizationId: organizationId || null
+            }
+        });
+
+        const { password: _, ...rest } = user;
+        res.status(201).json(rest);
+    } catch (err: any) {
+        if (err.code === 'P2002') { // Unique constraint
+            return res.status(400).json({ error: "El email ya está registrado" });
+        }
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// Update User (Super Admin)
+app.patch("/admin/users/:id", authMiddleware, requireRole('SUPER_ADMIN'), async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const { name, email, role, organizationId, password } = req.body;
+
+        const updateData: any = { name, email, role, organizationId };
+
+        if (password) {
+            updateData.password = await bcrypt.hash(password, 10);
+        }
+
+        // Remove undefined fields
+        Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+
+        const user = await prisma.user.update({
+            where: { id },
+            data: updateData
+        });
+
+        const { password: _, ...rest } = user;
+        res.json(rest);
+    } catch (err: any) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// ==================== TENANT ADMIN (TEAM) ====================
+
+// List Organization Users (Tenant Admin)
+app.get("/organization/users", authMiddleware, requireRole('ADMIN'), async (req: any, res) => {
+    try {
+        const organizationId = req.user.organizationId;
+        if (!organizationId) return res.status(403).json({ error: "No tienes organización asignada" });
+
+        const users = await prisma.user.findMany({
+            where: { organizationId },
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, name: true, email: true, role: true, createdAt: true, lastLoginAt: true }
+        });
+
+        res.json(users);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Invite/Create User for Organization (Tenant Admin)
+app.post("/organization/users", authMiddleware, requireRole('ADMIN'), async (req: any, res) => {
+    // ... (existing code, ensure it's kept or matched correctly)
+    try {
+        const organizationId = req.user.organizationId;
+        if (!organizationId) return res.status(403).json({ error: "No tienes organización asignada" });
+
+        const { name, email, password, role } = req.body;
+
+        if (!email || !password || !name) {
+            return res.status(400).json({ error: "Email, password y nombre son requeridos" });
+        }
+
+        // Restrict roles a Tenant Admin can assign (cannot create SUPER_ADMIN)
+        if (!['AGENT', 'MANAGER', 'ADMIN'].includes(role)) {
+            return res.status(400).json({ error: "Rol no permitido" });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const user = await prisma.user.create({
+            data: {
+                name,
+                email,
+                password: hashedPassword,
+                role: role || 'AGENT',
+                organizationId
+            }
+        });
+
+        const { password: _, ...rest } = user;
+        res.status(201).json(rest);
+    } catch (err: any) {
+        if (err.code === 'P2002') {
+            return res.status(400).json({ error: "El email ya está registrado" });
+        }
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// SEED DEMO DATA
+app.post("/organization/seed-demo", authMiddleware, requireRole('ADMIN'), async (req: any, res) => {
+    try {
+        const organizationId = req.user.organizationId;
+        if (!organizationId) return res.status(403).json({ error: "No tienes organización asignada" });
+
+        // 1. Create Dummy Customers
+        const customers = await Promise.all([
+            prisma.customer.create({ data: { organizationId, name: 'Empresa Demo A', email: 'contacto@demoa.com', plan: 'PRO', status: 'active', monthlyRevenue: 1500 } }),
+            prisma.customer.create({ data: { organizationId, name: 'Consultora XYZ', email: 'info@xyz.com', plan: 'ENTERPRISE', status: 'active', monthlyRevenue: 5000 } }),
+            prisma.customer.create({ data: { organizationId, name: 'Startup Beta', email: 'hello@beta.io', plan: 'STARTER', status: 'trial', monthlyRevenue: 0 } }),
+            prisma.customer.create({ data: { organizationId, name: 'Restaurante El Sabor', email: 'reservas@sabor.com', plan: 'PRO', status: 'active', monthlyRevenue: 1200 } }),
+            prisma.customer.create({ data: { organizationId, name: 'Tech Solutions', email: 'support@techsol.com', plan: 'ENTERPRISE', status: 'churned', monthlyRevenue: 0 } }),
         ]);
 
-        // Cache successful response
-        if (data && data.data) {
-            cachedAgents = data.data;
-            // Background save
-            const currentCache = loadAssistAICache();
-            currentCache.agents = cachedAgents;
-            saveAssistAICache(currentCache);
-        }
-
-        res.json(data);
-    } catch (err: any) {
-        console.error('[AssistAI] Agent fetch failed:', err.message);
-
-        // Fallback to cache
-        if (cachedAgents.length > 0) {
-            console.log('[AssistAI] Returning cached agents');
-            res.json({ data: cachedAgents, meta: { source: 'cache_fallback' } });
-        } else {
-            res.status(500).json({ error: err.message || "Failed to fetch agents and no cache available" });
-        }
-    }
-});
-
-// PATCH Update AssistAI Agent
-app.patch("/assistai/agents/:code", async (req, res) => {
-    const { code } = req.params;
-    const updateData = req.body;
-
-    try {
-        // Proxy update to AssistAI
-        const response = await fetch(`${process.env.ASSISTAI_API_URL}/api/v1/agents/${code}`, {
-            method: 'PATCH',
-            headers: {
-                'Authorization': `Bearer ${process.env.ASSISTAI_API_TOKEN}`,
-                'Content-Type': 'application/json',
-                'x-tenant-domain': process.env.ASSISTAI_TENANT_DOMAIN || '',
-                'x-organization-code': process.env.ASSISTAI_ORG_CODE || ''
-            },
-            body: JSON.stringify(updateData)
+        // 2. Create Dummy Tickets
+        await prisma.ticket.createMany({
+            data: [
+                { organizationId, title: 'Error en login', status: 'OPEN', priority: 'HIGH', customerId: customers[0].id },
+                { organizationId, title: 'Consulta sobre facturación', status: 'IN_PROGRESS', priority: 'MEDIUM', customerId: customers[1].id },
+                { organizationId, title: 'Feature Request: Dark Mode', status: 'OPEN', priority: 'LOW', customerId: customers[2].id },
+                { organizationId, title: 'Problema con integración WhatsApp', status: 'RESOLVED', priority: 'URGENT', customerId: customers[3].id },
+            ]
         });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            return res.status(response.status).json({
-                error: errorData.message || 'Error updating agent',
-                details: errorData
-            });
-        }
+        // 3. Create Dummy Leads
+        await prisma.lead.createMany({
+            data: [
+                { organizationId, name: 'Interesado Demo', email: 'lead1@test.com', status: 'NEW', source: 'Website' },
+                { organizationId, name: 'Posible Partner', email: 'partner@test.com', status: 'CONTACTED', source: 'LinkedIn' },
+                { organizationId, name: 'Cliente Potencial Grande', email: 'bigdeal@test.com', status: 'QUALIFIED', source: 'Referral' },
+            ]
+        });
 
-        const result = await response.json();
-
-        // Update local cache
-        const cacheIndex = cachedAgents.findIndex(a => a.code === code);
-        if (cacheIndex >= 0) {
-            cachedAgents[cacheIndex] = { ...cachedAgents[cacheIndex], ...updateData };
-        }
-
-        res.json({ success: true, agent: result });
+        res.json({ success: true, message: "Datos de demostración generados correctamente." });
     } catch (err: any) {
-        console.error("Error updating agent:", err);
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// GET AssistAI Conversations 
-app.get("/assistai/conversations", async (req, res) => {
-    try {
-        const { page = 1, take = 20 } = req.query;
-        const data = await assistaiFetch(`/conversations?page=${page}&take=${take}`);
-        res.json(data);
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
-// GET AssistAI Conversation Messages
-app.get("/assistai/conversations/:uuid/messages", async (req, res) => {
-    try {
-        const { uuid } = req.params;
-        const { page = 1, take = 50 } = req.query;
-        const data = await assistaiFetch(`/conversations/${uuid}/messages?page=${page}&take=${take}&order=ASC`);
-        res.json(data);
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
-// Sync AssistAI conversations into local inbox
-app.post("/assistai/sync", async (req, res) => {
-    try {
-        const convData = await assistaiFetch('/conversations?take=50');
-        const synced: string[] = [];
 
-        for (const conv of convData.data || []) {
-            const sessionId = `assistai-${conv.uuid}`;
-            if (!conversations.has(sessionId)) {
-                // Fetch messages
-                const msgData = await assistaiFetch(`/conversations/${conv.uuid}/messages?take=100&order=ASC`);
-                const messages: ChatMessage[] = (msgData.data || []).map((m: any) => ({
-                    id: `assistai-msg-${m.id}`,
-                    sessionId,
-                    from: m.sender === 'user' ? conv.title || 'Usuario' : 'AssistAI Bot',
-                    content: m.content,
-                    platform: 'assistai' as const,
-                    sender: m.sender === 'user' ? 'user' as const : 'agent' as const,
-                    timestamp: new Date(m.timestamp || m.createdAt)
-                }));
 
-                conversations.set(sessionId, {
-                    sessionId,
-                    platform: 'assistai',
-                    customerName: conv.title || 'Usuario AssistAI',
-                    customerContact: conv.uuid,
-                    messages,
-                    status: 'active',
-                    createdAt: new Date(conv.createdAt),
-                    updatedAt: new Date()
-                });
-                synced.push(sessionId);
-            }
-        }
 
-        io.emit("inbox_refresh", { synced: synced.length });
-        res.json({ success: true, synced: synced.length, total: conversations.size });
-    } catch (err: any) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
-// Local Agent Config Store (for custom notes, assignments)
-type AgentLocalConfig = {
-    code: string;
-    customName?: string;
-    notes?: string;
-    assignedToUserId?: string;
-    updatedAt: Date;
-};
-const agentLocalConfigs: Map<string, AgentLocalConfig> = new Map();
 
-// GET Single AssistAI Agent Details
-app.get("/assistai/agents/:code", async (req, res) => {
-    const { code } = req.params;
 
-    try {
-        // First get the agent basic info
-        let agent = null;
-        try {
-            const agentsData = await assistaiFetch('/agents');
-            agent = (agentsData.data || []).find((a: any) => a.code === code);
-        } catch (agentErr: any) {
-            console.error("Error fetching agents from AssistAI:", agentErr.message);
-            return res.status(503).json({
-                error: "Error conectando con AssistAI",
-                details: agentErr.message,
-                retryable: true
-            });
-        }
 
-        if (!agent) {
-            return res.status(404).json({ error: "Agente no encontrado" });
-        }
-
-        // Merge with local config
-        const localConfig = agentLocalConfigs.get(code);
-
-        // Try to get conversation stats (but don't fail if this errors)
-        let stats = { totalConversations: 0, recentConversations: [] as any[] };
-        try {
-            const convData = await assistaiFetch('/conversations?take=100');
-            const agentConversations = (convData.data || []).filter((c: any) => c.agentCode === code);
-            stats = {
-                totalConversations: agentConversations.length,
-                recentConversations: agentConversations.slice(0, 5)
-            };
-        } catch (convErr: any) {
-            console.error("Error fetching conversations for agent stats:", convErr.message);
-            // Continue with empty stats - non-critical error
-        }
-
-        res.json({
-            ...agent,
-            localConfig: localConfig || null,
-            stats
-        });
-    } catch (err: any) {
-        console.error("Unexpected error in agent detail:", err);
-        res.status(500).json({ error: err.message, retryable: true });
-    }
-});
-
-// PUT Update Local Agent Config
-app.put("/assistai/agents/:code/config", (req, res) => {
-    const { code } = req.params;
-    const { customName, notes, assignedToUserId } = req.body;
-
-    const existing = agentLocalConfigs.get(code) || { code, updatedAt: new Date() };
-    const updated: AgentLocalConfig = {
-        ...existing,
-        customName: customName !== undefined ? customName : existing.customName,
-        notes: notes !== undefined ? notes : existing.notes,
-        assignedToUserId: assignedToUserId !== undefined ? assignedToUserId : existing.assignedToUserId,
-        updatedAt: new Date()
-    };
-
-    agentLocalConfigs.set(code, updated);
-    res.json({ success: true, config: updated });
-});
-
-// GET All Agent Local Configs
-app.get("/assistai/configs", (req, res) => {
-    res.json(Array.from(agentLocalConfigs.values()));
-});
-
-// Enhanced Sync: Fetch all conversations with messages and agent/platform info
-app.post("/assistai/sync-all", async (req, res) => {
-    try {
-        // First get all agents to map codes to names
-        const agentsData = await assistaiFetch('/agents');
-        const agentsMap = new Map<string, string>();
-        for (const agent of agentsData.data || []) {
-            agentsMap.set(agent.code, agent.name);
-        }
-
-        // Get all conversations
-        const convData = await assistaiFetch('/conversations?take=100');
-        const synced: string[] = [];
-        const updated: string[] = [];
-
-        for (const conv of convData.data || []) {
-            const sessionId = `assistai-${conv.uuid}`;
-
-            // Fetch messages for this conversation
-            const msgData = await assistaiFetch(`/conversations/${conv.uuid}/messages?take=100&order=ASC`);
-            const messagesRaw = msgData.data || [];
-
-            // Detect platform from first message's channel field
-            const firstMessage = messagesRaw[0];
-            let platform: 'assistai' | 'whatsapp' | 'instagram' = 'assistai';
-            if (firstMessage?.channel === 'whatsapp') platform = 'whatsapp';
-            else if (firstMessage?.channel === 'instagram') platform = 'instagram';
-
-            // Get agent info - API doesn't provide agentCode, so we show unknown
-            // TODO: Request AssistAI to add agentCode to conversations endpoint
-            const agentCode = conv.agentCode || '';
-            const agentName = agentCode ? (agentsMap.get(agentCode) || 'AssistAI Bot') : 'Agente Desconocido';
-
-            // Customer contact info (IG username or phone number)
-            const customerContact = conv.sender || conv.contactPhone || conv.uuid;
-            // Format display name based on platform
-            const customerName = platform === 'instagram'
-                ? `@${customerContact}`
-                : platform === 'whatsapp'
-                    ? `+${customerContact.replace(/[^\d]/g, '')}`
-                    : customerContact;
-
-            const messages: ChatMessage[] = messagesRaw.map((m: any) => ({
-                id: `assistai-msg-${m.uuid || m.id}`,
-                sessionId,
-                from: m.sender === 'customer' || m.role === 'user'
-                    ? customerName
-                    : agentName,
-                content: m.content,
-                platform: platform,
-                sender: (m.sender === 'customer' || m.role === 'user') ? 'user' as const : 'agent' as const,
-                mediaUrl: m.mediaUrl,
-                mediaType: m.mediaType,
-                timestamp: new Date(m.timestamp || m.createdAt)
-            }));
-
-            const isNew = !conversations.has(sessionId);
-
-            conversations.set(sessionId, {
-                sessionId,
-                platform,
-                customerName,
-                customerContact,
-                agentCode,
-                agentName,
-                messages,
-                status: 'active',
-                createdAt: new Date(conv.createdAt || conv.lastMessageDate),
-                updatedAt: new Date(conv.lastMessageDate || new Date())
-            });
-
-            if (isNew) {
-                synced.push(sessionId);
-            } else {
-                updated.push(sessionId);
-            }
-        }
-
-        // Update cached agents and save to disk
-        cachedAgents = agentsData.data || [];
-        saveAssistAICache({
-            lastSync: new Date().toISOString(),
-            agents: cachedAgents,
-            conversations: Array.from(conversations.values()),
-            agentConfigs: Array.from(agentLocalConfigs.values())
-        });
-
-        io.emit("inbox_refresh", { synced: synced.length, updated: updated.length });
-        res.json({
-            success: true,
-            synced: synced.length,
-            updated: updated.length,
-            total: conversations.size,
-            agents: agentsData.data?.length || 0
-        });
-    } catch (err: any) {
-        console.warn("Sync-all: AssistAI unavailable, using cached data");
-        // Return cached data instead of error
-        const cachedConvs = Array.from(conversations.values());
-        res.json({
-            success: true,
-            cached: true,
-            synced: 0,
-            updated: 0,
-            total: cachedConvs.length,
-            agents: cachedAgents.length,
-            message: 'Using cached data - AssistAI temporarily unavailable'
-        });
-    }
-});
-
-// Get conversation messages with full details
-app.get("/conversations/:sessionId/messages", (req, res) => {
-    const conversation = conversations.get(req.params.sessionId);
-    if (!conversation) {
-        return res.status(404).json({ error: "Conversation not found" });
-    }
-    res.json({
-        sessionId: conversation.sessionId,
-        platform: conversation.platform,
-        agentCode: conversation.agentCode,
-        agentName: conversation.agentName,
-        customerName: conversation.customerName,
-        messages: conversation.messages
-    });
-});
-
-
-// ========== INBOX AGENT SUBSCRIPTION ==========
-
-// Store for subscribed agents per user/session (in production, use DB)
-let subscribedAgentCodes: string[] = []; // Default: all agents
-let lastSyncTime: Date = new Date(0);
-
-// GET Subscribed Agents
-app.get("/inbox/subscribed-agents", (req, res) => {
-    res.json({ agents: subscribedAgentCodes, subscribeAll: subscribedAgentCodes.length === 0 });
-});
-
-// POST Update Subscribed Agents
-app.post("/inbox/subscribed-agents", (req, res) => {
-    const { agents } = req.body;
-    if (!Array.isArray(agents)) {
-        return res.status(400).json({ error: "agents must be an array" });
-    }
-    subscribedAgentCodes = agents;
-    res.json({ success: true, agents: subscribedAgentCodes });
-});
-
-// Polling endpoint for real-time updates
-app.get("/assistai/poll", async (req, res) => {
-    try {
-        const since = req.query.since ? new Date(req.query.since as string) : lastSyncTime;
-
-        // Try to get agents map for names (with fallback)
-        let agentsMap = new Map<string, string>();
-        try {
-            const agentsData = await assistaiFetch('/agents');
-            for (const agent of agentsData.data || []) {
-                agentsMap.set(agent.code, agent.name);
-            }
-        } catch (agentErr) {
-            console.warn('Could not fetch agents, using cached names');
-        }
-
-        // Try to get recent conversations (with fallback)
-        let convData: any = { data: [] };
-        try {
-            convData = await assistaiFetch('/conversations?take=50');
-        } catch (convErr) {
-            console.warn('AssistAI conversations unavailable, returning cached data');
-            // Return cached conversations when external API fails
-            const cachedConvs = Array.from(conversations.values()).map(c => ({
-                sessionId: c.sessionId,
-                agentCode: c.agentCode,
-                agentName: c.agentName,
-                platform: c.platform,
-                messageCount: c.messages.length
-            }));
-            return res.json({
-                success: true,
-                cached: true,
-                since: since.toISOString(),
-                now: new Date().toISOString(),
-                new: [],
-                updated: [],
-                conversations: cachedConvs,
-                subscribedAgents: subscribedAgentCodes.length > 0 ? subscribedAgentCodes : 'all'
-            });
-        }
-
-        const newConversations: any[] = [];
-        const updatedConversations: any[] = [];
-
-        for (const conv of convData.data || []) {
-            const convUpdatedAt = new Date(conv.updatedAt || conv.createdAt);
-
-            // Skip if older than since time
-            if (convUpdatedAt <= since) continue;
-
-            // Filter by subscribed agents if any are set
-            if (subscribedAgentCodes.length > 0 && !subscribedAgentCodes.includes(conv.agentCode)) {
-                continue;
-            }
-
-            const sessionId = `assistai-${conv.uuid}`;
-            const isNew = !conversations.has(sessionId);
-
-            // Fetch messages (with error handling)
-            let messagesRaw: any[] = [];
-            try {
-                const msgData = await assistaiFetch(`/conversations/${conv.uuid}/messages?take=100&order=ASC`);
-                messagesRaw = msgData.data || [];
-            } catch (msgErr) {
-                console.warn(`Could not fetch messages for ${conv.uuid}`);
-                continue;
-            }
-
-            // Detect platform from first message's channel field
-            const firstMessage = messagesRaw[0];
-            let platform: 'assistai' | 'whatsapp' | 'instagram' = 'assistai';
-            if (firstMessage?.channel === 'whatsapp') platform = 'whatsapp';
-            else if (firstMessage?.channel === 'instagram') platform = 'instagram';
-
-            const agentCode = conv.agentCode || (convData.data?.[0]?.agentCode);
-            const agentName = agentsMap.get(agentCode) || 'AssistAI Bot';
-
-            // Customer contact info
-            const customerContact = conv.sender || conv.contactPhone || conv.uuid;
-            const customerName = platform === 'instagram'
-                ? `@${customerContact}`
-                : platform === 'whatsapp'
-                    ? `+${customerContact.replace(/[^\d]/g, '')}`
-                    : customerContact;
-
-            const messages: ChatMessage[] = messagesRaw.map((m: any) => ({
-                id: `assistai-msg-${m.uuid || m.id}`,
-                sessionId,
-                from: m.sender === 'customer' || m.role === 'user'
-                    ? customerName
-                    : agentName,
-                content: m.content,
-                platform,
-                sender: (m.sender === 'customer' || m.role === 'user') ? 'user' as const : 'agent' as const,
-                mediaUrl: m.mediaUrl,
-                mediaType: m.mediaType,
-                timestamp: new Date(m.timestamp || m.createdAt)
-            }));
-
-            conversations.set(sessionId, {
-                sessionId,
-                platform,
-                customerName,
-                customerContact,
-                agentCode,
-                agentName,
-                messages,
-                status: 'active',
-                createdAt: new Date(conv.createdAt || conv.lastMessageDate),
-                updatedAt: new Date(conv.lastMessageDate || new Date())
-            });
-
-            if (isNew) {
-                newConversations.push({ sessionId, agentCode, agentName, platform, messageCount: messages.length });
-            } else {
-                updatedConversations.push({ sessionId, agentCode, agentName, platform, messageCount: messages.length });
-            }
-        }
-
-        // Update last sync time
-        lastSyncTime = new Date();
-
-        // Emit socket event for real-time UI updates
-        if (newConversations.length > 0 || updatedConversations.length > 0) {
-            io.emit("inbox_refresh", {
-                newCount: newConversations.length,
-                updatedCount: updatedConversations.length,
-                timestamp: lastSyncTime.toISOString()
-            });
-
-            // Auto-save to cache after updates
-            saveAssistAICache({
-                lastSync: lastSyncTime.toISOString(),
-                agents: cachedAgents,
-                conversations: Array.from(conversations.values()),
-                agentConfigs: []
-            });
-        }
-
-        res.json({
-            success: true,
-            since: since.toISOString(),
-            now: lastSyncTime.toISOString(),
-            new: newConversations,
-            updated: updatedConversations,
-            subscribedAgents: subscribedAgentCodes.length > 0 ? subscribedAgentCodes : 'all'
-        });
-    } catch (err: any) {
-        console.error("Poll error:", err);
-        // Return empty result instead of error to prevent frontend crash
-        res.json({
-            success: false,
-            error: err.message,
-            new: [],
-            updated: [],
-            conversations: Array.from(conversations.values()).map(c => ({
-                sessionId: c.sessionId,
-                platform: c.platform,
-                messageCount: c.messages.length
-            }))
-        });
-    }
-});
-
-
-// ========== ASSISTAI WEBHOOK (Real-time notifications) ==========
-
-// Webhook log for debugging
-const webhookLogs: Array<{ timestamp: Date; event: string; payload: any }> = [];
-
-// POST webhook endpoint for AssistAI to call
-app.post("/webhooks/assistai", async (req, res) => {
-    const signature = req.headers['x-assistai-signature'] as string;
-    const event = req.headers['x-assistai-event'] as string || 'unknown';
-    const payload = req.body;
-
-    // Log the webhook call
-    console.log(`📨 Webhook received: ${event}`, JSON.stringify(payload).substring(0, 200));
-    webhookLogs.push({ timestamp: new Date(), event, payload });
-
-    // Keep only last 100 logs
-    if (webhookLogs.length > 100) webhookLogs.shift();
-
-    // TODO: Verify signature when AssistAI provides signing secret
-    // const expectedSignature = crypto.createHmac('sha256', WEBHOOK_SECRET).update(JSON.stringify(payload)).digest('hex');
-    // if (signature !== expectedSignature) return res.status(401).json({ error: 'Invalid signature' });
-
-    try {
-        switch (event) {
-            case 'new_message':
-            case 'message.created': {
-                // New message received
-                const { conversationId, sessionId, message, agentCode, platform } = payload;
-                const convId = sessionId || conversationId;
-
-                if (convId && conversations.has(convId)) {
-                    const conv = conversations.get(convId)!;
-
-                    // Add message to conversation
-                    const newMsg = {
-                        id: message?.id || `msg-wh-${Date.now()}`,
-                        sessionId: convId,
-                        from: message?.from || payload.customerName || 'Cliente',
-                        content: message?.content || message?.text || '',
-                        platform: platform || conv.platform || 'assistai',
-                        sender: message?.sender || (message?.isFromCustomer ? 'user' : 'agent'),
-                        mediaUrl: message?.mediaUrl,
-                        mediaType: message?.mediaType,
-                        timestamp: message?.createdAt || new Date().toISOString()
-                    };
-
-                    conv.messages.push(newMsg as any);
-                    conv.updatedAt = new Date();
-
-                    // Emit socket event for real-time update
-                    io.emit('new_message', { sessionId: convId, message: newMsg });
-                    io.to(convId).emit('chat_message', newMsg);
-                    io.emit('inbox_refresh');
-
-                    console.log(`✅ Message added to conversation ${convId}`);
-                } else if (convId) {
-                    // New conversation - create it
-                    const newConv = {
-                        sessionId: convId,
-                        customerName: payload.customerName || 'Nuevo contacto',
-                        customerContact: payload.customerContact || payload.phone || payload.instagram || '',
-                        platform: platform || 'assistai',
-                        agentCode: agentCode,
-                        agentName: payload.agentName,
-                        messages: [],
-                        status: 'active' as const,
-                        createdAt: new Date(),
-                        updatedAt: new Date()
-                    };
-                    conversations.set(convId, newConv);
-                    io.emit('inbox_refresh');
-                    console.log(`✅ New conversation created: ${convId}`);
-                }
-                break;
-            }
-
-            case 'conversation.created':
-            case 'conversation_created': {
-                // New conversation started
-                const { sessionId, conversationId, agentCode, customerInfo } = payload;
-                const convId = sessionId || conversationId;
-
-                if (convId && !conversations.has(convId)) {
-                    const newConv = {
-                        sessionId: convId,
-                        customerName: customerInfo?.name || 'Nuevo contacto',
-                        customerContact: customerInfo?.phone || customerInfo?.instagram || customerInfo?.email || '',
-                        platform: payload.platform || 'assistai',
-                        agentCode: agentCode,
-                        agentName: payload.agentName,
-                        messages: [],
-                        status: 'active' as const,
-                        createdAt: new Date(),
-                        updatedAt: new Date()
-                    };
-                    conversations.set(convId, newConv);
-                    io.emit('inbox_refresh');
-                    io.emit('notification', {
-                        id: `notif-${Date.now()}`,
-                        type: 'message',
-                        title: 'Nueva conversación',
-                        body: `${newConv.customerName} inició una conversación`
-                    });
-                }
-                break;
-            }
-
-            case 'conversation.resolved':
-            case 'conversation_resolved': {
-                const { sessionId, conversationId } = payload;
-                const convId = sessionId || conversationId;
-
-                if (convId && conversations.has(convId)) {
-                    const conv = conversations.get(convId)!;
-                    conv.status = 'resolved';
-                    io.emit('inbox_refresh');
-                }
-                break;
-            }
-
-            case 'ai.paused':
-            case 'ai_paused': {
-                // Agent took over conversation
-                console.log(`🤖 AI paused for conversation: ${payload.sessionId || payload.conversationId}`);
-                break;
-            }
-
-            default:
-                console.log(`⚠️ Unknown webhook event: ${event}`);
-        }
-
-        res.json({ success: true, message: 'Webhook processed' });
-    } catch (err: any) {
-        console.error('Webhook processing error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// GET webhook logs (for debugging)
-app.get("/webhooks/assistai/logs", (req, res) => {
-    res.json({
-        logs: webhookLogs.slice(-20).reverse(),
-        total: webhookLogs.length
-    });
-});
-
-// Webhook configuration info for AssistAI team
-app.get("/webhooks/assistai/config", (req, res) => {
-    const baseUrl = req.headers.host?.includes('localhost')
-        ? `http://${req.headers.host}`
-        : `https://${req.headers.host}`;
-
-    res.json({
-        endpoint: `${baseUrl}/webhooks/assistai`,
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'x-assistai-event': 'Event type (new_message, conversation.created, etc.)',
-            'x-assistai-signature': 'HMAC-SHA256 signature (optional for now)'
-        },
-        supportedEvents: [
-            'new_message / message.created',
-            'conversation.created / conversation_created',
-            'conversation.resolved / conversation_resolved',
-            'ai.paused / ai_paused'
-        ],
-        examplePayload: {
-            sessionId: 'conv-123',
-            agentCode: 'agent-claudia',
-            platform: 'whatsapp',
-            customerName: 'Eduardo',
-            customerContact: '+584144314817',
-            message: {
-                id: 'msg-456',
-                content: 'Hola, necesito ayuda',
-                from: 'Eduardo',
-                isFromCustomer: true,
-                createdAt: new Date().toISOString()
-            }
-        }
-    });
-});
 
 
 // ========== CONTACT IDENTITY MANAGEMENT ==========
@@ -3702,17 +3203,20 @@ const openApiSpec = {
             get: { tags: ['Invoices'], summary: 'Listar facturas', responses: { '200': { description: 'Lista de facturas' } } },
             post: { tags: ['Invoices'], summary: 'Crear factura', responses: { '201': { description: 'Factura creada' } } }
         },
-        '/assistai/agents': {
+        '/api/assistai/agents': {
             get: { tags: ['AssistAI'], summary: 'Listar agentes de IA', responses: { '200': { description: 'Lista de agentes' } } }
         },
-        '/assistai/agents/{code}': {
+        '/api/assistai/agents/{code}': {
             get: { tags: ['AssistAI'], summary: 'Obtener detalle de agente', parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Agente con estadísticas' } } },
             patch: { tags: ['AssistAI'], summary: 'Actualizar agente', parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, instructions: { type: 'string' } } } } } }, responses: { '200': { description: 'Agente actualizado' } } }
         },
-        '/assistai/conversations': {
+        '/api/assistai/agent-config/{agentId}': {
+            get: { tags: ['AssistAI'], summary: 'Obtener configuración remota de agente', parameters: [{ name: 'agentId', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Configuración remota' } } }
+        },
+        '/api/assistai/conversations': {
             get: { tags: ['AssistAI'], summary: 'Listar conversaciones de AssistAI', parameters: [{ name: 'page', in: 'query', schema: { type: 'integer' } }, { name: 'take', in: 'query', schema: { type: 'integer' } }], responses: { '200': { description: 'Conversaciones' } } }
         },
-        '/assistai/sync-all': {
+        '/api/assistai/sync-all': {
             post: { tags: ['AssistAI'], summary: 'Sincronizar todas las conversaciones', description: 'Sincroniza todas las conversaciones de AssistAI al inbox local', responses: { '200': { description: 'Sincronización completada' } } }
         },
         '/conversations': {
@@ -3811,7 +3315,7 @@ app.post("/auth/register", async (req, res) => {
 app.get("/auth/me", authMiddleware, async (req, res) => {
     const user = await prisma.user.findUnique({
         where: { id: req.user!.id },
-        select: { id: true, email: true, name: true, role: true, avatar: true, phone: true, createdAt: true, lastLoginAt: true }
+        select: { id: true, email: true, name: true, role: true, avatar: true, phone: true, createdAt: true, lastLoginAt: true, organizationId: true }
     });
     if (!user) {
         return res.status(404).json({ error: "Usuario no encontrado" });
@@ -4090,6 +3594,31 @@ app.get("/calendar/status", (req, res) => {
 app.get("/integrations", authMiddleware, async (req, res) => {
     try {
         const integrations = await getUserIntegrations(req.user!.id);
+
+        // Inject AssistAI Org Config
+        const assistAiConfig = getOrganizationConfig('org-default');
+        if (assistAiConfig) {
+            integrations.push({
+                id: 'assistai-org',
+                userId: req.user!.id,
+                provider: 'ASSISTAI',
+                isEnabled: true,
+                credentials: {}, // Don't expose secrets if not needed, or mask them
+                connected: !!assistAiConfig.apiToken,
+                createdAt: new Date()
+            } as any);
+        } else {
+            integrations.push({
+                id: 'assistai-org',
+                userId: req.user!.id,
+                provider: 'ASSISTAI',
+                isEnabled: false,
+                credentials: {},
+                connected: false,
+                createdAt: new Date()
+            } as any);
+        }
+
         res.json(integrations);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
@@ -4102,7 +3631,21 @@ app.post("/integrations", authMiddleware, async (req, res) => {
     if (!provider || !credentials) {
         return res.status(400).json({ error: "provider y credentials requeridos" });
     }
+
     try {
+        if (provider === 'ASSISTAI') {
+            // Save to Organization Config
+            // In real multi-tenant, use req.user.organizationId
+            saveOrganizationConfig('org-default', credentials);
+
+            return res.json({
+                id: 'assistai-org',
+                provider: 'ASSISTAI',
+                isEnabled: true,
+                connected: true
+            });
+        }
+
         const integration = await saveUserIntegration(req.user!.id, {
             provider,
             credentials,
@@ -4113,6 +3656,7 @@ app.post("/integrations", authMiddleware, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // ========== REPORTS ==========
 
@@ -4148,12 +3692,12 @@ if (process.env.NODE_ENV !== 'test') {
         console.log(`🚀 ChronusCRM API running on http://localhost:${PORT}`);
         console.log(`📚 API Docs: http://localhost:${PORT}/api/docs`);
         console.log(`🔌 Socket.io ready for connections`);
-        if (ASSISTAI_CONFIG.apiToken) {
+        if (process.env.ASSISTAI_API_TOKEN) {
             console.log(`🤖 AssistAI integration enabled`);
         }
 
         // Initialize cache
-        initializeFromCache();
+        initConversations();
     });
 }
 

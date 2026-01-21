@@ -1,5 +1,5 @@
 // Datos iniciales del CRM
-import type { Customer, Ticket, Invoice, Communication, Transaction, Lead, Tag } from "./types.js";
+import type { Customer, Ticket, Invoice, Communication, Transaction, Lead, Tag, Conversation } from "./types.js";
 
 export const customers: Customer[] = [
     {
@@ -299,6 +299,14 @@ import * as path from 'path';
 
 const ASSISTAI_DATA_FILE = path.join(process.cwd(), 'assistai_cache.json');
 
+export type AgentLocalConfig = {
+    code: string;
+    customName?: string;
+    notes?: string;
+    assignedToUserId?: string;
+    updatedAt: Date;
+};
+
 export interface AssistAICache {
     lastSync: string;
     agents: any[];
@@ -389,3 +397,73 @@ export const whatsappProviders: WhatsAppProvider[] = [
         createdAt: new Date()
     }
 ];
+
+// ==========================================
+// SHARED STATE (IN-MEMORY DB)
+// ==========================================
+
+// In-memory conversations store (Shared Source of Truth)
+export const conversations: Map<string, Conversation> = new Map();
+
+export function initConversations() {
+    console.log('🔄 Initializing conversations from cache...');
+    const cache = loadAssistAICache();
+    if (cache.conversations) {
+        cache.conversations.forEach((c: any) => {
+            // Restore Date objects
+            c.createdAt = new Date(c.createdAt);
+            c.updatedAt = new Date(c.updatedAt);
+            if (c.messages) {
+                c.messages.forEach((m: any) => {
+                    m.timestamp = new Date(m.timestamp);
+                });
+            }
+            conversations.set(c.sessionId, c as Conversation);
+        });
+    }
+    console.log(`✅ Loaded ${conversations.size} conversations into memory.`);
+}
+
+
+// ==========================================
+// ORGANIZATIONS & INTEGRATIONS
+// ==========================================
+
+export interface MockOrganization {
+    id: string;
+    name: string;
+    slug: string;
+    assistaiConfig?: {
+        apiToken: string;
+        tenantDomain: string;
+        organizationCode: string;
+    };
+}
+
+export const organizations: MockOrganization[] = [
+    {
+        id: 'org-default',
+        name: 'Default Organization',
+        slug: 'default',
+        assistaiConfig: process.env.ASSISTAI_API_TOKEN ? {
+            apiToken: process.env.ASSISTAI_API_TOKEN,
+            tenantDomain: process.env.ASSISTAI_TENANT_DOMAIN || '',
+            organizationCode: process.env.ASSISTAI_ORG_CODE || ''
+        } : undefined
+    }
+];
+
+export function getOrganizationConfig(orgId: string) {
+    const org = organizations.find(o => o.id === orgId);
+    return org?.assistaiConfig || null;
+}
+
+export function saveOrganizationConfig(orgId: string, config: any) {
+    const org = organizations.find(o => o.id === orgId);
+    if (org) {
+        org.assistaiConfig = config;
+        return true;
+    }
+    return false;
+}
+

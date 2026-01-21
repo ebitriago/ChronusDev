@@ -76,11 +76,28 @@ Read-only access to customer data for external dashboards.
 **Response:**
 ```json
 [
-  {
+    {
     "id": "cust-123",
     "name": "Acme Corp",
     "email": "contact@acme.com",
     "status": "ACTIVE"
-  }
+    }
 ]
 ```
+
+---
+
+## 🤖 AssistAI Integration
+
+The CRM includes a robust integration with **AssistAI** for AI-driven customer support.
+
+### Features
+- **Agent Management**: View and configure AI agents.
+- **Unified Inbox**: Chat with customers across WhatsApp and Instagram.
+- **Smart Sync**: Automatic synchronization of conversations and messages.
+
+### Full API Reference
+For a complete list of endpoints, schemas, and interactive testing, please visit our **Scalar API Documentation** (hosted at `/api/docs` in your local environment).
+
+[👉 Read the Full Integration Guide](docs/ASSISTAI_INTEGRATION.md)
+

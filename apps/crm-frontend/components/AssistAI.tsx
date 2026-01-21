@@ -52,10 +52,15 @@ export default function AssistAI() {
 
     // Fetch agents and conversations
     useEffect(() => {
+        const token = localStorage.getItem('crm_token');
+        if (!token) return;
+
+        const headers = { 'Authorization': `Bearer ${token}` };
+
         Promise.all([
-            fetch(`${API_URL}/assistai/agents`).then(r => r.ok ? r.json() : { data: [] }),
-            fetch(`${API_URL}/assistai/conversations`).then(r => r.ok ? r.json() : { data: [] }),
-            fetch(`${API_URL}/assistai/configs`).then(r => r.ok ? r.json() : [])
+            fetch(`${API_URL}/assistai/agents`, { headers }).then(r => r.ok ? r.json() : { data: [] }),
+            fetch(`${API_URL}/assistai/conversations`, { headers }).then(r => r.ok ? r.json() : { data: [] }),
+            fetch(`${API_URL}/assistai/configs`, { headers }).then(r => r.ok ? r.json() : [])
         ])
             .then(([agentsData, convsData, configs]) => {
                 // Merge local configs with agents
@@ -73,13 +78,23 @@ export default function AssistAI() {
 
     // Sync all conversations (enhanced)
     const handleSyncAll = async () => {
+        const token = localStorage.getItem('crm_token');
+        if (!token) return;
+
         setSyncing(true);
         setSyncResult(null);
         try {
-            const res = await fetch(`${API_URL}/assistai/sync-all`, { method: 'POST' });
+            const res = await fetch(`${API_URL}/assistai/sync-all`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             const data = await res.json();
             if (data.success) {
                 setSyncResult(`✅ Sincronizadas ${data.synced} nuevas, ${data.updated} actualizadas. Total: ${data.total} conversaciones`);
+                // Refresh list
+                const convRes = await fetch(`${API_URL}/assistai/conversations`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const convData = await convRes.json();
+                setConversations(convData.data || []);
             } else {
                 setSyncResult(`❌ Error: ${data.error}`);
             }
@@ -92,13 +107,18 @@ export default function AssistAI() {
 
     // Open agent detail modal
     const openAgentDetail = async (agentCode: string) => {
+        const token = localStorage.getItem('crm_token');
+        if (!token) return;
+
         setLoadingAgent(true);
         setAgentModalOpen(true);
         setAgentError(null);
         setSelectedAgent(null);
         setCurrentAgentCode(agentCode);
         try {
-            const res = await fetch(`${API_URL}/assistai/agents/${agentCode}`);
+            const res = await fetch(`${API_URL}/assistai/agents/${agentCode}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             const data = await res.json();
             if (res.ok) {
                 setSelectedAgent(data);
@@ -117,11 +137,17 @@ export default function AssistAI() {
     // Save local config
     const saveAgentConfig = async () => {
         if (!selectedAgent) return;
+        const token = localStorage.getItem('crm_token');
+        if (!token) return;
+
         setSaving(true);
         try {
             const res = await fetch(`${API_URL}/assistai/agents/${selectedAgent.code}/config`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     customName: editCustomName,
                     notes: editNotes
