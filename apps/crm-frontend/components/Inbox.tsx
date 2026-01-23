@@ -81,7 +81,7 @@ export default function Inbox() {
     const [subscribedAgents, setSubscribedAgents] = useState<string[]>([]);
     const [showSettings, setShowSettings] = useState(false);
     const [syncing, setSyncing] = useState(false);
-    const [lastPoll, setLastPoll] = useState<string | null>(null);
+    const lastPollRef = useRef<string | null>(null);
     const [newMessageCount, setNewMessageCount] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -179,8 +179,8 @@ export default function Inbox() {
     const pollForUpdates = useCallback(async () => {
         const headers = getAuthHeaders();
         try {
-            const url = lastPoll
-                ? `${API_URL}/assistai/poll?since=${encodeURIComponent(lastPoll)}`
+            const url = lastPollRef.current
+                ? `${API_URL}/assistai/poll?since=${encodeURIComponent(lastPollRef.current)}`
                 : `${API_URL}/assistai/poll`;
 
             // Cast headers to any to avoid strict TS 'undefined' index signature issue for now
@@ -188,7 +188,7 @@ export default function Inbox() {
             const data = await res.json();
 
             if (data.success) {
-                setLastPoll(data.now);
+                lastPollRef.current = data.now;
                 const totalNew = (data.new?.length || 0) + (data.updated?.length || 0);
                 if (totalNew > 0) {
                     setNewMessageCount(prev => prev + totalNew);
@@ -208,7 +208,7 @@ export default function Inbox() {
                 console.warn('Poll issue:', err?.message || err);
             }
         }
-    }, [lastPoll]);
+    }, []);
 
     // Polling interval (5 seconds for faster real-time updates)
     useEffect(() => {
@@ -298,7 +298,8 @@ export default function Inbox() {
         });
 
         return () => { newSocket.disconnect(); };
-    }, [selectedConversation?.sessionId, pollForUpdates]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedConversation?.sessionId]);
 
     // Auto-scroll
     useEffect(() => {

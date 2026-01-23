@@ -113,12 +113,39 @@ model Customer {
   transactions  Transaction[]
   activities    Activity[]
   tags          CustomerTag[]
+  scheduledInteractions ScheduledInteraction[]
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   
   @@index([email])
   @@index([status])
+}
+
+model ScheduledInteraction {
+  id          String    @id @default(cuid())
+  customerId  String
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  type        String    @default("VOICE") // VOICE, WHATSAPP, EMAIL
+  scheduledAt DateTime
+  status      String    @default("PENDING") // PENDING, COMPLETED, FAILED
+  metadata    Json?     // Context for AI or extras
+  
+  // Content for non-voice
+  content     String?   // Message body
+  subject     String?   // Email subject
+  
+  // Results
+  externalId  String?   // Call SID or Message ID
+  error       String?
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([type])
 }
 
 model Contact {

@@ -6,17 +6,49 @@ import { prisma } from './db.js';
 // Setup: https://console.cloud.google.com/apis/credentials
 // Enable: Google Calendar API
 
-const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3002/auth/google/callback'
-);
+// Helper to get OAuth2 client with dynamic credentials
+async function getOAuth2Client() {
+    // Try to find System/Admin Google config for Client ID/Secret
+    // This allows replacing the Env vars with DB config
+    const integration = await prisma.integration.findFirst({
+        where: {
+            provider: 'GOOGLE',
+            isEnabled: true,
+            OR: [
+                { userId: null },
+                { user: { role: 'SUPER_ADMIN' } }
+            ]
+        }
+    });
+
+    let clientId = process.env.GOOGLE_CLIENT_ID;
+    let clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    let redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3002/auth/google/callback';
+
+    if (integration && integration.credentials && typeof integration.credentials === 'object') {
+        const creds = integration.credentials as any;
+        if (creds.clientId && creds.clientSecret) {
+            clientId = creds.clientId;
+            clientSecret = creds.clientSecret;
+            // console.log('[Calendar] Using database Client ID/Secret');
+        }
+    }
+
+    if (!clientId || !clientSecret) {
+        throw new Error("Missing Google Client ID/Secret");
+    }
+
+    return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+}
 
 // Calendar API instance (initialized after auth)
+// Note: Currently simple singleton, which is not ideal for multi-user.
+// Ideally should be cached per user.
 let calendarApi: calendar_v3.Calendar | null = null;
 
 // Get OAuth URL for user authorization
-export function getGoogleAuthUrl(state?: string): string {
+export async function getGoogleAuthUrl(state?: string): Promise<string> {
+    const oauth2Client = await getOAuth2Client();
     const scopes = [
         'https://www.googleapis.com/auth/calendar',
         'https://www.googleapis.com/auth/calendar.events',
@@ -33,19 +65,61 @@ export function getGoogleAuthUrl(state?: string): string {
 // Exchange auth code for tokens
 export async function handleGoogleCallback(code: string, userId: string) {
     try {
+        const oauth2Client = await getOAuth2Client();
         const { tokens } = await oauth2Client.getToken(code);
         oauth2Client.setCredentials(tokens);
 
-        // Store tokens in user record (for persistence)
+        // Store tokens in Integration table to match our unified "Integrations" logic
+        // This makes them visible/editable in the UI if we expose token fields (or just for backend usage)
+        if (userId) {
+            await prisma.integration.upsert({
+                where: {
+                    userId_provider: {
+                        userId,
+                        provider: 'GOOGLE'
+                    }
+                },
+                update: {
+                    // Update credentials with new tokens.
+                    // IMPORTANT: We need to preserve existing credentials (like clientId if stored per user)
+                    // But here we are storing *User* tokens.
+                    // The UI for "Google" asks for ClientID/Secret.
+                    // If we overwrite that with Tokens, the UI might break if it expects ClientID.
+                    // The UI expects: clientId, clientSecret.
+                    // Tokens are usually hidden or in a different field.
+                    // Let's store tokens in 'metadata' or 'credentials.tokens'.
+                    // For now, let's store in metadata to avoid polluting the Config Form which is for App Credentials.
+                    metadata: {
+                        tokens: tokens as any,
+                        updatedAt: new Date()
+                    }
+                },
+                create: {
+                    userId,
+                    provider: 'GOOGLE',
+                    credentials: {}, // User doesn't define ClientID, the Admin does.
+                    metadata: {
+                        tokens: tokens as any,
+                        updatedAt: new Date()
+                    }
+                }
+            });
+        }
+
+        // Also keep legacy user update if needed, but 'Integration' is the new standard.
         await prisma.user.update({
             where: { id: userId },
             data: {
-                // Store tokens in a JSON field or separate table
-                // For now, we'll log success
+                // Legacy support or logging
             },
         });
 
+        // Initialize API for THIS request?
+        // Note: Global calendarApi assignment is risky in async multi-user.
+        // We really should return the api instance or store it in a request context.
+        // For backwards compat with existing code, we update the global, but this is a Known Issue.
         calendarApi = google.calendar({ version: 'v3', auth: oauth2Client });
+
         return { success: true, tokens };
     } catch (err: any) {
         console.error('[Calendar] OAuth error:', err.message);
@@ -54,7 +128,8 @@ export async function handleGoogleCallback(code: string, userId: string) {
 }
 
 // Initialize calendar with existing tokens
-export function initCalendar(accessToken: string, refreshToken?: string) {
+export async function initCalendar(accessToken: string, refreshToken?: string) {
+    const oauth2Client = await getOAuth2Client();
     oauth2Client.setCredentials({
         access_token: accessToken,
         refresh_token: refreshToken,

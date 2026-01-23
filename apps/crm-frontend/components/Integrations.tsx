@@ -5,6 +5,15 @@ import { useToast } from './Toast';
 
 const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
 
+// Declare ElevenLabs custom element for TypeScript
+declare global {
+    namespace JSX {
+        interface IntrinsicElements {
+            'elevenlabs-convai': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & { 'agent-id': string }, HTMLElement>;
+        }
+    }
+}
+
 type IntegrationConfig = {
     provider: string; // 'GOOGLE', 'GMAIL'
     isEnabled: boolean;
@@ -13,6 +22,13 @@ type IntegrationConfig = {
         clientSecret?: string;
         user?: string; // For Gmail (email address)
         appPassword?: string; // For Gmail
+        apiToken?: string; // AssistAI
+        tenantDomain?: string; // AssistAI
+        organizationCode?: string; // AssistAI
+        apiKey?: string; // ElevenLabs
+        agentId?: string; // ElevenLabs
+        agentCode?: string; // WhatsMeow
+        agentToken?: string; // WhatsMeow
     };
     connected?: boolean;
 };
@@ -22,11 +38,29 @@ export default function Integrations() {
     const [loading, setLoading] = useState(false);
     const [editingProvider, setEditingProvider] = useState<string | null>(null);
     const [formData, setFormData] = useState<any>({});
+    const [elevenLabsScriptLoaded, setElevenLabsScriptLoaded] = useState(false);
     const { showToast } = useToast();
 
     useEffect(() => {
         fetchIntegrations();
     }, []);
+
+    // Load ElevenLabs script when editing ELEVENLABS
+    useEffect(() => {
+        if (editingProvider === 'ELEVENLABS' && !elevenLabsScriptLoaded) {
+            const existingScript = document.querySelector('script[src*="elevenlabs.io/convai-widget"]');
+            if (!existingScript) {
+                const script = document.createElement('script');
+                script.src = 'https://elevenlabs.io/convai-widget/index.js';
+                script.async = true;
+                script.type = 'text/javascript';
+                script.onload = () => setElevenLabsScriptLoaded(true);
+                document.body.appendChild(script);
+            } else {
+                setElevenLabsScriptLoaded(true);
+            }
+        }
+    }, [editingProvider, elevenLabsScriptLoaded]);
 
     const fetchIntegrations = async () => {
         setLoading(true);
@@ -50,7 +84,7 @@ export default function Integrations() {
 
     const handleEdit = (provider: string) => {
         setEditingProvider(provider);
-        // Pre-fill form if data exists (except sensitive secrets if masking is used securely on backend, but here we might want to let them overwrite)
+        // Pre-fill form if data exists
         const current = integrations[provider] || {};
         setFormData(current.credentials || {});
     };
@@ -73,11 +107,20 @@ export default function Integrations() {
             });
 
             if (res.ok) {
+                // Save ElevenLabs config to localStorage for VoiceWidget
+                if (editingProvider === 'ELEVENLABS' && formData.agentId) {
+                    localStorage.setItem('elevenlabs_config', JSON.stringify({
+                        agentId: formData.agentId,
+                        apiKey: formData.apiKey
+                    }));
+                }
+
                 showToast('Integración guardada exitosamente', 'success');
                 setEditingProvider(null);
                 fetchIntegrations();
             } else {
-                showToast('Error al guardar integración', 'error');
+                const errorData = await res.json().catch(() => ({}));
+                showToast(`Error: ${errorData.error || 'Error al guardar integración'}`, 'error');
             }
         } catch (err) {
             console.error(err);
@@ -87,8 +130,38 @@ export default function Integrations() {
 
     const handleConnect = (provider: string) => {
         if (provider === 'GOOGLE') {
-            // Redirect to backend auth flow which uses the stored credentials
             window.location.href = `${API_URL}/calendar/connect?token=${localStorage.getItem('crm_token')}`;
+        }
+    };
+
+    const handleValidateAgent = async () => {
+        if (!formData.apiKey || !formData.agentId) {
+            showToast('Ingresa API Key y Agent ID', 'error');
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_URL}/voice/validate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('crm_token')}`
+                },
+                body: JSON.stringify({
+                    agentId: formData.agentId,
+                    apiKey: formData.apiKey
+                })
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                showToast(`Agente válido: ${data.agentName}`, 'success');
+            } else {
+                showToast(`Error: ${data.error}`, 'error');
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('Error de validación', 'error');
         }
     };
 
@@ -190,6 +263,62 @@ export default function Integrations() {
                         Configurar
                     </button>
                 </div>
+
+                {/* ElevenLabs Integration */}
+                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
+                            <span className="text-2xl">🗣️</span>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-gray-900">ElevenLabs Voice</h4>
+                            <p className="text-xs text-gray-500 mb-1">Agentes de voz con IA (Telefonía Integrada)</p>
+                            {integrations['ELEVENLABS']?.isEnabled ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Conectado
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
+                                    No conectado
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => handleEdit('ELEVENLABS')}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                    >
+                        Configurar
+                    </button>
+                </div>
+
+                {/* WhatsMeow WhatsApp */}
+                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
+                            <span className="text-2xl">💬</span>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-gray-900">WhatsApp (WhatsMeow)</h4>
+                            <p className="text-xs text-gray-500 mb-1">Envía mensajes directos por WhatsApp</p>
+                            {integrations['WHATSMEOW']?.isEnabled ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Conectado
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
+                                    No configurado
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => handleEdit('WHATSMEOW')}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                    >
+                        Configurar
+                    </button>
+                </div>
             </div>
 
             {/* Config Modal */}
@@ -198,7 +327,7 @@ export default function Integrations() {
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-fadeIn">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold text-gray-900">
-                                Configurar {editingProvider === 'GOOGLE' ? 'Google Calendar' : editingProvider === 'GMAIL' ? 'Gmail' : 'AssistAI'}
+                                Configurar {editingProvider === 'GOOGLE' ? 'Google Calendar' : editingProvider === 'GMAIL' ? 'Gmail' : editingProvider === 'ELEVENLABS' ? 'ElevenLabs Voice' : editingProvider === 'ASSISTAI' ? 'AssistAI' : editingProvider === 'WHATSMEOW' ? 'WhatsApp (WhatsMeow)' : editingProvider}
                             </h3>
                             <button onClick={() => setEditingProvider(null)} className="text-gray-400 hover:text-gray-600">✕</button>
                         </div>
@@ -298,6 +427,144 @@ export default function Integrations() {
                                             placeholder="e.g. d59b32edfb28e130"
                                         />
                                     </div>
+                                </>
+                            )}
+
+                            {editingProvider === 'ELEVENLABS' && (
+                                <>
+                                    <div className="bg-orange-50 text-orange-800 text-xs p-3 rounded-lg mb-4">
+                                        ℹ️ Configura tu Agente de Voz de ElevenLabs.
+                                        <br />Asegúrate de que Twilio esté conectado en tu cuenta de ElevenLabs si requieres telefonía.
+                                    </div>
+                                    <h4 className="font-bold text-gray-900 border-b pb-1 mb-2">ElevenLabs</h4>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                                        <input
+                                            type="password"
+                                            value={formData.apiKey || ''}
+                                            onChange={e => setFormData({ ...formData, apiKey: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="sk_..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Agent ID</label>
+                                        <input
+                                            type="text"
+                                            value={formData.agentId || ''}
+                                            onChange={e => setFormData({ ...formData, agentId: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="ID del agente de voz"
+                                        />
+                                    </div>
+
+                                    <div className="mt-2 flex justify-between items-center">
+                                        <button
+                                            type="button"
+                                            onClick={handleValidateAgent}
+                                            className="text-xs text-blue-600 hover:text-blue-800 font-medium underline"
+                                        >
+                                            Validar Agente
+                                        </button>
+                                    </div>
+
+                                    {/* Test Agent Section */}
+                                    {integrations['ELEVENLABS']?.isEnabled && formData.agentId && (
+                                        <div className="mt-4 pt-4 border-t border-gray-200">
+                                            <h4 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                                                🎙️ Probar Agente
+                                            </h4>
+                                            <p className="text-xs text-gray-500 mb-3">
+                                                Haz clic en el botón de micrófono para iniciar una conversación de prueba con tu agente.
+                                            </p>
+                                            <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 border border-orange-100">
+                                                <div id="elevenlabs-test-widget" className="flex justify-center">
+                                                    <elevenlabs-convai agent-id={formData.agentId}></elevenlabs-convai>
+                                                </div>
+                                                <p className="text-center text-xs text-orange-600 mt-2">
+                                                    El widget se conectará al agente configurado
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {editingProvider === 'WHATSMEOW' && (
+                                <>
+                                    <div className="bg-green-50 text-green-800 text-xs p-3 rounded-lg mb-4">
+                                        💬 Conecta tu número de WhatsApp escaneando el código QR.
+                                        <br />Se creará automáticamente un agente para tu cuenta.
+                                    </div>
+
+                                    {integrations['WHATSMEOW']?.credentials?.agentCode ? (
+                                        <>
+                                            <div className="text-sm text-gray-600 mb-2">
+                                                <strong>Agent Code:</strong> {integrations['WHATSMEOW'].credentials.agentCode}
+                                            </div>
+                                            <div className="bg-gray-50 rounded-xl p-4 text-center">
+                                                <p className="text-sm text-gray-600 mb-2">Escanea el código QR con WhatsApp:</p>
+                                                <img
+                                                    src={`${API_URL}/whatsmeow/agents/${integrations['WHATSMEOW'].credentials.agentCode}/qr`}
+                                                    alt="QR Code"
+                                                    className="mx-auto w-48 h-48 border border-gray-200 rounded-lg"
+                                                    onError={(e) => {
+                                                        (e.target as HTMLImageElement).style.display = 'none';
+                                                    }}
+                                                />
+                                                <p className="text-xs text-gray-500 mt-2">El QR se actualiza automáticamente</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    try {
+                                                        const res = await fetch(`${API_URL}/whatsmeow/status`, {
+                                                            headers: { 'Authorization': `Bearer ${localStorage.getItem('crm_token')}` }
+                                                        });
+                                                        const data = await res.json();
+                                                        if (data.connected) {
+                                                            showToast('✅ WhatsApp conectado correctamente', 'success');
+                                                        } else {
+                                                            showToast('⏳ Aún no conectado. Escanea el QR.', 'info');
+                                                        }
+                                                    } catch (err) {
+                                                        showToast('Error verificando estado', 'error');
+                                                    }
+                                                }}
+                                                className="mt-3 w-full text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                            >
+                                                Verificar Conexión
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                try {
+                                                    const res = await fetch(`${API_URL}/whatsmeow/agents`, {
+                                                        method: 'POST',
+                                                        headers: {
+                                                            'Content-Type': 'application/json',
+                                                            'Authorization': `Bearer ${localStorage.getItem('crm_token')}`
+                                                        },
+                                                        body: JSON.stringify({})
+                                                    });
+                                                    if (res.ok) {
+                                                        showToast('Agente WhatsMeow creado. Recarga para ver el QR.', 'success');
+                                                        fetchIntegrations();
+                                                    } else {
+                                                        const data = await res.json();
+                                                        showToast(`Error: ${data.error}`, 'error');
+                                                    }
+                                                } catch (err) {
+                                                    showToast('Error creando agente', 'error');
+                                                }
+                                            }}
+                                            className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-bold transition-colors"
+                                        >
+                                            Crear Agente WhatsApp
+                                        </button>
+                                    )}
                                 </>
                             )}
 

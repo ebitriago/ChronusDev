@@ -86,6 +86,39 @@ export default function CustomerDetail({ customerId, onBack }: { customerId: str
                         )}
                     </div>
                 </div>
+                <button
+                    onClick={async () => {
+                        const phone = contacts.find((c: any) => c.type === 'phone')?.value || customer.phone;
+                        if (!phone) {
+                            alert('El cliente no tiene teléfono registrado.');
+                            return;
+                        }
+                        if (!confirm(`¿Llamar a ${customer.name} (${phone}) usando el Agente de Voz?`)) return;
+
+                        try {
+                            const res = await fetch(`${API_URL}/voice/call`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${localStorage.getItem('crm_token')}`
+                                },
+                                body: JSON.stringify({ customerNumber: phone })
+                            });
+                            const data = await res.json();
+                            if (res.ok) {
+                                alert('Llamada iniciada con éxito. ID: ' + data.callSid);
+                            } else {
+                                alert('Error: ' + data.error);
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            alert('Error al iniciar la llamada.');
+                        }
+                    }}
+                    className="ml-auto px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-bold shadow-lg shadow-orange-500/20 hover:shadow-orange-500/30 transition-all flex items-center gap-2"
+                >
+                    <span className="text-lg">📞</span> Llamar con IA
+                </button>
             </div>
 
             {/* Tabs */}

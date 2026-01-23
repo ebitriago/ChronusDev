@@ -1,414 +1,365 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useToast } from './Toast';
 
 const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
 
-type WhatsAppProvider = {
-    id: string;
-    name: string;
-    type: 'whatsmeow' | 'meta';
-    enabled: boolean;
-    config: {
-        apiUrl?: string;
-        apiKey?: string;
-        sessionId?: string;
-        phoneNumberId?: string;
-        accessToken?: string;
-        businessAccountId?: string;
-        webhookVerifyToken?: string;
-    };
-    status: 'disconnected' | 'connecting' | 'connected' | 'error';
-    lastError?: string;
-    connectedAt?: string;
+type WhatsMeowStatus = {
+    configured: boolean;
+    connected: boolean;
+    accountInfo?: any;
+    agentCode?: string;
 };
 
-export default function WhatsAppConfig() {
-    const [providers, setProviders] = useState<WhatsAppProvider[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [editingProvider, setEditingProvider] = useState<WhatsAppProvider | null>(null);
-    const [testing, setTesting] = useState<string | null>(null);
-    const [qrModal, setQrModal] = useState<{ providerId: string; qr: string; instructions: string[] } | null>(null);
-    const [loadingQr, setLoadingQr] = useState(false);
-    const { showToast } = useToast();
+// Component to load QR with auth header
+function QRImage({ agentCode, onReset }: { agentCode: string, onReset: () => void }) {
+    const [src, setSrc] = useState<string>('');
+    const [error, setError] = useState(false);
 
     useEffect(() => {
-        fetchProviders();
-    }, []);
+        if (!agentCode) return;
+        setSrc(''); setError(false);
 
-    const fetchProviders = async () => {
+        const loadQR = async () => {
+            try {
+                // The backend now checks agent existence before fetching QR
+                // If backend returns 500/404, we show error
+                const res = await fetch(`${API_URL}/whatsmeow/agents/${agentCode}/qr`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('crm_token')}` }
+                });
+                if (res.ok) {
+                    const blob = await res.blob();
+                    setSrc(URL.createObjectURL(blob));
+                } else {
+                    console.error('QR fetch failed:', res.status, res.statusText);
+                    setError(true);
+                }
+            } catch (e) {
+                console.error('QR fetch error:', e);
+                setError(true);
+            }
+        };
+        loadQR();
+
+        const interval = setInterval(loadQR, 30000);
+        return () => clearInterval(interval);
+    }, [agentCode]);
+
+    if (error) {
+        return (
+            <div className="w-48 h-48 bg-gray-100 rounded-lg flex flex-col items-center justify-center text-center p-2">
+                <div className="text-3xl mb-2">⚠️</div>
+                <p className="text-xs text-gray-500 mb-2">Error cargando QR</p>
+                <div className="text-[10px] text-gray-400 mb-2">Error del servidor externo</div>
+                <button
+                    onClick={onReset}
+                    className="px-3 py-1 bg-white border border-gray-300 rounded text-xs text-red-600 hover:bg-gray-50 transition-colors"
+                >
+                    Nuevo Agente
+                </button>
+            </div>
+        );
+    }
+
+    if (!src) {
+        return (
+            <div className="w-48 h-48 bg-gray-100 rounded-lg flex items-center justify-center animate-pulse">
+                <div className="text-center">
+                    <div className="text-3xl mb-2">📱</div>
+                    <p className="text-xs text-gray-500">Cargando QR...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return <img src={src} alt="QR Code" className="w-48 h-48 border border-gray-200 rounded-lg" />;
+}
+
+export default function WhatsAppConfig() {
+    const [status, setStatus] = useState<WhatsMeowStatus>({ configured: false, connected: false });
+    const [loading, setLoading] = useState(true);
+    const [testPhone, setTestPhone] = useState('');
+    const [testMessage, setTestMessage] = useState('');
+    const [sending, setSending] = useState(false);
+    const { showToast } = useToast();
+
+    const fetchStatus = async () => {
         try {
-            const res = await fetch(`${API_URL}/whatsapp/providers`);
-            if (res.ok) setProviders(await res.json());
-        } catch (err) {
-            console.error(err);
+            const res = await fetch(`${API_URL}/whatsmeow/status`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('crm_token')}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setStatus(data);
+            }
+        } catch (error) {
+            console.error('Error fetching status:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleToggle = async (id: string, enabled: boolean) => {
+    useEffect(() => {
+        fetchStatus();
+    }, []);
+
+    const handleCreateAgent = async () => {
+        setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/whatsapp/providers/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enabled })
+            const res = await fetch(`${API_URL}/whatsmeow/agents`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('crm_token')}`
+                }
             });
+
             if (res.ok) {
-                fetchProviders();
-                showToast(enabled ? 'Proveedor habilitado' : 'Proveedor deshabilitado', 'success');
-            }
-        } catch (err) {
-            showToast('Error actualizando proveedor', 'error');
-        }
-    };
-
-    const handleTest = async (id: string) => {
-        setTesting(id);
-        try {
-            const res = await fetch(`${API_URL}/whatsapp/providers/${id}/test`, { method: 'POST' });
-            const data = await res.json();
-            if (data.success) {
-                showToast(data.message, 'success');
+                showToast('Agente creado correctamente', 'success');
+                await fetchStatus();
             } else {
-                showToast(`Error: ${data.error}`, 'error');
+                const err = await res.json();
+                showToast(err.error || 'Error al crear agente', 'error');
             }
-            fetchProviders();
-        } catch (err) {
-            showToast('Error probando conexión', 'error');
+        } catch (error) {
+            showToast('Error de conexión', 'error');
         } finally {
-            setTesting(null);
+            setLoading(false);
         }
     };
 
-    const handleSaveConfig = async () => {
-        if (!editingProvider) return;
+    const handleReset = async () => {
+        if (!confirm('¿Seguro que quieres borrar la configuración y crear un nuevo agente?')) return;
+
+        setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/whatsapp/providers/${editingProvider.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ config: editingProvider.config })
+            const res = await fetch(`${API_URL}/whatsmeow/reset`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('crm_token')}`
+                }
             });
+
             if (res.ok) {
-                showToast('Configuración guardada', 'success');
-                setEditingProvider(null);
-                fetchProviders();
-            }
-        } catch (err) {
-            showToast('Error guardando', 'error');
-        }
-    };
-
-    // Request QR for WhatsMeow
-    const handleRequestQR = async (id: string) => {
-        setLoadingQr(true);
-        try {
-            const res = await fetch(`${API_URL}/whatsapp/providers/${id}/qr`);
-            const data = await res.json();
-            if (data.qr) {
-                setQrModal({ providerId: id, qr: data.qr, instructions: data.instructions || [] });
-                fetchProviders();
+                showToast('Configuración reiniciada', 'success');
+                // Force reset state locally
+                setStatus({ configured: false, connected: false });
             } else {
-                showToast(data.error || 'Error obteniendo QR', 'error');
+                showToast('Error al reiniciar', 'error');
             }
-        } catch (err) {
-            showToast('Error solicitando QR', 'error');
+        } catch (error) {
+            showToast('Error de conexión', 'error');
         } finally {
-            setLoadingQr(false);
+            setLoading(false);
         }
     };
 
-    const statusColors: Record<string, string> = {
-        connected: 'bg-emerald-100 text-emerald-700',
-        connecting: 'bg-blue-100 text-blue-700',
-        disconnected: 'bg-gray-100 text-gray-500',
-        error: 'bg-red-100 text-red-700'
+    const handleVerifyConnection = async () => {
+        setLoading(true);
+        await fetchStatus();
+        setLoading(false);
+    };
+
+    const handleSendTestMessage = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSending(true);
+        try {
+            const res = await fetch(`${API_URL}/whatsmeow/send/message`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('crm_token')}`
+                },
+                body: JSON.stringify({ to: testPhone, message: testMessage })
+            });
+
+            if (res.ok) {
+                showToast('Mensaje enviado', 'success');
+                setTestMessage('');
+            } else {
+                const err = await res.json();
+                showToast(err.error || 'Error al enviar mensaje', 'error');
+            }
+        } catch (error) {
+            showToast('Error de conexión', 'error');
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const handleDisconnect = async () => {
+        if (!confirm('¿Seguro que quieres desconectar?')) return;
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/whatsmeow/disconnect`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('crm_token')}` }
+            });
+
+            if (res.ok) {
+                showToast('Desconectado correctamente', 'success');
+                fetchStatus();
+            } else {
+                showToast('Error al desconectar', 'error');
+            }
+        } catch (error) {
+            showToast('Error de conexión', 'error');
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (loading) {
-        return <div className="text-center py-10 text-gray-400">Cargando proveedores...</div>;
+        return <div className="p-8 text-center text-gray-500">Cargando estado de WhatsApp...</div>;
     }
 
-    return (
-        <div className="space-y-6 animate-fadeIn">
-            {/* Header */}
-            <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center text-white text-2xl shadow-lg">
-                    📱
+    /* 1. Not Configured - Show Create Button */
+    if (!status.configured) {
+        return (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center animate-fadeIn">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-3xl">📱</span>
                 </div>
-                <div>
-                    <h2 className="text-xl font-bold text-gray-900">Integración WhatsApp</h2>
-                    <p className="text-sm text-gray-500">Configura proveedores WhatsMeow y Meta Business API</p>
-                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">WhatsApp (WhatsMeow)</h3>
+                <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                    Envía mensajes directos usando tu número de WhatsApp. Vincula tu dispositivo para comenzar.
+                </p>
+                <button
+                    onClick={handleCreateAgent}
+                    disabled={loading}
+                    className="bg-[#25D366] text-white px-6 py-2.5 rounded-lg hover:bg-[#20bd5a] transition-colors font-medium inline-flex items-center gap-2 shadow-sm"
+                >
+                    🚀 Crear Agente WhatsApp
+                </button>
             </div>
+        );
+    }
 
-            {/* Providers Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {providers.map(provider => (
-                    <div
-                        key={provider.id}
-                        className={`bg-white rounded-2xl border p-5 transition-all ${provider.enabled ? 'border-emerald-200 shadow-lg shadow-emerald-500/10' : 'border-gray-200'
-                            }`}
-                    >
-                        {/* Header */}
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${provider.type === 'whatsmeow'
-                                    ? 'bg-purple-100 text-purple-600'
-                                    : 'bg-blue-100 text-blue-600'
-                                    }`}>
-                                    {provider.type === 'whatsmeow' ? '🔧' : '📘'}
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-gray-900">{provider.name}</h3>
-                                    <span className="text-xs text-gray-400 uppercase">{provider.type}</span>
-                                </div>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={provider.enabled}
-                                    onChange={(e) => handleToggle(provider.id, e.target.checked)}
-                                    className="sr-only peer"
-                                />
-                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                            </label>
+    /* 2. Configured but not connected - Show QR */
+    if (status.configured && !status.connected) {
+        return (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 animate-fadeIn">
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-[#25D366] rounded-lg flex items-center justify-center text-white">
+                            📱
                         </div>
-
-                        {/* Status */}
-                        <div className="flex items-center gap-2 mb-4">
-                            <span className={`text-xs font-bold px-2 py-1 rounded ${statusColors[provider.status]}`}>
-                                {provider.status === 'connected' && '✓ '}
-                                {provider.status === 'error' && '⚠ '}
-                                {provider.status.toUpperCase()}
-                            </span>
-                            {provider.connectedAt && (
-                                <span className="text-xs text-gray-400">
-                                    desde {new Date(provider.connectedAt).toLocaleString()}
-                                </span>
-                            )}
+                        <div>
+                            <h3 className="font-semibold text-gray-900">WhatsApp (WhatsMeow)</h3>
+                            <p className="text-sm text-gray-500">Envía mensajes directos usando tu número de WhatsApp</p>
                         </div>
+                    </div>
+                </div>
 
-                        {provider.lastError && (
-                            <div className="mb-4 p-2 bg-red-50 rounded-lg text-xs text-red-600">
-                                {provider.lastError}
-                            </div>
+                <div className="text-center py-4">
+                    <div className="flex items-center justify-center gap-2 text-yellow-600 bg-yellow-50 py-2 px-4 rounded-full inline-flex mb-8">
+                        <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+                        <span className="text-sm font-medium">⏳ Pendiente de vincular</span>
+                    </div>
+
+                    <h4 className="font-medium text-gray-900 mb-4">Escanea el código QR</h4>
+
+                    <div className="bg-gray-50 rounded-xl p-6 mb-4 inline-block">
+                        {status.agentCode ? (
+                            <QRImage agentCode={status.agentCode} onReset={handleReset} />
+                        ) : (
+                            <div className="text-red-500">Error: No hay código de agente</div>
                         )}
-
-                        {/* Config Preview */}
-                        <div className="text-xs text-gray-500 mb-4 bg-gray-50 p-3 rounded-lg space-y-1">
-                            {provider.type === 'whatsmeow' ? (
-                                <>
-                                    <div><strong>API URL:</strong> {provider.config.apiUrl || 'No configurada'}</div>
-                                    <div><strong>Session:</strong> {provider.config.sessionId || 'N/A'}</div>
-                                </>
-                            ) : (
-                                <>
-                                    <div><strong>Phone ID:</strong> {provider.config.phoneNumberId || 'No configurado'}</div>
-                                    <div><strong>Token:</strong> {provider.config.accessToken || 'No configurado'}</div>
-                                </>
-                            )}
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setEditingProvider({ ...provider })}
-                                className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-medium transition-colors"
-                            >
-                                ⚙️ Configurar
-                            </button>
-                            {provider.type === 'whatsmeow' && provider.status !== 'connected' && (
-                                <button
-                                    onClick={() => handleRequestQR(provider.id)}
-                                    disabled={loadingQr}
-                                    className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-colors"
-                                >
-                                    {loadingQr ? '...' : '📱 Vincular'}
-                                </button>
-                            )}
-                            <button
-                                onClick={() => handleTest(provider.id)}
-                                disabled={testing === provider.id}
-                                className="flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-colors"
-                            >
-                                {testing === provider.id ? '...' : '🔌 Probar'}
-                            </button>
-                        </div>
                     </div>
-                ))}
-            </div>
 
-            {/* Webhook Info */}
-            <div className="bg-blue-50 rounded-2xl border border-blue-100 p-5">
-                <h3 className="font-bold text-blue-900 mb-2">📡 Webhook URL para Meta Business API</h3>
-                <p className="text-sm text-blue-700 mb-3">Usa esta URL en tu configuración de Meta para recibir mensajes:</p>
-                <code className="block bg-white p-3 rounded-lg text-sm font-mono text-blue-800 break-all">
-                    {`${API_URL}/whatsapp/webhook`}
-                </code>
-                <p className="text-xs text-blue-600 mt-2">Verify Token: <code className="bg-white px-2 py-0.5 rounded">crm_verify_token_2024</code></p>
-            </div>
-
-            {/* Edit Modal */}
-            {editingProvider && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-bold text-gray-900">
-                                Configurar {editingProvider.name}
-                            </h3>
-                            <button onClick={() => setEditingProvider(null)} className="text-gray-400 hover:text-gray-600">✕</button>
-                        </div>
-
-                        <div className="space-y-4">
-                            {editingProvider.type === 'whatsmeow' ? (
-                                <>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">API URL (Servidor de Bernardo)</label>
-                                        <input
-                                            type="url"
-                                            value={editingProvider.config.apiUrl || ''}
-                                            onChange={e => setEditingProvider({
-                                                ...editingProvider,
-                                                config: { ...editingProvider.config, apiUrl: e.target.value }
-                                            })}
-                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                                            placeholder="http://servidor:8080"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
-                                        <input
-                                            type="password"
-                                            value={editingProvider.config.apiKey || ''}
-                                            onChange={e => setEditingProvider({
-                                                ...editingProvider,
-                                                config: { ...editingProvider.config, apiKey: e.target.value }
-                                            })}
-                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                                            placeholder="Tu API key"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Session ID</label>
-                                        <input
-                                            type="text"
-                                            value={editingProvider.config.sessionId || ''}
-                                            onChange={e => setEditingProvider({
-                                                ...editingProvider,
-                                                config: { ...editingProvider.config, sessionId: e.target.value }
-                                            })}
-                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                                            placeholder="crm-session-1"
-                                        />
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number ID</label>
-                                        <input
-                                            type="text"
-                                            value={editingProvider.config.phoneNumberId || ''}
-                                            onChange={e => setEditingProvider({
-                                                ...editingProvider,
-                                                config: { ...editingProvider.config, phoneNumberId: e.target.value }
-                                            })}
-                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                                            placeholder="123456789012345"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Access Token</label>
-                                        <input
-                                            type="password"
-                                            value={editingProvider.config.accessToken || ''}
-                                            onChange={e => setEditingProvider({
-                                                ...editingProvider,
-                                                config: { ...editingProvider.config, accessToken: e.target.value }
-                                            })}
-                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                                            placeholder="EAAxxxxxxx..."
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Business Account ID (WABA)</label>
-                                        <input
-                                            type="text"
-                                            value={editingProvider.config.businessAccountId || ''}
-                                            onChange={e => setEditingProvider({
-                                                ...editingProvider,
-                                                config: { ...editingProvider.config, businessAccountId: e.target.value }
-                                            })}
-                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                                            placeholder="123456789012345"
-                                        />
-                                    </div>
-                                </>
-                            )}
-
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    onClick={() => setEditingProvider(null)}
-                                    className="flex-1 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={handleSaveConfig}
-                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold"
-                                >
-                                    Guardar
-                                </button>
-                            </div>
-                        </div>
+                    <div className="max-w-md mx-auto bg-blue-50 rounded-lg p-4 text-left mb-6">
+                        <h5 className="text-sm font-semibold text-blue-900 mb-2">📖 Instrucciones</h5>
+                        <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                            <li>Abre WhatsApp en tu teléfono</li>
+                            <li>Ve a Configuración → Dispositivos vinculados</li>
+                            <li>Toca "Vincular un dispositivo"</li>
+                            <li>Escanea el código QR</li>
+                        </ol>
                     </div>
-                </div>
-            )}
 
-            {/* QR Modal */}
-            {qrModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 text-center">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-lg font-bold text-gray-900">Vincular WhatsApp</h3>
-                            <button onClick={() => setQrModal(null)} className="text-gray-400 hover:text-gray-600">✕</button>
-                        </div>
-
-                        {/* QR Code Display */}
-                        <div className="bg-gray-100 rounded-xl p-8 mb-4">
-                            <div className="w-48 h-48 mx-auto bg-white rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
-                                {qrModal.qr.startsWith('data:') ? (
-                                    <img src={qrModal.qr} alt="QR Code" className="w-full h-full" />
-                                ) : (
-                                    <div className="text-center">
-                                        <div className="text-5xl mb-2">📱</div>
-                                        <p className="text-xs text-gray-500">QR aparecerá aquí cuando Bernardo proporcione la API</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Instructions */}
-                        <div className="text-left bg-blue-50 rounded-xl p-4 mb-4">
-                            <h4 className="font-bold text-blue-900 mb-2">📖 Instrucciones</h4>
-                            <ol className="text-sm text-blue-800 space-y-1">
-                                {qrModal.instructions.map((inst, i) => (
-                                    <li key={i}>{inst}</li>
-                                ))}
-                            </ol>
-                        </div>
+                    <div className="flex flex-col gap-3 items-center">
+                        <button
+                            onClick={handleVerifyConnection}
+                            className="text-[#25D366] hover:text-[#20bd5a] font-medium text-sm flex items-center gap-1"
+                        >
+                            🔄 Verificar Conexión
+                        </button>
 
                         <button
-                            onClick={() => setQrModal(null)}
-                            className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-xl font-medium"
+                            onClick={handleReset}
+                            className="text-gray-400 hover:text-red-500 text-xs underline"
                         >
-                            Cerrar
+                            ❌ Cancelar / Cambiar Agente
                         </button>
                     </div>
                 </div>
-            )}
+            </div>
+        );
+    }
+
+    /* 3. Connected - Show Test Form */
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 animate-fadeIn">
+            <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-[#25D366] rounded-lg flex items-center justify-center text-white">
+                        📱
+                    </div>
+                    <div>
+                        <h3 className="font-semibold text-gray-900">WhatsApp (WhatsMeow)</h3>
+                        <p className="text-sm text-gray-500">
+                            Conectado: {status.accountInfo?.PushName || status.accountInfo?.JID || 'Desconocido'}
+                        </p>
+                    </div>
+                </div>
+                <button
+                    onClick={handleDisconnect}
+                    className="text-red-500 hover:text-red-600 text-sm font-medium px-4 py-2 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                    Desconectar
+                </button>
+            </div>
+
+            <div className="flex items-center gap-2 text-green-600 bg-green-50 py-2 px-4 rounded-full inline-flex mb-8">
+                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                <span className="text-sm font-medium">✅ Conectado y listo para enviar</span>
+            </div>
+
+            <div className="max-w-md">
+                <h4 className="font-medium text-gray-900 mb-4">Enviar mensaje de prueba</h4>
+                <form onSubmit={handleSendTestMessage} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Número de destino</label>
+                        <input
+                            type="tel"
+                            placeholder="Ej: 584241234567"
+                            value={testPhone}
+                            onChange={(e) => setTestPhone(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#25D366] focus:border-transparent outline-none transition-all"
+                            required
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Incluye código de país sin + (ej: 58...)</p>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Mensaje</label>
+                        <textarea
+                            placeholder="Escribe un mensaje de prueba..."
+                            value={testMessage}
+                            onChange={(e) => setTestMessage(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#25D366] focus:border-transparent outline-none transition-all h-24 resize-none"
+                            required
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={sending}
+                        className="bg-gray-900 text-white px-6 py-2.5 rounded-lg hover:bg-gray-800 transition-colors font-medium w-full flex items-center justify-center gap-2"
+                    >
+                        {sending ? 'Enviando...' : '✉️ Enviar Mensaje'}
+                    </button>
+                </form>
+            </div>
         </div>
     );
 }

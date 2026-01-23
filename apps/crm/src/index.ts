@@ -9,7 +9,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { apiReference } from '@scalar/express-api-reference';
 import { customers, tickets, invoices, communications, transactions, leads, tags, loadAssistAICache, saveAssistAICache, channelConfigs, conversationTakeovers, type AssistAICache, type ChannelConfig, type ConversationTakeover, conversations, initConversations, saveOrganizationConfig, getOrganizationConfig } from "./data.js";
-import type { Customer, Ticket, Invoice, Communication, TicketStatus, Transaction, Lead, Tag, ChatMessage, Conversation } from "./types.js";
+import type { Customer, Ticket, Invoice, Communication, TicketStatus, Transaction, Lead, Tag, ChatMessage, Conversation, ContactIdentity, ContactType } from "./types.js";
 import { authMiddleware, optionalAuth, requireRole, handleLogin, handleRegister, handleLogout, getAssistAIAuthUrl, handleAssistAICallback } from "./auth.js";
 import { prisma } from "./db.js";
 import { logActivity, getCustomerActivities, getLeadActivities, getTicketActivities, getRecentActivities, activityTypeLabels, activityTypeIcons } from "./activity.js";
@@ -19,9 +19,19 @@ import { getUserIntegrations, saveUserIntegration } from "./integrations.js";
 import { generateInvoicePDF, generateAnalyticsPDF } from "./reports.js";
 import { AssistAIService } from "./services/assistai.js";
 import bcrypt from "bcryptjs";
+import { validateAgentId } from "./voice.js";
+import * as whatsmeow from "./whatsmeow.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Fix: Define ASSISTAI_CONFIG global fallback
+const ASSISTAI_CONFIG = {
+    baseUrl: process.env.ASSISTAI_API_URL || 'https://public.assistai.lat',
+    apiToken: process.env.ASSISTAI_API_TOKEN,
+    tenantDomain: process.env.ASSISTAI_TENANT_DOMAIN,
+    organizationCode: process.env.ASSISTAI_ORG_CODE
+};
 
 const app = express();
 const httpServer = createServer(app);
@@ -37,10 +47,10 @@ app.use(helmet());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Global Rate Limiter
+// Global Rate Limiter (relaxed for development)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Higher limit for development
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
     message: { error: "Demasiadas solicitudes, por favor intente más tarde." }
@@ -49,7 +59,7 @@ const limiter = rateLimit({
 // Apply granular limits to Auth routes
 const authLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 10, // 5 failed attempts per hour really (but 2 calls per login usually)
+    max: process.env.NODE_ENV === 'production' ? 10 : 50, // Higher limit for development
     message: { error: "Demasiados intentos de inicio de sesión, intente más tarde." }
 });
 
@@ -578,6 +588,171 @@ app.post("/clients/:id/contacts", (req, res) => {
     });
 });
 
+// ========== INTEGRATIONS MANAGEMENT ==========
+
+/**
+ * @openapi
+ * /integrations:
+ *   get:
+ *     summary: Get all integrations for the current user
+ *     tags: [Integrations]
+ */
+app.get("/integrations", authMiddleware, async (req: any, res) => {
+    try {
+        const integrations = await getUserIntegrations(req.user.id);
+        res.json(integrations);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * @openapi
+ * /integrations:
+ *   post:
+ *     summary: Save or update an integration configuration
+ *     tags: [Integrations]
+ */
+app.post("/integrations", authMiddleware, async (req: any, res) => {
+    const { provider, credentials, isEnabled, metadata } = req.body;
+
+    if (!provider || !credentials) {
+        return res.status(400).json({ error: "Provider and credentials are required" });
+    }
+
+    try {
+        const integration = await saveUserIntegration(req.user.id, {
+            provider,
+            credentials,
+            isEnabled: isEnabled !== undefined ? isEnabled : true,
+            metadata
+        });
+
+        // SPECIAL HANDLING FOR ASSISTAI:
+        // Also update the Organization config if this is an admin saving AssistAI creds,
+        // so that the rest of the system (which uses org config) works correctly.
+        if (provider === 'ASSISTAI' && req.user.organizationId) {
+            try {
+                // Determine if we should update org config.
+                // If the user provided these specific fields in credentials:
+                if (credentials.apiToken && credentials.organizationCode && credentials.tenantDomain) {
+                    await prisma.organization.update({
+                        where: { id: req.user.organizationId },
+                        data: {
+                            assistaiConfig: {
+                                apiToken: credentials.apiToken,
+                                organizationCode: credentials.organizationCode,
+                                tenantDomain: credentials.tenantDomain
+                            }
+                        }
+                    });
+                    console.log(`[Integrations] Synced AssistAI config to Organization ${req.user.organizationId}`);
+                }
+            } catch (orgErr) {
+                console.error("[Integrations] Failed to sync to Organization config:", orgErr);
+                // Don't fail the request, just log it. The user integration is already saved.
+            }
+        }
+
+        res.json({ success: true, integration });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ========== VOICE (ELEVENLABS + TWILIO) ==========
+
+import { initiateOutboundCall, handleElevenLabsTranscript } from './voice.js';
+import { initScheduler } from './scheduler.js';
+
+// Initialize the scheduler for pending calls
+initScheduler();
+
+/**
+ * @openapi
+ * /voice/call:
+ *   post:
+ *     summary: Initiate an outbound AI call
+ *     tags: [Voice]
+ */
+app.post("/voice/call", authMiddleware, async (req: any, res) => {
+    try {
+        const { customerNumber, agentId } = req.body;
+        if (!customerNumber) {
+            return res.status(400).json({ error: "Customer number is required" });
+        }
+
+        const result = await initiateOutboundCall(customerNumber, agentId);
+        if (result.success) {
+            res.json(result);
+        } else {
+            res.status(500).json(result);
+        }
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * @openapi
+ * /interactions/schedule:
+ *   post:
+ *     summary: Schedule an outbound interaction (Call, WhatsApp, Email)
+ *     tags: [Interactions]
+ */
+app.post("/interactions/schedule", authMiddleware, async (req: any, res) => {
+    try {
+        const { customerId, scheduledAt, type, content, subject, metadata } = req.body;
+
+        if (!customerId || !scheduledAt || !type) {
+            return res.status(400).json({ error: "Customer ID, Schedule Time, and Type are required" });
+        }
+
+        const date = new Date(scheduledAt);
+        if (isNaN(date.getTime())) {
+            return res.status(400).json({ error: "Invalid scheduledAt date" });
+        }
+
+        const interaction = await prisma.scheduledInteraction.create({
+            data: {
+                customerId,
+                scheduledAt: date,
+                type, // VOICE, WHATSAPP, EMAIL
+                content, // Message or Email body
+                subject, // Email subject
+                metadata: metadata || {},
+                status: 'PENDING'
+            }
+        });
+
+        res.json({ success: true, interaction });
+    } catch (err: any) {
+        console.error("Schedule Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * @openapi
+ * /webhooks/elevenlabs/transcript:
+ *   post:
+ *     summary: Receive conversation transcripts from ElevenLabs
+ *     tags: [Webhooks]
+ */
+app.post("/webhooks/elevenlabs/transcript", async (req, res) => {
+    // Determine if we need to verify signature? 
+    // ElevenLabs might sign requests. For now, open.
+    try {
+        await handleElevenLabsTranscript(req.body);
+        res.json({ received: true });
+    } catch (err: any) {
+        console.error("Webhook Error:", err);
+        res.status(500).json({ error: "Internal Error" });
+    }
+});
+
+// ========== END VOICE ==========
+
 // Manual Sync Endpoint
 app.post("/customers/:id/sync", async (req, res) => {
     const customer = customers.find(c => c.id === req.params.id);
@@ -1096,24 +1271,31 @@ app.post("/leads", (req, res) => {
     res.json(lead);
 });
 
-app.put("/leads/:id", (req, res) => {
-    const lead = leads.find(l => l.id === req.params.id);
-    if (!lead) return res.status(404).json({ error: "Lead no encontrado" });
+// ... imports
+import { checkLeadAutomations } from './automations.js';
 
-    const { name, email, company, value, status, notes, tags: leadTags } = req.body;
-    if (name) lead.name = name;
-    if (email) lead.email = email;
-    if (company !== undefined) lead.company = company;
-    if (value !== undefined) lead.value = Number(value);
-    if (status) lead.status = status;
-    if (notes !== undefined) lead.notes = notes;
-    if (leadTags !== undefined) lead.tags = leadTags;
-    lead.updatedAt = new Date();
+app.put("/leads/:id", authMiddleware, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const { status, ...data } = req.body;
 
-    // Recalculate score
-    lead.score = calculateLeadScore(lead);
+        const lead = await prisma.lead.update({
+            where: { id },
+            data: { status, ...data }
+        });
 
-    res.json(lead);
+        // Trigger Automations if status changed
+        if (status) {
+            checkLeadAutomations(id, status as any).catch(err => console.error(err));
+        }
+
+        res.json(lead);
+    } catch (err: any) {
+        if (err.code === 'P2025') {
+            return res.status(404).json({ error: "Lead no encontrado" });
+        }
+        res.status(500).json({ error: err.message });
+    }
 });
 
 
@@ -1646,6 +1828,104 @@ app.post("/webhooks/clients/incoming", (req, res) => {
     res.json({ success: true, id: customer.id, message: "Cliente creado exitosamente" });
 });
 
+// WhatsMeow Webhook Receiver
+// Payload format from Bernardo's n8n integration
+app.post("/whatsmeow/webhook", async (req, res) => {
+    const payload = req.body;
+    console.log('[WhatsMeow Webhook] Recibido:', JSON.stringify(payload).substring(0, 800));
+
+    try {
+        // Bernardo's format: payload has body object with message data
+        const data = payload.body || payload;
+
+        // Extract agent info from headers (if available via payload.headers)
+        const agentCode = payload.headers?.['x-agent-code'] || req.headers['x-agent-code'];
+        const agentToken = payload.headers?.['x-agent-token'] || req.headers['x-agent-token'];
+
+        // Extract sender info - format: "584124330943@s.whatsapp.net"
+        const fromRaw = data.from || '';
+        const toRaw = data.to || '';
+
+        // Check if it's a group message or self message
+        const isGroup = data.is_group === true || fromRaw.includes('@g.us');
+        const isSelfMessage = data.is_self_message === true || data.is_owner_sender === true;
+
+        if (!fromRaw || isSelfMessage || isGroup) {
+            console.log('[WhatsMeow] Ignorando mensaje (self/group/empty)');
+            return res.sendStatus(200);
+        }
+
+        // Clean phone number - remove @s.whatsapp.net suffix
+        const from = fromRaw.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
+        const pushName = data.pushname || data.pushName || '';
+
+        // Extract message content based on type
+        let content = '';
+        let mediaUrl: string | undefined = undefined;
+        let mediaType: 'text' | 'image' | 'audio' | 'video' | 'document' | 'sticker' = 'text';
+        const messageType = data.type || 'text';
+
+        switch (messageType) {
+            case 'text':
+            case 'extended_text':
+                content = data.message || data.text || '';
+                break;
+            case 'image':
+                content = data.caption || '[Imagen recibida]';
+                mediaType = 'image';
+                mediaUrl = data.image_url || data.media_url;
+                break;
+            case 'audio':
+            case 'ptt': // Push to talk (voice note)
+                content = '[Audio recibido]';
+                mediaType = 'audio';
+                mediaUrl = data.audio_url || data.media_url;
+                break;
+            case 'video':
+                content = data.caption || '[Video recibido]';
+                mediaType = 'video' as any;
+                mediaUrl = data.video_url || data.media_url;
+                break;
+            case 'document':
+                content = data.filename || data.caption || '[Documento recibido]';
+                mediaType = 'document' as any;
+                mediaUrl = data.document_url || data.media_url;
+                break;
+            case 'sticker':
+                content = '[Sticker recibido]';
+                mediaType = 'sticker' as any;
+                mediaUrl = data.sticker_url || data.media_url;
+                break;
+            default:
+                content = data.message || data.text || `[${messageType}]`;
+        }
+
+        if (from && content) {
+            console.log(`[WhatsMeow] Procesando ${messageType} de ${from} (${pushName}): ${content.substring(0, 100)}`);
+
+            await processIncomingMessage(
+                'whatsmeow',
+                'whatsapp',
+                from,
+                content,
+                mediaType as any,
+                mediaUrl,
+                {
+                    pushName,
+                    messageId: data.message_id || data.id,
+                    timestamp: data.timestamp,
+                    conversationId: data.conversationId,
+                    agentCode
+                }
+            );
+        }
+    } catch (e: any) {
+        console.error('[WhatsMeow Webhook Error]', e.message, e.stack);
+    }
+
+    res.sendStatus(200);
+});
+
 app.post("/webhooks/messages/incoming", async (req, res) => {
     // Universal Webhook for WhatsApp, Instagram, Messenger, AssistAI
     const { from, content, platform = "assistai", sessionId: providedSessionId, mediaUrl, mediaType, providerId } = req.body;
@@ -1715,8 +1995,34 @@ app.post("/chat/send", async (req, res) => {
                 if (provider.type === 'whatsmeow') {
                     // Send via WhatsMeow
                     console.log(`[WhatsMeow] Sending to ${to}: ${content}`);
-                    // TODO: Call Bernardo's API
-                    // await fetch(`${provider.config.apiUrl}/send`, ...)
+                    try {
+                        // Get WhatsMeow credentials from first available integration
+                        const wmIntegrations = await prisma.integration.findMany({
+                            where: { provider: 'WHATSMEOW', isEnabled: true }
+                        });
+                        const wmConfig = wmIntegrations[0];
+
+                        if (wmConfig?.credentials) {
+                            const creds = wmConfig.credentials as any;
+                            if (creds.agentCode && creds.agentToken) {
+                                const formattedTo = whatsmeow.formatPhoneNumber(to);
+                                await whatsmeow.sendMessage(
+                                    creds.agentCode,
+                                    creds.agentToken,
+                                    { to: formattedTo, message: content }
+                                );
+                                newMessage.status = 'sent';
+                                console.log(`[WhatsMeow] Message sent successfully to ${formattedTo}`);
+                            } else {
+                                console.warn('[WhatsMeow] Missing agentCode or agentToken in credentials');
+                            }
+                        } else {
+                            console.warn('[WhatsMeow] No enabled WhatsMeow integration found');
+                        }
+                    } catch (wmErr: any) {
+                        console.error('[WhatsMeow Send Error]', wmErr.message);
+                        newMessage.status = 'failed';
+                    }
                 } else if (provider.type === 'meta') {
                     // Send via Meta
                     console.log(`[Meta] Sending to ${to} via ${provider.id}: ${content}`);
@@ -2478,12 +2784,36 @@ app.post("/organization/users", authMiddleware, requireRole('ADMIN'), async (req
         });
 
         const { password: _, ...rest } = user;
-        res.status(201).json(rest);
+
+        res.json(rest);
     } catch (err: any) {
-        if (err.code === 'P2002') {
-            return res.status(400).json({ error: "El email ya está registrado" });
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// ... (existing code)
+
+// Voice Validation
+app.post("/voice/validate", authMiddleware, async (req: any, res) => {
+    try {
+        let { agentId, apiKey } = req.body;
+
+        // Sanitize input
+        agentId = agentId ? agentId.trim() : '';
+        apiKey = apiKey ? apiKey.trim() : '';
+
+        if (!agentId || !apiKey) {
+            return res.status(400).json({ error: "Agent ID y API Key requeridos" });
         }
-        res.status(400).json({ error: err.message });
+        const result = await validateAgentId(agentId, apiKey);
+        if (result.success) {
+            res.json(result);
+        } else {
+            res.status(400).json(result);
+        }
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -2541,7 +2871,7 @@ app.post("/organization/seed-demo", authMiddleware, requireRole('ADMIN'), async 
 
 // ========== CONTACT IDENTITY MANAGEMENT ==========
 
-import type { ContactIdentity, ContactType } from './types.js';
+
 
 // In-memory contact store (use database in production)
 const contactIdentities: Map<string, ContactIdentity> = new Map();
@@ -3179,6 +3509,7 @@ const openApiSpec = {
         { name: 'Email', description: 'Servicios de Email (Gmail)' },
         { name: 'Calendar', description: 'Google Calendar & Meet' },
         { name: 'Integrations', description: 'Gestión de credenciales de usuario' },
+        { name: 'WhatsApp', description: 'WhatsApp vía WhatsMeow (mensajes directos)' },
         { name: 'Reports', description: 'Reportes y PDF' }
     ],
     paths: {
@@ -3218,6 +3549,9 @@ const openApiSpec = {
         },
         '/api/assistai/sync-all': {
             post: { tags: ['AssistAI'], summary: 'Sincronizar todas las conversaciones', description: 'Sincroniza todas las conversaciones de AssistAI al inbox local', responses: { '200': { description: 'Sincronización completada' } } }
+        },
+        '/voice/validate': {
+            post: { tags: ['AssistAI'], summary: 'Validar Agente de Voz', description: 'Valida credenciales de ElevenLabs', requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['agentId', 'apiKey'], properties: { agentId: { type: 'string' }, apiKey: { type: 'string' } } } } } }, responses: { '200': { description: 'Agente válido' }, '400': { description: 'Credenciales inválidas' } } }
         },
         '/conversations': {
             get: { tags: ['Inbox'], summary: 'Listar conversaciones del inbox', responses: { '200': { description: 'Lista de conversaciones' } } }
@@ -3273,6 +3607,32 @@ const openApiSpec = {
         },
         '/reports/analytics/pdf': {
             get: { tags: ['Reports'], summary: 'Descargar Reporte Analytics PDF', responses: { '200': { description: 'Archivo PDF' } } }
+        },
+        '/whatsmeow/agents': {
+            get: { tags: ['WhatsApp'], summary: 'Listar agentes WhatsMeow', responses: { '200': { description: 'Lista de agentes' } } },
+            post: { tags: ['WhatsApp'], summary: 'Crear agente WhatsMeow', description: 'Crea un nuevo agente y guarda las credenciales', responses: { '201': { description: 'Agente creado con code y token' } } }
+        },
+        '/whatsmeow/agents/{code}/qr': {
+            get: { tags: ['WhatsApp'], summary: 'Obtener QR como imagen PNG', parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Imagen PNG del código QR' } } },
+            post: { tags: ['WhatsApp'], summary: 'Iniciar proceso de vinculación QR', parameters: [{ name: 'code', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Estado pending o connected con datos QR' } } }
+        },
+        '/whatsmeow/status': {
+            get: { tags: ['WhatsApp'], summary: 'Estado de conexión WhatsApp', responses: { '200': { description: 'configured, connected y accountInfo' } } }
+        },
+        '/whatsmeow/send/message': {
+            post: { tags: ['WhatsApp'], summary: 'Enviar mensaje de texto', requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['to', 'message'], properties: { to: { type: 'string', description: 'Número destino (ej: 584123456789)' }, message: { type: 'string' } } } } } }, responses: { '200': { description: 'Mensaje enviado' } } }
+        },
+        '/whatsmeow/send/image': {
+            post: { tags: ['WhatsApp'], summary: 'Enviar imagen', requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['to', 'imageUrl'], properties: { to: { type: 'string' }, imageUrl: { type: 'string' }, caption: { type: 'string' } } } } } }, responses: { '200': { description: 'Imagen enviada' } } }
+        },
+        '/whatsmeow/send/audio': {
+            post: { tags: ['WhatsApp'], summary: 'Enviar audio/nota de voz', requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['to', 'audioUrl'], properties: { to: { type: 'string' }, audioUrl: { type: 'string' }, ptt: { type: 'boolean', description: 'true para nota de voz' } } } } } }, responses: { '200': { description: 'Audio enviado' } } }
+        },
+        '/whatsmeow/send/document': {
+            post: { tags: ['WhatsApp'], summary: 'Enviar documento', requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['to', 'documentUrl'], properties: { to: { type: 'string' }, documentUrl: { type: 'string' }, fileName: { type: 'string' }, caption: { type: 'string' } } } } } }, responses: { '200': { description: 'Documento enviado' } } }
+        },
+        '/whatsmeow/disconnect': {
+            post: { tags: ['WhatsApp'], summary: 'Desconectar dispositivo WhatsApp', responses: { '200': { description: 'Dispositivo desconectado' } } }
         }
     }
 };
@@ -3625,38 +3985,356 @@ app.get("/integrations", authMiddleware, async (req, res) => {
     }
 });
 
-// Save user integration
-app.post("/integrations", authMiddleware, async (req, res) => {
-    const { provider, credentials, isEnabled } = req.body;
-    if (!provider || !credentials) {
-        return res.status(400).json({ error: "provider y credentials requeridos" });
-    }
 
+
+
+// ========== WHATSMEOW WHATSAPP ==========
+
+// Create WhatsMeow agent
+app.post("/whatsmeow/agents", authMiddleware, async (req, res) => {
     try {
-        if (provider === 'ASSISTAI') {
-            // Save to Organization Config
-            // In real multi-tenant, use req.user.organizationId
-            saveOrganizationConfig('org-default', credentials);
+        const { externalAgentId, externalAgentToken } = req.body;
+        const agent = await whatsmeow.createAgent({ externalAgentId, externalAgentToken });
 
-            return res.json({
-                id: 'assistai-org',
-                provider: 'ASSISTAI',
-                isEnabled: true,
-                connected: true
-            });
-        }
-
-        const integration = await saveUserIntegration(req.user!.id, {
-            provider,
-            credentials,
-            isEnabled: isEnabled !== false
+        // Save to integrations
+        await saveUserIntegration(req.user!.id, {
+            provider: 'WHATSMEOW',
+            credentials: {
+                agentCode: agent.code,
+                agentToken: agent.token,
+                agentId: agent.id
+            },
+            isEnabled: true
         });
-        res.json(integration);
+
+        res.status(201).json(agent);
+    } catch (err: any) {
+        console.error('Error creating WhatsMeow agent:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// List WhatsMeow agents
+app.get("/whatsmeow/agents", authMiddleware, async (req, res) => {
+    try {
+        const agents = await whatsmeow.getAgents();
+        res.json(agents);
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
 });
 
+// Get QR code for device linking (initiates process)
+app.post("/whatsmeow/agents/:code/qr", authMiddleware, async (req, res) => {
+    try {
+        const { code } = req.params;
+        const integrations = await getUserIntegrations(req.user!.id);
+        const wmConfig = integrations.find((i: any) => i.provider === 'WHATSMEOW');
+
+        if (!wmConfig?.credentials?.agentToken) {
+            return res.status(400).json({ error: 'WhatsMeow no configurado' });
+        }
+
+        const result = await whatsmeow.getQRCode(code, wmConfig.credentials.agentToken);
+        res.json(result);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get QR code as PNG image
+app.get("/whatsmeow/agents/:code/qr", authMiddleware, async (req, res) => {
+    try {
+        const { code } = req.params;
+        const integrations = await getUserIntegrations(req.user!.id);
+        const wmConfig = integrations.find((i: any) => i.provider === 'WHATSMEOW');
+
+        if (!wmConfig?.credentials?.agentToken) {
+            console.log('[WhatsMeow QR] No WHATSMEOW config found for user:', req.user!.id);
+            return res.status(400).json({ error: 'WhatsMeow no configurado' });
+        }
+
+        const agentToken = wmConfig.credentials.agentToken as string;
+
+        // Debug: Check if agent info can be retrieved
+        console.log('[WhatsMeow QR] Checking agent info for code:', code);
+        try {
+            const info = await whatsmeow.getAccountInfo(code, agentToken);
+            console.log('[WhatsMeow QR] Agent info retrieved successfully:', JSON.stringify(info));
+        } catch (infoErr: any) {
+            console.log('[WhatsMeow QR] Could not get agent info (expected if not connected):', infoErr.message);
+        }
+
+        // Fetch the QR image
+        console.log('[WhatsMeow QR] Fetching QR image for code:', code);
+        const qrImage = await whatsmeow.getQRImage(code, agentToken);
+        res.set('Content-Type', 'image/png');
+        res.send(qrImage);
+    } catch (err: any) {
+        console.error('[WhatsMeow QR Error]', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get WhatsMeow connection status
+app.get("/whatsmeow/status", authMiddleware, async (req, res) => {
+    try {
+        const integrations = await getUserIntegrations(req.user!.id);
+        const wmConfig = integrations.find((i: any) => i.provider === 'WHATSMEOW');
+
+        if (!wmConfig?.credentials?.agentCode || !wmConfig?.credentials?.agentToken) {
+            return res.json({ configured: false, connected: false });
+        }
+
+        const agentCode = wmConfig.credentials.agentCode;
+
+        try {
+            const info = await whatsmeow.getAccountInfo(agentCode, wmConfig.credentials.agentToken);
+            res.json({ configured: true, connected: true, agentCode, accountInfo: info });
+        } catch {
+            // Not connected yet, but configured - return agentCode for QR display
+            res.json({ configured: true, connected: false, agentCode });
+        }
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Send WhatsApp text message
+app.post("/whatsmeow/send/message", authMiddleware, async (req, res) => {
+    try {
+        const { to, message } = req.body;
+
+        if (!to || !message) {
+            return res.status(400).json({ error: 'Destino y mensaje requeridos' });
+        }
+
+        const integrations = await getUserIntegrations(req.user!.id);
+        const wmConfig = integrations.find((i: any) => i.provider === 'WHATSMEOW');
+
+        if (!wmConfig?.credentials?.agentCode || !wmConfig?.credentials?.agentToken) {
+            return res.status(400).json({ error: 'WhatsMeow no configurado' });
+        }
+
+        const formattedTo = whatsmeow.formatPhoneNumber(to);
+        const result = await whatsmeow.sendMessage(
+            wmConfig.credentials.agentCode,
+            wmConfig.credentials.agentToken,
+            { to: formattedTo, message }
+        );
+
+        res.json(result);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Send WhatsApp image
+app.post("/whatsmeow/send/image", authMiddleware, async (req, res) => {
+    try {
+        const { to, imageUrl, caption } = req.body;
+
+        if (!to || !imageUrl) {
+            return res.status(400).json({ error: 'Destino y URL de imagen requeridos' });
+        }
+
+        const integrations = await getUserIntegrations(req.user!.id);
+        const wmConfig = integrations.find((i: any) => i.provider === 'WHATSMEOW');
+
+        if (!wmConfig?.credentials?.agentCode || !wmConfig?.credentials?.agentToken) {
+            return res.status(400).json({ error: 'WhatsMeow no configurado' });
+        }
+
+        const formattedTo = whatsmeow.formatPhoneNumber(to);
+        const result = await whatsmeow.sendImage(
+            wmConfig.credentials.agentCode,
+            wmConfig.credentials.agentToken,
+            { to: formattedTo, imageUrl, caption }
+        );
+
+        res.json(result);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Send WhatsApp audio/voice note
+app.post("/whatsmeow/send/audio", authMiddleware, async (req, res) => {
+    try {
+        const { to, audioUrl, ptt } = req.body;
+
+        if (!to || !audioUrl) {
+            return res.status(400).json({ error: 'Destino y URL de audio requeridos' });
+        }
+
+        const integrations = await getUserIntegrations(req.user!.id);
+        const wmConfig = integrations.find((i: any) => i.provider === 'WHATSMEOW');
+
+        if (!wmConfig?.credentials?.agentCode || !wmConfig?.credentials?.agentToken) {
+            return res.status(400).json({ error: 'WhatsMeow no configurado' });
+        }
+
+        const formattedTo = whatsmeow.formatPhoneNumber(to);
+        const result = await whatsmeow.sendAudio(
+            wmConfig.credentials.agentCode,
+            wmConfig.credentials.agentToken,
+            { to: formattedTo, audioUrl, ptt }
+        );
+
+        res.json(result);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Send WhatsApp document
+app.post("/whatsmeow/send/document", authMiddleware, async (req, res) => {
+    try {
+        const { to, documentUrl, fileName, caption } = req.body;
+
+        if (!to || !documentUrl) {
+            return res.status(400).json({ error: 'Destino y URL de documento requeridos' });
+        }
+
+        const integrations = await getUserIntegrations(req.user!.id);
+        const wmConfig = integrations.find((i: any) => i.provider === 'WHATSMEOW');
+
+        if (!wmConfig?.credentials?.agentCode || !wmConfig?.credentials?.agentToken) {
+            return res.status(400).json({ error: 'WhatsMeow no configurado' });
+        }
+
+        const formattedTo = whatsmeow.formatPhoneNumber(to);
+        const result = await whatsmeow.sendDocument(
+            wmConfig.credentials.agentCode,
+            wmConfig.credentials.agentToken,
+            { to: formattedTo, documentUrl, fileName, caption }
+        );
+
+        res.json(result);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Disconnect WhatsMeow device
+app.post("/whatsmeow/disconnect", authMiddleware, async (req, res) => {
+    try {
+        const integrations = await getUserIntegrations(req.user!.id);
+        const wmConfig = integrations.find((i: any) => i.provider === 'WHATSMEOW');
+
+        if (!wmConfig?.credentials?.agentCode || !wmConfig?.credentials?.agentToken) {
+            return res.status(400).json({ error: 'WhatsMeow no configurado' });
+        }
+
+        const result = await whatsmeow.disconnect(
+            wmConfig.credentials.agentCode,
+            wmConfig.credentials.agentToken
+        );
+
+        res.json(result);
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Reset WhatsMeow configuration
+app.post("/whatsmeow/reset", authMiddleware, async (req, res) => {
+    try {
+        await saveUserIntegration(req.user!.id, 'WHATSMEOW', {});
+        res.json({ success: true, message: 'Configuración reseteada' });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Configure WhatsMeow webhook URL
+app.post("/whatsmeow/configure-webhook", authMiddleware, async (req, res) => {
+    try {
+        const { webhookUrl } = req.body;
+
+        // Get user's WhatsMeow credentials
+        const integrations = await getUserIntegrations(req.user!.id);
+        const wmConfig = integrations.find((i: any) => i.provider === 'WHATSMEOW');
+
+        if (!wmConfig?.credentials?.agentCode || !wmConfig?.credentials?.agentToken) {
+            return res.status(400).json({ error: 'WhatsMeow no configurado. Vincule un número primero.' });
+        }
+
+        // Determine webhook URL - use provided or auto-generate
+        let finalWebhookUrl = webhookUrl;
+        if (!finalWebhookUrl) {
+            // Try to auto-detect from request
+            const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+            const host = req.headers['x-forwarded-host'] || req.get('host');
+            if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
+                finalWebhookUrl = `${protocol}://${host}/whatsmeow/webhook`;
+            } else {
+                return res.status(400).json({
+                    error: 'No se puede auto-configurar webhook en localhost. Use ngrok o proporcione una URL pública.',
+                    hint: 'Ejemplo: POST con body { "webhookUrl": "https://tu-dominio.com/whatsmeow/webhook" }'
+                });
+            }
+        }
+
+        // Call WhatsMeow API to set webhook
+        const result = await whatsmeow.setWebhook(
+            wmConfig.credentials.agentCode,
+            wmConfig.credentials.agentToken,
+            finalWebhookUrl
+        );
+
+        // Save webhook URL in credentials for reference
+        await saveUserIntegration(req.user!.id, 'WHATSMEOW', {
+            ...wmConfig.credentials,
+            webhookUrl: finalWebhookUrl
+        });
+
+        console.log(`[WhatsMeow] Webhook configured: ${finalWebhookUrl}`);
+        res.json({
+            success: true,
+            message: 'Webhook configurado exitosamente',
+            webhookUrl: finalWebhookUrl
+        });
+    } catch (err: any) {
+        console.error('[WhatsMeow Webhook Config Error]', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get WhatsMeow agent info including webhook status
+app.get("/whatsmeow/agent-info", authMiddleware, async (req, res) => {
+    try {
+        const integrations = await getUserIntegrations(req.user!.id);
+        const wmConfig = integrations.find((i: any) => i.provider === 'WHATSMEOW');
+
+        if (!wmConfig?.credentials?.agentCode || !wmConfig?.credentials?.agentToken) {
+            return res.json({ configured: false });
+        }
+
+        try {
+            const agent = await whatsmeow.getAgent(
+                wmConfig.credentials.agentCode,
+                wmConfig.credentials.agentToken
+            );
+            res.json({
+                configured: true,
+                agentCode: agent.code,
+                connected: !!agent.deviceId,
+                webhookUrl: agent.incomingWebhook || wmConfig.credentials.webhookUrl,
+                webhookConfigured: !!agent.incomingWebhook
+            });
+        } catch (e) {
+            res.json({
+                configured: true,
+                agentCode: wmConfig.credentials.agentCode,
+                connected: false,
+                error: 'No se pudo obtener info del agente'
+            });
+        }
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // ========== REPORTS ==========
 
@@ -3681,6 +4359,208 @@ app.get("/reports/analytics/pdf", authMiddleware, async (req, res) => {
 // Health Check
 app.get("/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date() });
+});
+
+// ========== AUTOMATIONS (WhatsApp Templates) ==========
+
+const MESSAGE_TEMPLATES: Record<string, { name: string; message: string; variables: string[] }> = {
+    lead_welcome: {
+        name: 'Bienvenida Lead',
+        message: '¡Hola {{nombre}}! Gracias por tu interés. Soy {{agente}} de {{empresa}}. ¿En qué puedo ayudarte?',
+        variables: ['nombre', 'agente', 'empresa']
+    },
+    payment_reminder: {
+        name: 'Recordatorio de Pago',
+        message: 'Hola {{nombre}}, te recordamos que tienes un pago pendiente de ${{monto}} por {{concepto}}. ¿Necesitas ayuda con el pago?',
+        variables: ['nombre', 'monto', 'concepto']
+    },
+    invoice_sent: {
+        name: 'Factura Enviada',
+        message: 'Hola {{nombre}}, te hemos enviado la factura #{{numero}} por ${{monto}}. Puedes verla en tu correo o solicitar el enlace aquí.',
+        variables: ['nombre', 'numero', 'monto']
+    },
+    appointment_reminder: {
+        name: 'Recordatorio de Cita',
+        message: 'Hola {{nombre}}, te recordamos tu cita para {{fecha}} a las {{hora}}. ¿Confirmas asistencia? Responde SÍ o NO.',
+        variables: ['nombre', 'fecha', 'hora']
+    },
+    follow_up: {
+        name: 'Seguimiento',
+        message: 'Hola {{nombre}}, ¿cómo te fue con {{asunto}}? Estamos aquí para ayudarte si necesitas algo más.',
+        variables: ['nombre', 'asunto']
+    },
+    custom: {
+        name: 'Mensaje Personalizado',
+        message: '{{mensaje}}',
+        variables: ['mensaje']
+    }
+};
+
+// Get available templates
+app.get("/automations/templates", authMiddleware, async (req, res) => {
+    res.json({
+        success: true,
+        templates: Object.entries(MESSAGE_TEMPLATES).map(([key, template]) => ({
+            id: key,
+            ...template
+        }))
+    });
+});
+
+// Send automated message via WhatsApp
+app.post("/automations/send", authMiddleware, async (req, res) => {
+    try {
+        const { templateId, phone, variables, customMessage, clientId } = req.body;
+
+        if (!phone) {
+            return res.status(400).json({ error: 'Número de teléfono requerido' });
+        }
+
+        // Get WhatsMeow credentials
+        const wmIntegration = await prisma.integration.findFirst({
+            where: {
+                provider: 'WHATSMEOW',
+                isEnabled: true,
+                userId: req.user!.id
+            }
+        });
+
+        // Fallback to any enabled integration
+        const wmConfig = wmIntegration || await prisma.integration.findFirst({
+            where: { provider: 'WHATSMEOW', isEnabled: true }
+        });
+
+        if (!wmConfig?.credentials) {
+            return res.status(400).json({ error: 'WhatsMeow no configurado. Configure primero en Integraciones.' });
+        }
+
+        const creds = wmConfig.credentials as any;
+        if (!creds.agentCode || !creds.agentToken) {
+            return res.status(400).json({ error: 'Credenciales de WhatsMeow incompletas' });
+        }
+
+        // Build message from template
+        let message = '';
+        if (templateId === 'custom' && customMessage) {
+            message = customMessage;
+        } else if (templateId && MESSAGE_TEMPLATES[templateId]) {
+            message = MESSAGE_TEMPLATES[templateId].message;
+            // Replace variables
+            if (variables) {
+                for (const [key, value] of Object.entries(variables)) {
+                    message = message.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
+                }
+            }
+        } else {
+            return res.status(400).json({ error: 'Template inválido o mensaje no proporcionado' });
+        }
+
+        // Format phone number
+        const formattedPhone = whatsmeow.formatPhoneNumber(phone);
+
+        // Send via WhatsMeow
+        const result = await whatsmeow.sendMessage(
+            creds.agentCode,
+            creds.agentToken,
+            { to: formattedPhone, message }
+        );
+
+        // Log the automation
+        console.log(`[Automation] Sent ${templateId || 'custom'} to ${formattedPhone}: ${message.substring(0, 50)}...`);
+
+        // If clientId provided, save as activity/note
+        if (clientId) {
+            try {
+                await prisma.activity.create({
+                    data: {
+                        type: 'NOTE',
+                        description: `[Automatización] ${MESSAGE_TEMPLATES[templateId]?.name || 'Personalizado'}: ${message.substring(0, 100)}`,
+                        customerId: clientId,
+                        metadata: { templateId, phone: formattedPhone, messageSent: message }
+                    }
+                });
+            } catch (e) {
+                // Activity logging is optional, don't fail the request
+            }
+        }
+
+        res.json({
+            success: true,
+            message: 'Mensaje enviado exitosamente',
+            sentTo: formattedPhone,
+            templateUsed: templateId || 'custom'
+        });
+
+    } catch (err: any) {
+        console.error('[Automation Error]', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Send bulk automated messages
+app.post("/automations/send-bulk", authMiddleware, async (req, res) => {
+    try {
+        const { templateId, recipients, variables } = req.body;
+        // recipients: [{ phone: string, variables?: Record<string, string>, clientId?: string }]
+
+        if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
+            return res.status(400).json({ error: 'Lista de destinatarios vacía' });
+        }
+
+        if (recipients.length > 50) {
+            return res.status(400).json({ error: 'Máximo 50 destinatarios por envío' });
+        }
+
+        // Get WhatsMeow credentials
+        const wmConfig = await prisma.integration.findFirst({
+            where: { provider: 'WHATSMEOW', isEnabled: true }
+        });
+
+        if (!wmConfig?.credentials) {
+            return res.status(400).json({ error: 'WhatsMeow no configurado' });
+        }
+
+        const creds = wmConfig.credentials as any;
+        const results: { phone: string; success: boolean; error?: string }[] = [];
+
+        for (const recipient of recipients) {
+            try {
+                const template = MESSAGE_TEMPLATES[templateId];
+                if (!template) {
+                    results.push({ phone: recipient.phone, success: false, error: 'Template inválido' });
+                    continue;
+                }
+
+                let message = template.message;
+                const mergedVars = { ...variables, ...recipient.variables };
+                for (const [key, value] of Object.entries(mergedVars)) {
+                    message = message.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
+                }
+
+                const formattedPhone = whatsmeow.formatPhoneNumber(recipient.phone);
+                await whatsmeow.sendMessage(creds.agentCode, creds.agentToken, { to: formattedPhone, message });
+
+                results.push({ phone: recipient.phone, success: true });
+
+                // Small delay between messages to avoid rate limiting
+                await new Promise(r => setTimeout(r, 500));
+            } catch (e: any) {
+                results.push({ phone: recipient.phone, success: false, error: e.message });
+            }
+        }
+
+        const successCount = results.filter(r => r.success).length;
+        res.json({
+            success: true,
+            total: recipients.length,
+            sent: successCount,
+            failed: recipients.length - successCount,
+            results
+        });
+
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ========== SERVER ==========

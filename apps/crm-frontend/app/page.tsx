@@ -164,6 +164,14 @@ export default function CRMPage() {
         localStorage.removeItem('crm_user');
       }
     }
+
+    // Check for initial view from URL-based navigation
+    const initialView = sessionStorage.getItem('crm_initial_view');
+    if (initialView) {
+      setView(initialView as any);
+      sessionStorage.removeItem('crm_initial_view');
+    }
+
     // Stop loading immediately so showing the page is fast
     setLoading(false);
   }, []);

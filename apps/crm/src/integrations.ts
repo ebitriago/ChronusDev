@@ -1,7 +1,7 @@
 // Integrations Management Service
 import { prisma } from './db.js';
 
-type IntegrationProvider = 'GOOGLE' | 'GMAIL' | 'ASSISTAI';
+type IntegrationProvider = 'GOOGLE' | 'GMAIL' | 'ASSISTAI' | 'ELEVENLABS' | 'TWILIO' | 'WHATSMEOW';
 
 interface IntegrationConfig {
     provider: IntegrationProvider;
@@ -27,6 +27,18 @@ export async function getUserIntegrations(userId: string) {
 
 // Save user integration
 export async function saveUserIntegration(userId: string, config: IntegrationConfig) {
+    // Sanitize credentials (trim strings)
+    const sanitizedCredentials: Record<string, any> = {};
+    if (config.credentials) {
+        for (const [key, value] of Object.entries(config.credentials)) {
+            if (typeof value === 'string') {
+                sanitizedCredentials[key] = value.trim();
+            } else {
+                sanitizedCredentials[key] = value;
+            }
+        }
+    }
+
     // Upsert integration
     const integration = await prisma.integration.upsert({
         where: {
@@ -36,14 +48,14 @@ export async function saveUserIntegration(userId: string, config: IntegrationCon
             },
         },
         update: {
-            credentials: config.credentials, // Encrypt this in production!
+            credentials: sanitizedCredentials, // Encrypt this in production!
             isEnabled: config.isEnabled,
             metadata: config.metadata,
         },
         create: {
             userId,
             provider: config.provider,
-            credentials: config.credentials,
+            credentials: sanitizedCredentials,
             isEnabled: config.isEnabled,
             metadata: config.metadata,
         },
