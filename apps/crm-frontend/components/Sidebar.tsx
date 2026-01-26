@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-type View = 'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'channels' | 'settings' | 'developers' | 'super-admin';
+type View = 'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'ai-agents' | 'channels' | 'settings' | 'developers' | 'super-admin';
 
 interface SidebarProps {
     currentView: View;
@@ -17,6 +17,7 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
         { id: 'inbox', label: 'Inbox Unificado', icon: '💬' },
         { id: 'assistai', label: 'AssistAI', icon: '🤖' },
+        { id: 'ai-agents', label: 'Agentes IA', icon: '🧠' },
         { id: 'channels', label: 'Canales', icon: '📱' },
         { id: 'leads', label: 'Leads Pipeline', icon: '🎯' },
         { id: 'customers', label: 'Clientes', icon: '👥' },
@@ -24,6 +25,7 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
         { id: 'invoices', label: 'Facturas', icon: '💰' },
         { id: 'finances', label: 'Finanzas', icon: '💵' },
         { id: 'developers', label: 'Developers', icon: '🛠️' },
+        { id: 'docs', label: 'Documentación', icon: '📚' },
         ...(userRole === 'SUPER_ADMIN' ? [{ id: 'super-admin', label: 'Organizaciones', icon: '🏢' }] : []),
         { id: 'settings', label: 'Configuración', icon: '⚙️' },
     ];

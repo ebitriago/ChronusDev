@@ -125,6 +125,51 @@ export default function Inbox() {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
+    // AI Smart Compose State
+    const [showAiMenu, setShowAiMenu] = useState(false);
+    const [aiLoading, setAiLoading] = useState(false);
+
+    const handleAiAction = async (task: 'rewrite' | 'grammar' | 'tone_formal' | 'tone_friendly' | 'expand' | 'translate_en') => {
+        if (!replyText.trim()) {
+            showToast('Escribe algo primero para que la IA lo procese', 'error');
+            return;
+        }
+
+        setAiLoading(true);
+        setShowAiMenu(false);
+
+        try {
+            const token = localStorage.getItem('crm_token');
+            const res = await fetch(`${API_URL}/ai/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                } as HeadersInit,
+                body: JSON.stringify({
+                    prompt: replyText,
+                    task: task,
+                    context: `Customer: ${selectedConversation?.customerName || 'User'}. Latest message: ${selectedConversation?.messages[selectedConversation.messages.length - 1]?.content || ''}`
+                })
+            });
+
+            const data = await res.json();
+            if (res.ok && data.result) {
+                setReplyText(data.result);
+                showToast('Texto actualizado por IA', 'success');
+            } else if (res.status === 429) {
+                showToast(data.error || 'Cuota de IA excedida. Espera un momento.', 'error');
+            } else {
+                showToast(data.error || 'Error al procesar con IA', 'error');
+            }
+        } catch (error) {
+            console.error(error);
+            showToast('Error de conexión con IA', 'error');
+        } finally {
+            setAiLoading(false);
+        }
+    };
+
     // Load subscribed agents from localStorage on mount
     useEffect(() => {
         const saved = localStorage.getItem('inbox_subscribed_agents');
@@ -149,7 +194,7 @@ export default function Inbox() {
     // Fetch conversations and agents
     useEffect(() => {
         const token = localStorage.getItem('crm_token');
-        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
 
         Promise.all([
             fetch(`${API_URL}/conversations`, { headers }).then(r => r.ok ? r.json() : []),
@@ -183,8 +228,7 @@ export default function Inbox() {
                 ? `${API_URL}/assistai/poll?since=${encodeURIComponent(lastPollRef.current)}`
                 : `${API_URL}/assistai/poll`;
 
-            // Cast headers to any to avoid strict TS 'undefined' index signature issue for now
-            const res = await fetch(url, { headers: headers as any });
+            const res = await fetch(url, { headers });
             const data = await res.json();
 
             if (data.success) {
@@ -264,10 +308,23 @@ export default function Inbox() {
 
             // Update selected if viewing
             if (selectedConversation?.sessionId === data.sessionId) {
-                setSelectedConversation(prev => prev ? {
-                    ...prev,
-                    messages: [...prev.messages, data.message]
-                } : null);
+                setSelectedConversation(prev => {
+                    if (!prev) return null;
+                    // Check if message already exists by ID or similar content/timestamp to avoid duplication
+                    // Relaxed window to 60s to account for latency
+                    const exists = prev.messages.some(m =>
+                        m.id === data.message.id ||
+                        (m.content === data.message.content &&
+                            Math.abs(new Date(m.timestamp).getTime() - new Date(data.message.timestamp).getTime()) < 60000)
+                    );
+
+                    if (exists) return prev;
+
+                    return {
+                        ...prev,
+                        messages: [...prev.messages, data.message]
+                    };
+                });
             }
         });
 
@@ -509,31 +566,15 @@ export default function Inbox() {
 
         setSending(true);
         try {
-            // Check if this is an AssistAI/WhatsApp/Instagram conversation
-            const isAssistAI = ['assistai', 'whatsapp', 'instagram'].includes(selectedConversation.platform);
-
-            let res;
-            if (isAssistAI && selectedConversation.sessionId) {
-                // Use AssistAI API to send message
-                res = await fetch(`${API_URL}/assistai/conversations/${selectedConversation.sessionId}/messages`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        content: replyText.trim(),
-                        senderName: 'Agente CRM'
-                    })
-                });
-            } else {
-                // Fallback to generic chat endpoint
-                res = await fetch(`${API_URL}/chat/send`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sessionId: selectedConversation.sessionId,
-                        content: replyText.trim()
-                    })
-                });
-            }
+            // Unified Send: Use /chat/send for ALL platforms (AssistAI, WhatsApp, Instagram, etc.)
+            const res = await fetch(`${API_URL}/chat/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId: selectedConversation.sessionId,
+                    content: replyText.trim()
+                })
+            });
 
             if (res.ok) {
                 const data = await res.json();
@@ -953,15 +994,46 @@ export default function Inbox() {
                                     </div>
                                 )}
                                 <div className="flex gap-2 items-center">
-                                    {/* AI Suggestions Button */}
-                                    <button
-                                        onClick={handleGetSuggestions}
-                                        disabled={loadingSuggestions}
-                                        title="Obtener sugerencias de IA"
-                                        className="p-3 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 rounded-xl text-white transition-all shadow-lg shadow-purple-500/20 disabled:opacity-50"
-                                    >
-                                        ✨
-                                    </button>
+                                    {/* AI Tools Button */}
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowAiMenu(!showAiMenu)}
+                                            disabled={loadingSuggestions || aiLoading}
+                                            title="Herramientas de IA"
+                                            className="p-3 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 rounded-xl text-white transition-all shadow-lg shadow-purple-500/20 disabled:opacity-50"
+                                        >
+                                            {aiLoading ? '...' : '✨'}
+                                        </button>
+
+                                        {/* AI Menu */}
+                                        {showAiMenu && (
+                                            <div className="absolute bottom-full left-0 mb-2 w-56 bg-white rounded-xl shadow-xl border border-purple-100 overflow-hidden z-20 animate-fadeIn">
+                                                <div className="p-2 border-b border-gray-100 bg-purple-50">
+                                                    <span className="text-xs font-bold text-purple-800 uppercase tracking-wider">Asistente IA</span>
+                                                </div>
+                                                <div className="p-1">
+                                                    <button onClick={() => handleAiAction('rewrite')} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 rounded-lg flex items-center gap-2">
+                                                        <span>✍️</span> Mejorar redacción
+                                                    </button>
+                                                    <button onClick={() => handleAiAction('grammar')} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 rounded-lg flex items-center gap-2">
+                                                        <span>📝</span> Corregir gramática
+                                                    </button>
+                                                    <button onClick={() => handleAiAction('tone_formal')} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 rounded-lg flex items-center gap-2">
+                                                        <span>👔</span> Hacer más formal
+                                                    </button>
+                                                    <button onClick={() => handleAiAction('tone_friendly')} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 rounded-lg flex items-center gap-2">
+                                                        <span>👋</span> Hacer más amable
+                                                    </button>
+                                                    <button onClick={() => handleAiAction('expand')} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 rounded-lg flex items-center gap-2">
+                                                        <span>➕</span> Expandir texto
+                                                    </button>
+                                                    <button onClick={() => handleAiAction('translate_en')} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-purple-50 rounded-lg flex items-center gap-2">
+                                                        <span>🇬🇧</span> Traducir a Inglés
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                     {/* Attachment Button */}
                                     <button
                                         title="Adjuntar archivo"

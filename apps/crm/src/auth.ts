@@ -13,6 +13,7 @@ declare global {
                 email: string;
                 name: string;
                 role: string;
+                organizationId?: string;
             };
         }
     }
@@ -73,6 +74,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
         email: decoded.email,
         name: decoded.name,
         role: decoded.role,
+        organizationId: (decoded as any).organizationId
     };
 
     next();
