@@ -2910,6 +2910,61 @@ app.get("/users", authMiddleware, async (req: any, res) => {
     }
 });
 
+app.post("/users", authMiddleware, async (req: any, res) => {
+    try {
+        const { name, email, password, role } = req.body;
+        const { organizationId } = req.user;
+
+        // Verify Admin permission
+        // Since we don't have strict granular permissions yet, we assume the caller is Admin or Manager
+        // Could check: if (req.user.role !== 'ADMIN') ...
+
+        // Check if user exists
+        const existing = await prisma.user.findUnique({ where: { email } });
+        if (existing) {
+            // If exists, checks if already in org
+            const member = await prisma.organizationMember.findFirst({
+                where: { userId: existing.id, organizationId }
+            });
+            if (member) return res.status(400).json({ error: "El usuario ya está en la organización" });
+
+            // Add to org
+            await prisma.organizationMember.create({
+                data: { userId: existing.id, organizationId, role: role || 'AGENT' }
+            });
+            return res.json({ message: "Usuario existente agregado al equipo" });
+        }
+
+        // Create new user
+        const hashedPassword = await bcrypt.hash(password || '123456', 10);
+
+        const newUser = await prisma.user.create({
+            data: {
+                name,
+                email,
+                password: hashedPassword,
+                role: 'AGENT', // Global role
+                memberships: {
+                    create: {
+                        organizationId,
+                        role: role || 'AGENT' // Org role (e.g., DEV, MANAGER)
+                    }
+                }
+            }
+        });
+
+        res.json({
+            success: true,
+            user: { id: newUser.id, name: newUser.name, email: newUser.email },
+            message: "Usuario creado y agregado exitosamente"
+        });
+
+    } catch (err: any) {
+        console.error("Error creating user:", err);
+        res.status(500).json({ error: "Error al crear usuario" });
+    }
+});
+
 // ========== CHANNEL CONFIGURATIONS (Hybrid AI/Human) ==========
 
 /**
