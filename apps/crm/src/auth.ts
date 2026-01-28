@@ -53,7 +53,7 @@ export async function comparePassword(password: string, hash: string): Promise<b
 
 // ==================== MIDDLEWARE ====================
 
-export function authMiddleware(req: Request, res: Response, next: NextFunction) {
+export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
     // Get token from header
     const authHeader = req.headers.authorization;
 
@@ -69,12 +69,37 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
     }
 
     // Attach user to request
+    const userId = decoded.userId;
+    const organizationId = (decoded as any).organizationId;
+
+    // JIT: Ensure user exists in local DB to prevent FK errors
+    try {
+        const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+        if (!existingUser) {
+            console.log(`[Auth] JIT Provisioning user: ${decoded.email}`);
+            await prisma.user.create({
+                data: {
+                    id: userId,
+                    email: decoded.email,
+                    name: decoded.name,
+                    role: (decoded.role as any) || 'AGENT',
+                    // Create default org membership if organizationId is present? 
+                    // Or just let it be. For integrations, we just need the User record.
+                }
+            });
+        }
+    } catch (e) {
+        console.error("[Auth] JIT Error:", e);
+        // Continue anyway, maybe it was a race condition or DB error. 
+        // If it really failed, the route handler will crash on FK, which is fine.
+    }
+
     req.user = {
-        id: decoded.userId,
+        id: userId,
         email: decoded.email,
         name: decoded.name,
         role: decoded.role,
-        organizationId: (decoded as any).organizationId
+        organizationId: organizationId
     };
 
     next();

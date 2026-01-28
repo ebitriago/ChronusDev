@@ -465,6 +465,20 @@ app.get("/integrations", authMiddleware, async (req: any, res) => {
     }
 });
 
+app.post("/debug/email", authMiddleware, async (req: any, res) => {
+    const { to, subject, html } = req.body;
+    try {
+        const result = await sendEmail({
+            to: to || req.user.email,
+            subject: subject || "Test Email from ChronusCRM",
+            html: html || "<p>This is a test email sent from the debug endpoint.</p>"
+        });
+        res.json(result);
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 /**
  * @openapi
  * /integrations:
