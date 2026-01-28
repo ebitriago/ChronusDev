@@ -32,18 +32,21 @@ model User {
   sessions          Session[]
   activities        Activity[]
   integrations      Integration[]
+  aiAgents          AiAgent[]
+  pushDevices       PushDevice[]
+  notifPrefs        NotificationPreferences?
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   lastLoginAt   DateTime?
 
   // Multi-tenancy
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id])
+  // organizationId - REMOVED single relation
+  // organization   - REMOVED single relation
+  memberships    OrganizationMember[]
   
   @@index([email])
   @@index([assistaiId])
-  @@index([organizationId])
 }
 
 model Organization {
@@ -53,12 +56,54 @@ model Organization {
   
   // AssistAI Configuration per Tenant
   assistaiConfig Json?    // { apiToken: string, orgCode: string, tenantDomain: string }
+
+  // SaaS Management
+  enabledServices String   @default("CRM,CHRONUSDEV,ASSISTAI") // "CRM,CHRONUSDEV,ASSISTAI"
+
+  // Subscription Fields
+  plan              String   @default("FREE") // FREE, PRO, ENTERPRISE
+  subscriptionStatus String   @default("ACTIVE") // ACTIVE, TRIALING, PAST_DUE, CANCELED
+  trialEndsAt       DateTime?
   
-  users         User[]
+  members       OrganizationMember[]
   integrations  Integration[]
+  aiAgents      AiAgent[]
+  
+  // Scoped Data
+  customers     Customer[]
+  leads         Lead[]
+  tickets       Ticket[]
+  invoices      Invoice[]
+  transactions  Transaction[]
+  conversations Conversation[]
+  notifications Notification[]
+  activities    Activity[]
+  tags          Tag[]
+  communications Communication[]
+  channels      Channel[]
+  contacts      Contact[]
+  takeovers     Takeover[]
+  pushDevices   PushDevice[]
+  notifPrefs    NotificationPreferences[]
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           Role         @default(AGENT) // Role within this org
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
 }
 
 
@@ -103,6 +148,10 @@ model Customer {
   // External IDs
   chronusDevClientId      String?
   chronusDevDefaultProjectId String?
+
+  // Multi-tenancy
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   
   // Relations
   contacts      Contact[]
@@ -111,6 +160,7 @@ model Customer {
   leads         Lead[]      @relation("ConvertedLeads")
   conversations Conversation[]
   transactions  Transaction[]
+  communications Communication[]
   activities    Activity[]
   tags          CustomerTag[]
   scheduledInteractions ScheduledInteraction[]
@@ -120,6 +170,46 @@ model Customer {
   
   @@index([email])
   @@index([status])
+  @@index([organizationId])
+}
+
+enum CommunicationType {
+  EMAIL
+  WHATSAPP
+  NOTE
+  CALL
+  MEETING
+  OTHER
+}
+
+enum CommunicationDirection {
+  INBOUND
+  OUTBOUND
+}
+
+model Communication {
+  id          String    @id @default(cuid())
+  customerId  String
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  type        CommunicationType
+  direction   CommunicationDirection
+  subject     String?
+  content     String
+  metadata    Json?
+  
+  createdBy   String?   // User ID or System
+  
+  // Multi-tenancy
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([customerId])
+  @@index([organizationId])
+  @@index([type])
 }
 
 model ScheduledInteraction {
@@ -139,6 +229,10 @@ model ScheduledInteraction {
   // Results
   externalId  String?   // Call SID or Message ID
   error       String?
+
+  // Multi-tenancy (implied by Customer, but good to have if querying directly)
+  // organizationId String
+  // organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -158,9 +252,13 @@ model Contact {
   verified    Boolean     @default(false)
   isPrimary   Boolean     @default(false)
   createdAt   DateTime    @default(now())
+  // Multi-tenancy
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   
   @@unique([type, value])
   @@index([customerId])
+  @@index([organizationId])
 }
 
 enum Plan {
@@ -199,6 +297,10 @@ model Lead {
   score       Int         @default(0)
   notes       String?
   customFields Json?
+
+  // Multi-tenancy
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   
   // Relations
   createdById String?
@@ -214,6 +316,7 @@ model Lead {
   
   @@index([email])
   @@index([status])
+  @@index([organizationId])
 }
 
 enum LeadStatus {
@@ -255,8 +358,13 @@ model Ticket {
   
   // External
   chronusDevTaskId String?
+  chronusDevProjectId String?
   
   customFields Json?
+
+  // Multi-tenancy
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   
   // Relations
   comments    TicketComment[]
@@ -269,6 +377,7 @@ model Ticket {
   @@index([customerId])
   @@index([status])
   @@index([assignedToId])
+  @@index([organizationId])
 }
 
 model TicketComment {
@@ -311,6 +420,10 @@ model Invoice {
   dueDate     DateTime
   paidAt      DateTime?
   notes       String?
+
+  // Multi-tenancy
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   
   // Relations
   items       InvoiceItem[]
@@ -321,6 +434,7 @@ model Invoice {
   
   @@index([customerId])
   @@index([status])
+  @@index([organizationId])
 }
 
 model InvoiceItem {
@@ -373,13 +487,20 @@ model Transaction {
   currency    String          @default("USD")
   description String?
   category    String?
+  status      String          @default("COMPLETED")
   customerId  String?
   customer    Customer?       @relation(fields: [customerId], references: [id])
+  
+  // Multi-tenancy
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   date        DateTime        @default(now())
   createdAt   DateTime        @default(now())
   
   @@index([type])
   @@index([date])
+  @@index([organizationId])
 }
 
 enum TransactionType {
@@ -405,6 +526,10 @@ model Conversation {
   messages        Message[]
   takeover        Takeover?
   
+  // Multi-tenancy
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   // Metadata
   metadata        Json?
   
@@ -414,6 +539,7 @@ model Conversation {
   @@index([sessionId])
   @@index([customerId])
   @@index([platform])
+  @@index([organizationId])
 }
 
 model Message {
@@ -441,7 +567,14 @@ model Takeover {
   takenById       String
   durationMinutes Int          @default(30)
   expiresAt       DateTime
+
+  // Multi-tenancy
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   createdAt       DateTime     @default(now())
+  
+  @@index([organizationId])
 }
 
 enum Platform {
@@ -491,9 +624,14 @@ model Notification {
   data      Json?
   read      Boolean          @default(false)
   createdAt DateTime         @default(now())
+
+  // Multi-tenancy (Optional, as user is already scoped, but good for filtering)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   
   @@index([userId])
   @@index([read])
+  @@index([organizationId])
 }
 
 enum NotificationType {
@@ -521,6 +659,10 @@ model Activity {
   lead        Lead?        @relation(fields: [leadId], references: [id])
   ticketId    String?
   ticket      Ticket?      @relation(fields: [ticketId], references: [id])
+
+  // Multi-tenancy
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   
   metadata    Json?
   createdAt   DateTime     @default(now())
@@ -529,6 +671,7 @@ model Activity {
   @@index([leadId])
   @@index([ticketId])
   @@index([createdAt])
+  @@index([organizationId])
 }
 
 enum ActivityType {
@@ -548,11 +691,19 @@ enum ActivityType {
 
 model Tag {
   id          String        @id @default(cuid())
-  name        String        @unique
+  name        String
   color       String        @default("#6B7280")
+  
+  // Multi-tenancy
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
   customers   CustomerTag[]
   leads       LeadTag[]
   createdAt   DateTime      @default(now())
+
+  @@unique([name, organizationId]) // Tags are unique per org
+  @@index([organizationId])
 }
 
 model CustomerTag {
@@ -588,9 +739,15 @@ model Channel {
   
   // Provider config
   config      Json?
+
+  // Multi-tenancy
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+
+  @@index([organizationId])
 }
 
 enum ChannelMode {
@@ -617,5 +774,63 @@ model Integration {
   updatedAt   DateTime @updatedAt
   
   @@unique([userId, provider])
+  @@index([organizationId])
+}
+
+// ==================== AI AGENTS MODULE ====================
+
+enum AiProvider {
+  OPENAI
+  GEMINI
+  ELEVENLABS
+}
+
+model AiAgent {
+  id              String        @id @default(cuid())
+  name            String
+  description     String?
+  provider        AiProvider
+  model           String        // e.g. gpt-4, gemini-pro, eleven_turbo_v2 (voiceId via config)
+  systemPrompt    String?       // SQLite handles text automatically
+  apiKey          String?       // Optional override, otherwise use env
+  config          Json?         // { voiceId, temperature, maxTokens, etc }
+  isEnabled       Boolean       @default(true)
+  
+  organizationId  String
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  users           User[]        // Created by / Managed by
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([provider])
+}
+
+model PushDevice {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token           String
+  platform        String
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt       DateTime     @default(now())
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model NotificationPreferences {
+  id              String       @id @default(cuid())
+  userId          String       @unique
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email           Boolean      @default(true)
+  push            Boolean      @default(true)
+  whatsapp        Boolean      @default(true)
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
   @@index([organizationId])
 }

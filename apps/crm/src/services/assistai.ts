@@ -1,11 +1,5 @@
 import { prisma } from "../db.js";
-import { loadAssistAICache, saveAssistAICache, type AssistAICache, conversations } from "../data.js";
-import { AssistAIAgentConfig, ChatMessage } from "../types.js";
-
-// AssistAI Configuration
-// AssistAI Configuration
-// const ASSISTAI_CONFIG = { ... } REMOVED
-
+import { ChatMessage } from "../types.js";
 
 export interface AssistAIConfig {
     baseUrl: string;
@@ -77,28 +71,15 @@ export const AssistAIService = {
                 timeout
             ]);
 
-            // Cache successful response
-            if (data && data.data) {
-                const currentCache = loadAssistAICache();
-                currentCache.agents = data.data;
-                saveAssistAICache(currentCache);
-            }
             return data;
         } catch (err: any) {
             console.error('[AssistAI] Agent fetch failed:', err.message);
-            // Fallback to cache
-            const cache = loadAssistAICache();
-            if (cache.agents && cache.agents.length > 0) {
-                console.log('[AssistAI] Returning cached agents');
-                return { data: cache.agents, fromCache: true };
-            }
             throw err;
         }
     },
 
     // Get single agent with details and remote config
     async getAgentDetails(config: AssistAIConfig, code: string) {
-        // 1. Get basic info
         const agentsData = await this.getAgents(config);
         const agent = (agentsData.data || []).find((a: any) => a.code === code);
 
@@ -106,7 +87,6 @@ export const AssistAIService = {
             throw new Error("Agent not found");
         }
 
-        // 2. Fetch detailed configuration (Prompt, Flow, etc.)
         let remoteConfig = null;
         try {
             remoteConfig = await assistaiFetch(`/agents/${code}/configuration`, config);
@@ -120,13 +100,10 @@ export const AssistAIService = {
         };
     },
 
-    // Get specific agent config (Direct Proxy)
     async getAgentConfig(config: AssistAIConfig, agentId: string) {
-        // This proxies the specific curl command user requested
         return assistaiFetch(`/agents/${agentId}/configuration`, config);
     },
 
-    // Get all conversations
     async getConversations(config: AssistAIConfig, params: {
         page?: number;
         take?: number;
@@ -135,45 +112,33 @@ export const AssistAIService = {
         order?: 'ASC' | 'DESC';
     } = {}) {
         const { page = 1, take = 25, agentCode, orderBy = 'lastMessageDate', order = 'DESC' } = params;
-
         let endpoint = `/conversations?page=${page}&take=${take}&orderBy=${orderBy}&order=${order}`;
+        if (agentCode) endpoint += `&agentCode=${agentCode}`;
 
-        if (agentCode) {
-            endpoint += `&agentCode=${agentCode}`;
-        }
         const response = await assistaiFetch(endpoint, config);
 
-        // Map response to match Frontend expectations (AssistAI.tsx)
-        // Expected: { uuid, title, createdAt, channel, agentCode }
         if (response && response.data && Array.isArray(response.data)) {
             response.data = response.data.map((c: any) => ({
                 ...c,
-                // Ensure uuid exists (it seems to work already, but strictly)
                 uuid: c.uuid || c.id || c.sessionId,
-                // Map Title from various potential sources
                 title: c.title || c.subject || c.contact?.name || c.guest?.name || c.customerName || 'Sin título',
-                // Map Date
                 createdAt: c.createdAt || c.created_at || c.date || new Date().toISOString(),
-                // Map Channel
                 channel: c.channel || c.platform || (c.source === 'whatsapp' ? 'whatsapp' : 'manual')
             }));
         }
-
         return response;
     },
 
-    // Get messages for a specific conversation
     async getMessages(config: AssistAIConfig, uuid: string, limit = 100) {
         return assistaiFetch(`/conversations/${uuid}/messages?take=${limit}&order=ASC`, config);
     },
 
-    // Send a message
     async sendMessage(config: AssistAIConfig, uuid: string, content: string, senderName = 'Agent') {
         return assistaiPost(`/conversations/${uuid}/messages`, {
             content,
             senderMetadata: {
-                id: 0, // Default or mock ID
-                email: 'system@chronus.com', // Default
+                id: 0,
+                email: 'system@chronus.com',
                 firstname: senderName,
                 lastname: 'Bot'
             }
@@ -181,7 +146,7 @@ export const AssistAIService = {
     },
 
     // Full Sync Logic (Agents + Conversations + Messages)
-    async syncAll(config: AssistAIConfig) {
+    async syncAll(config: AssistAIConfig, organizationId: string) {
         // 1. Get agents for mapping
         const agentsData = await this.getAgents(config);
         const agentsMap = new Map<string, string>();
@@ -191,18 +156,9 @@ export const AssistAIService = {
 
         // 2. Get conversations
         const convData = await assistaiFetch('/conversations?take=100', config);
-        const results = {
-            total: 0,
-            synced: 0,
-            updated: 0
-        };
-
-        const cache = loadAssistAICache();
-        const cachedConvs = cache.conversations || [];
         const syncedConvs = [];
 
         for (const conv of convData.data || []) {
-            results.total++;
             const sessionId = `assistai-${conv.uuid}`;
 
             // Fetch messages
@@ -224,43 +180,54 @@ export const AssistAIService = {
             const agentCode = conv.agentCode || '';
             const agentName = agentCode ? (agentsMap.get(agentCode) || 'AssistAI Bot') : 'Unknown Agent';
 
-            // Construct Conversation Object
-            const fullConv = {
-                sessionId,
-                uuid: conv.uuid,
-                platform: platform as 'assistai' | 'whatsapp' | 'instagram',
-                customerContact: conv.sender || conv.contactPhone || conv.uuid,
-                customerName: platform === 'instagram' ? `@${conv.sender || conv.uuid}` : (conv.sender || conv.uuid),
-                agentCode,
-                agentName,
-                messages: messages.map((m: any) => ({
-                    id: `msg-${m.id}`,
-                    sessionId,
-                    from: m.role === 'user' ? (conv.sender || 'user') : 'agent',
-                    content: m.content || '',
-                    platform: platform as any,
-                    sender: m.role === 'user' ? 'user' : 'agent',
-                    timestamp: new Date(m.createdAt),
-                    status: 'read'
-                })) as ChatMessage[],
-                status: 'active' as const,
-                createdAt: new Date(conv.createdAt),
-                updatedAt: new Date(conv.updatedAt || conv.createdAt)
-            };
+            // PERSIST TO DATABASE
+            try {
+                const dbConv = await prisma.conversation.upsert({
+                    where: { sessionId },
+                    update: {
+                        updatedAt: new Date(conv.updatedAt || conv.createdAt),
+                        status: 'ACTIVE',
+                        agentName: agentName,
+                        agentCode: agentCode
+                    },
+                    create: {
+                        sessionId,
+                        platform: platform.toUpperCase() as any,
+                        customerName: platform === 'instagram' ? `@${conv.sender || conv.uuid}` : (conv.sender || conv.uuid),
+                        customerContact: conv.sender || conv.contactPhone || conv.uuid,
+                        agentCode,
+                        agentName,
+                        organizationId,
+                        status: 'ACTIVE',
+                        createdAt: new Date(conv.createdAt),
+                        updatedAt: new Date(conv.updatedAt || conv.createdAt)
+                    }
+                });
 
-            syncedConvs.push(fullConv);
+                // Sync Messages
+                for (const m of messages) {
+                    await prisma.message.upsert({
+                        where: { id: `assistai-${m.id}` },
+                        update: { status: 'DELIVERED' },
+                        create: {
+                            id: `assistai-${m.id}`,
+                            conversationId: dbConv.id,
+                            sender: m.role === 'user' ? 'USER' : 'AGENT',
+                            content: m.content || '',
+                            createdAt: new Date(m.createdAt),
+                        }
+                    });
+                }
 
-            // UPDATE SHARED MEMORY STATE
-            conversations.set(sessionId, fullConv);
+                syncedConvs.push(dbConv);
+            } catch (dbErr) {
+                console.error(`Error syncing conversation ${conv.uuid}:`, dbErr);
+            }
         }
-
-        // Update Cache
-        cache.conversations = syncedConvs;
-        saveAssistAICache(cache);
 
         return {
             success: true,
-            ...results,
+            syncedCount: syncedConvs.length,
             conversations: syncedConvs
         };
     }

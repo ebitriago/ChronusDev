@@ -109,9 +109,10 @@ import Invoices from '../components/Invoices';
 import NotificationBell from '../components/NotificationBell';
 import AuthPage from '../components/AuthPage';
 import SuperAdminPanel from '../components/SuperAdminPanel';
+import AiAgentsPage from './ai-agents/page';
 
 export default function CRMPage() {
-  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'channels' | 'settings' | 'developers' | 'super-admin'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'ai-agents' | 'channels' | 'settings' | 'developers' | 'super-admin'>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -157,6 +158,10 @@ export default function CRMPage() {
     if (token && userStr) {
       try {
         const user = JSON.parse(userStr);
+        if (user.role === 'SUPER_ADMIN' && window.location.pathname !== '/admin/dashboard') {
+          window.location.replace('/admin/dashboard');
+          return;
+        }
         setCurrentUser(user);
         setIsAuthenticated(true);
       } catch {
@@ -181,6 +186,13 @@ export default function CRMPage() {
     setCurrentUser(user);
     setIsAuthenticated(true);
     setLoading(false);
+
+    // Redirect Super Admins immediately
+    if (user.role === 'SUPER_ADMIN') {
+      window.location.href = '/admin/dashboard';
+      return;
+    }
+
     // Data will load via effect
   };
 
@@ -318,6 +330,10 @@ export default function CRMPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
+      {/* Onboarding Tour */}
+      {showOnboarding && (
+        <OnboardingTour onComplete={() => setShowOnboarding(false)} />
+      )}
 
       {/* Mobile Overlay */}
       {mobileMenuOpen && (
@@ -335,6 +351,8 @@ export default function CRMPage() {
           isCollapsed={sidebarCollapsed}
           toggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
           userRole={currentUser?.role}
+          enabledServices={(currentUser as any)?.organization?.enabledServices}
+          user={currentUser}
         />
       </div>
 
@@ -457,17 +475,24 @@ export default function CRMPage() {
                       <span>🎫</span> Tickets Recientes
                     </h2>
                     <div className="space-y-4">
-                      {tickets.slice(0, 5).map(ticket => (
-                        <div key={ticket.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl transition-colors border border-transparent hover:border-gray-100">
-                          <div>
-                            <p className="font-medium text-gray-900 text-sm">{ticket.title}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{ticket.customer?.name} • hace 2h</p>
+                      {tickets.length > 0 ? (
+                        tickets.slice(0, 5).map(ticket => (
+                          <div key={ticket.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl transition-colors border border-transparent hover:border-gray-100">
+                            <div>
+                              <p className="font-medium text-gray-900 text-sm">{ticket.title}</p>
+                              <p className="text-xs text-gray-500 mt-0.5">{ticket.customer?.name} • hace 2h</p>
+                            </div>
+                            <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-lg ${ticketStatusColors[ticket.status]}`}>
+                              {ticket.status.replace('_', ' ')}
+                            </span>
                           </div>
-                          <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-lg ${ticketStatusColors[ticket.status]}`}>
-                            {ticket.status.replace('_', ' ')}
-                          </span>
+                        ))
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-32 text-gray-400 text-center">
+                          <p className="text-sm">No hay tickets recientes.</p>
+                          <button onClick={() => setView('tickets')} className="text-emerald-600 text-xs font-bold mt-2 hover:underline">Ir a Tickets</button>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
 
@@ -477,7 +502,8 @@ export default function CRMPage() {
                     </h2>
                     <div className="flex flex-col items-center justify-center h-48 text-gray-400">
                       <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-2 text-2xl">💸</div>
-                      <p className="text-sm">Proximamente: Feed de transacciones en tiempo real</p>
+                      <p className="text-sm">Sin transacciones recientes.</p>
+                      <button onClick={() => setView('invoices')} className="text-emerald-600 text-xs font-bold mt-2 hover:underline">Ver Facturas</button>
                     </div>
                   </div>
                 </div>
@@ -667,6 +693,9 @@ export default function CRMPage() {
 
             {/* AssistAI View */}
             {view === 'assistai' && <AssistAI />}
+
+            {/* AI Agents View */}
+            {view === 'ai-agents' && <AiAgentsPage />}
 
             {/* Channel Settings View */}
             {view === 'channels' && <ChannelSettings />}

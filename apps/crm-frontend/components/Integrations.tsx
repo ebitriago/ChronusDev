@@ -31,6 +31,47 @@ type IntegrationConfig = {
         agentToken?: string; // WhatsMeow
     };
     connected?: boolean;
+    id?: string;
+};
+
+// Authenticated QR Display Component
+const QRDisplay = ({ url }: { url: string }) => {
+    const [src, setSrc] = useState('');
+    const [error, setError] = useState(false);
+
+    useEffect(() => {
+        const fetchQR = async () => {
+            try {
+                const res = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('crm_token')}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    // Backend returns { qr: "url_or_base64" }
+                    setSrc(data.qr);
+                } else {
+                    setError(true);
+                }
+            } catch (e) {
+                setError(true);
+            }
+        };
+        fetchQR();
+        // Poll every 5s
+        const interval = setInterval(fetchQR, 5000);
+        return () => clearInterval(interval);
+    }, [url]);
+
+    if (error) return <div className="text-red-500 text-xs">Error cargando QR</div>;
+    if (!src) return <div className="w-48 h-48 bg-gray-100 animate-pulse rounded-lg mx-auto" />;
+
+    return (
+        <img
+            src={src}
+            alt="QR Code"
+            className="mx-auto w-48 h-48 border border-gray-200 rounded-lg"
+        />
+    );
 };
 
 export default function Integrations() {
@@ -40,6 +81,8 @@ export default function Integrations() {
     const [formData, setFormData] = useState<any>({});
     const [elevenLabsScriptLoaded, setElevenLabsScriptLoaded] = useState(false);
     const { showToast } = useToast();
+
+
 
     useEffect(() => {
         fetchIntegrations();
@@ -264,6 +307,62 @@ export default function Integrations() {
                     </button>
                 </div>
 
+                {/* OpenAI Integration */}
+                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
+                            <span className="text-2xl">🤖</span>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-gray-900">OpenAI (ChatGPT)</h4>
+                            <p className="text-xs text-gray-500 mb-1">GPT-4, GPT-3.5 para agentes de IA</p>
+                            {integrations['OPENAI']?.isEnabled ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Configurado
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
+                                    No configurado
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => handleEdit('OPENAI')}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                    >
+                        Configurar
+                    </button>
+                </div>
+
+                {/* Google Gemini Integration */}
+                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
+                            <span className="text-2xl">✨</span>
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-gray-900">Google Gemini</h4>
+                            <p className="text-xs text-gray-500 mb-1">Gemini Pro para agentes de IA</p>
+                            {integrations['GEMINI']?.isEnabled ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Configurado
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
+                                    No configurado
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => handleEdit('GEMINI')}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                    >
+                        Configurar
+                    </button>
+                </div>
+
                 {/* ElevenLabs Integration */}
                 <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
                     <div className="flex items-center gap-4">
@@ -392,6 +491,68 @@ export default function Integrations() {
                                 </>
                             )}
 
+                            {editingProvider === 'OPENAI' && (
+                                <>
+                                    <div className="bg-green-50 text-green-800 text-xs p-3 rounded-lg mb-4">
+                                        ℹ️ Ingresa tu API Key de OpenAI.
+                                        <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="block mt-1 underline font-bold">Obtener API Key</a>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                                        <input
+                                            type="password"
+                                            value={formData.apiKey || ''}
+                                            onChange={e => setFormData({ ...formData, apiKey: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="sk-..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Modelo por defecto (opcional)</label>
+                                        <select
+                                            value={formData.defaultModel || 'gpt-4'}
+                                            onChange={e => setFormData({ ...formData, defaultModel: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none bg-white"
+                                        >
+                                            <option value="gpt-4">GPT-4</option>
+                                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                        </select>
+                                    </div>
+                                </>
+                            )}
+
+                            {editingProvider === 'GEMINI' && (
+                                <>
+                                    <div className="bg-blue-50 text-blue-800 text-xs p-3 rounded-lg mb-4">
+                                        ℹ️ Ingresa tu API Key de Google AI (Gemini).
+                                        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="block mt-1 underline font-bold">Obtener API Key</a>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                                        <input
+                                            type="password"
+                                            value={formData.apiKey || ''}
+                                            onChange={e => setFormData({ ...formData, apiKey: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="AIza..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Modelo por defecto (opcional)</label>
+                                        <select
+                                            value={formData.defaultModel || 'gemini-pro'}
+                                            onChange={e => setFormData({ ...formData, defaultModel: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none bg-white"
+                                        >
+                                            <option value="gemini-pro">Gemini Pro</option>
+                                            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                                        </select>
+                                    </div>
+                                </>
+                            )}
+
                             {editingProvider === 'ASSISTAI' && (
                                 <>
                                     <div className="bg-purple-50 text-purple-800 text-xs p-3 rounded-lg mb-4">
@@ -504,13 +665,8 @@ export default function Integrations() {
                                             </div>
                                             <div className="bg-gray-50 rounded-xl p-4 text-center">
                                                 <p className="text-sm text-gray-600 mb-2">Escanea el código QR con WhatsApp:</p>
-                                                <img
-                                                    src={`${API_URL}/whatsmeow/agents/${integrations['WHATSMEOW'].credentials.agentCode}/qr`}
-                                                    alt="QR Code"
-                                                    className="mx-auto w-48 h-48 border border-gray-200 rounded-lg"
-                                                    onError={(e) => {
-                                                        (e.target as HTMLImageElement).style.display = 'none';
-                                                    }}
+                                                <QRDisplay
+                                                    url={`${API_URL}/whatsapp/providers/${integrations['WHATSMEOW'].id}/qr`}
                                                 />
                                                 <p className="text-xs text-gray-500 mt-2">El QR se actualiza automáticamente</p>
                                             </div>

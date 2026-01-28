@@ -202,8 +202,8 @@ export default function Timer() {
                   </div>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${task.status === 'BACKLOG'
-                        ? 'bg-gray-100 text-gray-600'
-                        : 'bg-yellow-100 text-yellow-700'
+                      ? 'bg-gray-100 text-gray-600'
+                      : 'bg-yellow-100 text-yellow-700'
                       }`}>
                       {task.status === 'BACKLOG' ? '📋 Backlog' : '🔄 En progreso'}
                     </span>
@@ -224,15 +224,15 @@ export default function Timer() {
 
   // Timer principal
   return (
-    <div className="fixed bottom-6 right-6 z-50 animate-fadeIn">
+    <div className="fixed bottom-6 right-6 z-50 animate-fadeIn" data-tour="timer">
       <div
         className={`relative bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 dark:border-white/10 overflow-hidden transition-all duration-300 ${isExpanded ? 'w-80' : 'w-auto'
           }`}
       >
         {/* Gradiente superior según estado */}
         <div className={`absolute top-0 left-0 right-0 h-1 ${currentTimer?.status === 'RUNNING'
-            ? 'bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 animate-pulse'
-            : 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500'
+          ? 'bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 animate-pulse'
+          : 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500'
           }`} />
 
         {isExpanded ? (

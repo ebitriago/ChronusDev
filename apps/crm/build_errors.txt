@@ -1,0 +1,122 @@
+
+> @chronusdev/crm@0.1.0 build
+> tsc -p tsconfig.json
+
+src/index.ts(1064,17): error TS2353: Object literal may only specify known properties, and 'chronusDevProjectId' does not exist in type '(Without<TicketUpdateInput, TicketUncheckedUpdateInput> & TicketUncheckedUpdateInput) | (Without<...> & TicketUpdateInput)'.
+src/index.ts(1451,10): error TS2305: Module '"./data.js"' has no exported member 'whatsappProviders'.
+src/index.ts(1480,31): error TS2339: Property 'name' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'name' does not exist on type 'string'.
+src/index.ts(1484,34): error TS2339: Property 'status' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'status' does not exist on type 'string'.
+src/index.ts(1485,36): error TS2339: Property 'lastError' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'lastError' does not exist on type 'string'.
+src/index.ts(1486,38): error TS2339: Property 'connectedAt' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'connectedAt' does not exist on type 'string'.
+src/index.ts(1486,72): error TS2339: Property 'connectedAt' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'connectedAt' does not exist on type 'string'.
+src/index.ts(1936,29): error TS2339: Property 'type' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; organizationId: string | null; userId: string | null; metadata: JsonValue; provider: string; credentials: JsonValue; isEnabled: boolean; }'.
+src/index.ts(1939,62): error TS2339: Property 'config' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; organizationId: string | null; userId: string | null; metadata: JsonValue; provider: string; credentials: JsonValue; isEnabled: boolean; }'.
+src/index.ts(1944,61): error TS2339: Property 'config' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; organizationId: string | null; userId: string | null; metadata: JsonValue; provider: string; credentials: JsonValue; isEnabled: boolean; }'.
+src/index.ts(2183,17): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/index.ts(2977,13): error TS2322: Type '{ conversationId: string; takenById: any; durationMinutes: any; expiresAt: Date; }' is not assignable to type '(Without<TakeoverCreateInput, TakeoverUncheckedCreateInput> & TakeoverUncheckedCreateInput) | (Without<...> & TakeoverCreateInput)'.
+  Type '{ conversationId: string; takenById: any; durationMinutes: any; expiresAt: Date; }' is not assignable to type 'Without<TakeoverCreateInput, TakeoverUncheckedCreateInput> & TakeoverUncheckedCreateInput'.
+    Property 'organizationId' is missing in type '{ conversationId: string; takenById: any; durationMinutes: any; expiresAt: Date; }' but required in type 'TakeoverUncheckedCreateInput'.
+src/index.ts(3204,17): error TS2353: Object literal may only specify known properties, and 'organizationId' does not exist in type '(Without<UserCreateInput, UserUncheckedCreateInput> & UserUncheckedCreateInput) | (Without<...> & UserCreateInput)'.
+src/index.ts(3254,22): error TS2353: Object literal may only specify known properties, and 'organizationId' does not exist in type 'UserWhereInput'.
+src/index.ts(3291,17): error TS2353: Object literal may only specify known properties, and 'organizationId' does not exist in type '(Without<UserCreateInput, UserUncheckedCreateInput> & UserUncheckedCreateInput) | (Without<...> & UserCreateInput)'.
+src/index.ts(3337,128): error TS2820: Type '"active"' is not assignable to type 'CustomerStatus | undefined'. Did you mean '"ACTIVE"'?
+src/index.ts(3338,129): error TS2820: Type '"active"' is not assignable to type 'CustomerStatus | undefined'. Did you mean '"ACTIVE"'?
+src/index.ts(3339,108): error TS2322: Type '"STARTER"' is not assignable to type 'Plan | undefined'.
+src/index.ts(3339,125): error TS2820: Type '"trial"' is not assignable to type 'CustomerStatus | undefined'. Did you mean '"TRIAL"'?
+src/index.ts(3340,134): error TS2820: Type '"active"' is not assignable to type 'CustomerStatus | undefined'. Did you mean '"ACTIVE"'?
+src/index.ts(3341,136): error TS2820: Type '"churned"' is not assignable to type 'CustomerStatus | undefined'. Did you mean '"CHURNED"'?
+src/index.ts(3357,100): error TS2322: Type '"Website"' is not assignable to type 'LeadSource | undefined'.
+src/index.ts(3358,108): error TS2322: Type '"LinkedIn"' is not assignable to type 'LeadSource | undefined'.
+src/index.ts(3359,117): error TS2820: Type '"Referral"' is not assignable to type 'LeadSource | undefined'. Did you mean '"REFERRAL"'?
+src/index.ts(4261,129): error TS2353: Object literal may only specify known properties, and 'organizationId' does not exist in type 'UserSelect<DefaultArgs>'.
+src/index.ts(4303,31): error TS2353: Object literal may only specify known properties, and 'users' does not exist in type 'OrganizationCountOutputTypeSelect<DefaultArgs>'.
+src/index.ts(4674,18): error TS2345: Argument of type 'Promise<string>' is not assignable to parameter of type 'string'.
+src/index.ts(4788,32): error TS2304: Cannot find name 'getOrganizationConfig'.
+src/index.ts(4863,37): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(4867,77): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(4881,37): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(4886,49): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(4914,37): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(4914,74): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(4918,48): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(4921,89): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(4944,37): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(4944,74): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(4950,34): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(4951,34): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(4973,37): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(4973,74): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(4979,34): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(4980,34): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(5002,37): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(5002,74): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(5008,34): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(5009,34): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(5031,37): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(5031,74): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(5037,34): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(5038,34): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(5054,37): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(5054,74): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(5059,34): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(5060,34): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(5092,37): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(5092,74): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(5114,34): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(5115,34): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(5123,17): error TS2698: Spread types may only be created from object types.
+src/index.ts(5147,37): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(5147,74): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(5153,38): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(5154,38): error TS2339: Property 'agentToken' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentToken' does not exist on type 'string'.
+src/index.ts(5160,75): error TS2339: Property 'webhookUrl' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'webhookUrl' does not exist on type 'string'.
+src/index.ts(5166,49): error TS2339: Property 'agentCode' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'agentCode' does not exist on type 'string'.
+src/index.ts(5260,71): error TS2339: Property 'apiKey' does not exist on type 'string | number | boolean | JsonObject | JsonArray'.
+  Property 'apiKey' does not exist on type 'string'.
+src/index.ts(5620,21): error TS2322: Type '{ type: "NOTE"; description: string; customerId: any; metadata: { templateId: any; phone: string; messageSent: string; }; }' is not assignable to type '(Without<ActivityCreateInput, ActivityUncheckedCreateInput> & ActivityUncheckedCreateInput) | (Without<...> & ActivityCreateInput)'.
+  Type '{ type: "NOTE"; description: string; customerId: any; metadata: { templateId: any; phone: string; messageSent: string; }; }' is not assignable to type 'Without<ActivityUncheckedCreateInput, ActivityCreateInput> & ActivityCreateInput'.
+    Property 'organization' is missing in type '{ type: "NOTE"; description: string; customerId: any; metadata: { templateId: any; phone: string; messageSent: string; }; }' but required in type 'ActivityCreateInput'.

@@ -101,3 +101,46 @@ For a complete list of endpoints, schemas, and interactive testing, please visit
 
 [👉 Read the Full Integration Guide](docs/ASSISTAI_INTEGRATION.md)
 
+---
+
+## 👑 Super Admin & SaaS Management
+APIs for managing the platform, organizations, and global users. **Requires SUPER_ADMIN role.**
+
+### Organization Management
+
+#### List Organizations
+**GET** `/organizations`
+Returns a list of all organizations with their subscription status and service flags.
+
+#### Create Organization
+**POST** `/organizations`
+Creates a brand new "clean" organization with optional admin user.
+```json
+{
+  "name": "New Client Corp",
+  "adminEmail": "admin@newclient.com", // Optional, will create user/invite
+  "enabledServices": "CRM,CHRONUSDEV"   // Services to enable
+}
+```
+
+#### Update Organization
+**PUT** `/organizations/:id`
+Updates services or details.
+
+### User Management (Global)
+
+#### Find Users
+**GET** `/admin/users?search=query`
+Global search for users by name or email across all organizations.
+
+#### Impersonate User ("Login As")
+**POST** `/admin/impersonate`
+Generate a login token for any user (Critical Spec).
+```json
+{ "userId": "user-uuid" }
+```
+
+#### Suspend User
+**POST** `/admin/users/:id/suspend`
+Block access for a user.
+

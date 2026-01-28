@@ -43,6 +43,7 @@ export interface Customer {
     notes?: string;
     customFields?: Record<string, any>;
     source?: "lead" | "manual" | "chat";  // How the client was created
+    organizationId: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -60,6 +61,7 @@ export interface Ticket {
     chronusDevProjectId?: string;
     assignedTo?: string;
     customFields?: Record<string, any>;
+    organizationId: string;
     resolvedAt?: Date;
     createdAt: Date;
     updatedAt: Date;
@@ -76,6 +78,7 @@ export interface Invoice {
     dueDate: Date;
     paidAt?: Date;
     items: InvoiceItem[];
+    organizationId: string;
     createdAt: Date;
 }
 
@@ -126,6 +129,7 @@ export interface Lead {
     customFields?: Record<string, any>;
     tags?: string[];  // Flexible tagging
     score?: number;   // Lead score (0-100)
+    organizationId: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -136,6 +140,7 @@ export interface Tag {
     name: string;
     color: string;  // Hex color
     category: 'lead' | 'customer' | 'ticket' | 'general';
+    organizationId: string;
     createdAt: Date;
 }
 
@@ -222,17 +227,18 @@ export type ChatMessage = {
     sessionId: string;
     from: string;    // Display name
     content: string;
-    platform: 'whatsapp' | 'instagram' | 'assistai'; // Origin
+    platform: 'whatsapp' | 'instagram' | 'assistai' | 'messenger'; // Origin
     sender: 'user' | 'agent'; // Direction
     timestamp: Date;
     status?: 'sent' | 'delivered' | 'read';
     mediaUrl?: string;
     mediaType?: 'image' | 'video' | 'audio' | 'document';
+    metadata?: any;
 };
 
 export type Conversation = {
     sessionId: string;
-    platform: 'whatsapp' | 'instagram' | 'assistai';
+    platform: 'whatsapp' | 'instagram' | 'assistai' | 'messenger';
     agentCode?: string;
     agentName?: string;
     customerName: string;

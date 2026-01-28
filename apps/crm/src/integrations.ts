@@ -18,6 +18,7 @@ export async function getUserIntegrations(userId: string) {
 
     // Return simplified objects safely (should mask secrets in full prod, but returning for edit for now)
     return integrations.map(i => ({
+        id: i.id,
         provider: i.provider,
         isEnabled: i.isEnabled,
         credentials: i.credentials, // Be specific about what to return in production!

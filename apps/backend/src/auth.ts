@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import type { User } from "./types.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "chronusdev-secret-key-change-in-production";
+const JWT_SECRET = process.env.JWT_SECRET || "chronus-crm-super-secret-key-change-in-production";
 const JWT_EXPIRES_IN = "7d";
 
 // Hash password con bcrypt
@@ -38,8 +38,10 @@ export function verifyJWT(token: string): JWTPayload | null {
 }
 
 export interface JWTPayload {
-    id: string;
+    id?: string;
+    userId?: string; // From CRM
     email: string;
+    name?: string; // From CRM
     role: string;
     organizationId?: string;
     iat: number;

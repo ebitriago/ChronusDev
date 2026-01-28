@@ -32,13 +32,13 @@ const TOUR_STEPS: TourStep[] = [
         content: 'Gestiona conversaciones de WhatsApp, Instagram y chat en un solo lugar. La IA puede ayudarte con sugerencias de respuesta.',
         position: 'right'
     },
-    {
-        id: 'ai-button',
-        target: '[data-tour="ai-suggestions"]',
-        title: 'Sugerencias IA ✨',
-        content: 'Haz clic aquí para obtener 3 respuestas sugeridas basadas en el contexto de la conversación.',
-        position: 'top'
-    },
+    // {
+    //     id: 'ai-button',
+    //     target: '[data-tour="ai-suggestions"]',
+    //     title: 'Sugerencias IA ✨',
+    //     content: 'Haz clic aquí para obtener 3 respuestas sugeridas basadas en el contexto de la conversación.',
+    //     position: 'top'
+    // },
     {
         id: 'leads',
         target: '[data-tour="leads"]',
@@ -181,10 +181,10 @@ export default function OnboardingTour({ onComplete }: OnboardingTourProps) {
                                 key={i}
                                 onClick={() => setCurrentStep(i)}
                                 className={`w-2 h-2 rounded-full transition-all ${i === currentStep
-                                        ? 'bg-emerald-500 w-6'
-                                        : i < currentStep
-                                            ? 'bg-emerald-300'
-                                            : 'bg-gray-200'
+                                    ? 'bg-emerald-500 w-6'
+                                    : i < currentStep
+                                        ? 'bg-emerald-300'
+                                        : 'bg-gray-200'
                                     }`}
                             />
                         ))}
@@ -224,9 +224,9 @@ export function Tooltip({ children, content, position = 'top' }: TooltipProps) {
                     {content}
                     {/* Arrow */}
                     <div className={`absolute w-2 h-2 bg-gray-900 transform rotate-45 ${position === 'top' ? 'top-full left-1/2 -translate-x-1/2 -mt-1' :
-                            position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
-                                position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
-                                    'right-full top-1/2 -translate-y-1/2 -mr-1'
+                        position === 'bottom' ? 'bottom-full left-1/2 -translate-x-1/2 -mb-1' :
+                            position === 'left' ? 'left-full top-1/2 -translate-y-1/2 -ml-1' :
+                                'right-full top-1/2 -translate-y-1/2 -mr-1'
                         }`} />
                 </div>
             )}

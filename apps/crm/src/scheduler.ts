@@ -50,11 +50,11 @@ async function processScheduledInteraction(interaction: any) {
 
             const context = interaction.metadata as any || {};
             // Cast to generic result
-            const callRes = await initiateOutboundCall(phone, undefined, context);
+            const callRes: any = await initiateOutboundCall(phone, (context as any).agentId || process.env.VAPI_ASSISTANT_ID || '');
             result = {
                 success: callRes.success,
-                error: callRes.error,
-                externalId: callRes.callSid
+                error: (callRes as any).error,
+                externalId: (callRes as any).callSid
             };
 
         } else if (interaction.type === 'WHATSAPP') {

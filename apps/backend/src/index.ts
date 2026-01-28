@@ -45,7 +45,39 @@ function getUserFromToken(token: string | undefined): User | undefined {
   // Intentar verificar como JWT primero
   const payload = verifyJWT(token);
   if (payload) {
-    return users.find((u) => u.id === payload.id);
+    const userId = payload.id || payload.userId;
+    if (!userId) return undefined;
+
+    let user = users.find((u) => u.id === userId);
+
+    // Just-In-Time Provisioning for External Users (CRM)
+    if (!user && payload.email) {
+      console.log(`[Auth] Provisioning external user: ${payload.email} (${payload.role})`);
+
+      // Determine Role Mapping
+      let role: UserRole = "DEV"; // Default
+      if (payload.role === "SUPER_ADMIN") role = "SUPER_ADMIN";
+      else if (payload.role === "ADMIN") role = "ADMIN";
+
+      user = {
+        id: userId,
+        email: payload.email,
+        name: payload.name || payload.email.split('@')[0],
+        role,
+        organizationId: payload.organizationId,
+        defaultPayRate: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      users.push(user);
+    }
+
+    // Update local user info from latest token if needed (sync)
+    if (user && payload.organizationId && user.organizationId !== payload.organizationId) {
+      user.organizationId = payload.organizationId;
+    }
+
+    return user;
   }
 
   // Fallback: buscar token legacy

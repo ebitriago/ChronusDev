@@ -29,6 +29,7 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
 
     return (
         <aside
+            data-tour="sidebar"
             className={`h-full bg-white border-r border-gray-200 text-gray-700 transition-all duration-300 flex flex-col ${isCollapsed ? 'w-20' : 'w-64'}`}
         >
             {/* Header / Logo */}
@@ -50,6 +51,7 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
                 {menuItems.map((item) => (
                     <button
                         key={item.id}
+                        data-tour={item.id} // Add tour hook
                         onClick={() => onChangeView(item.id as View)}
                         className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative ${currentView === item.id
                             ? 'bg-blue-50 text-blue-600 font-medium'

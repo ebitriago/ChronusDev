@@ -1,0 +1,34 @@
+Message Save Error: 
+Invalid `prisma.message.create()` invocation in
+/Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/index.ts:1920:45
+
+  1917 // Save message to DB
+  1918 let savedMessage;
+  1919 try {
+→ 1920     savedMessage = await prisma.message.create({
+             data: {
+               conversationId: "cmkrraxnb0000co11c1e6lvz8",
+               sessionId: "session-584120009999",
+               ~~~~~~~~~
+               from: "584120009999",
+               content: "Hola desde la simulación de webhook! 🚀",
+               platform: "WHATSAPP",
+               sender: "USER",
+               mediaUrl: undefined,
+               mediaType: null,
+               metadata: {
+                 pushName: "Usuario Simulado",
+                 messageId: undefined,
+                 timestamp: 1769225803,
+                 conversationId: undefined,
+                 agentCode: undefined
+               },
+               status: "DELIVERED",
+           ?   id?: String,
+           ?   senderName?: String | Null,
+           ?   createdAt?: DateTime
+             }
+           })
+
+Unknown argument `sessionId`. Available options are marked with ?.
+{"name":"PrismaClientValidationError","clientVersion":"7.3.0"}

@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+export const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
 console.log('🔗 API configured at:', API_URL);
 
 // ========== TIPOS ==========

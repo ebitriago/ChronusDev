@@ -10,42 +10,107 @@ interface SidebarProps {
     isCollapsed: boolean;
     toggleCollapse: () => void;
     userRole?: string;
+    enabledServices?: string; // "CRM,CHRONUSDEV"
+    user?: any; // Pass full user object for orgs
 }
 
-export default function Sidebar({ currentView, onChangeView, isCollapsed, toggleCollapse, userRole }: SidebarProps) {
+export default function Sidebar({ currentView, onChangeView, isCollapsed, toggleCollapse, userRole, enabledServices, user }: SidebarProps) {
+    const hasChronusDev = enabledServices?.includes('CHRONUSDEV') || enabledServices?.includes('ALL');
+    const [showOrgMenu, setShowOrgMenu] = useState(false);
+
+    const handleSwitchOrg = async (orgId: string) => {
+        try {
+            const token = localStorage.getItem('crm_token');
+            const response = await fetch(`${process.env.NEXT_PUBLIC_CRM_API_URL}/auth/switch-org`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ organizationId: orgId })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                localStorage.setItem('crm_token', data.token);
+                window.location.reload();
+            }
+        } catch (error) {
+            console.error('Error switching org', error);
+        }
+    };
+
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-        { id: 'inbox', label: 'Inbox Unificado', icon: '💬' },
-        { id: 'assistai', label: 'AssistAI', icon: '🤖' },
-        { id: 'ai-agents', label: 'Agentes IA', icon: '🧠' },
-        { id: 'channels', label: 'Canales', icon: '📱' },
-        { id: 'leads', label: 'Leads Pipeline', icon: '🎯' },
+        { id: 'inbox', label: 'Inbox Unificado', icon: '📥' },
+        { id: 'leads', label: 'Leads (CRM)', icon: '💼' },
+        { id: 'kanban', label: 'Kanban', icon: '📋' },
         { id: 'customers', label: 'Clientes', icon: '👥' },
-        { id: 'tickets', label: 'Tickets', icon: '🎫' },
-        { id: 'invoices', label: 'Facturas', icon: '💰' },
-        { id: 'finances', label: 'Finanzas', icon: '💵' },
-        { id: 'developers', label: 'Developers', icon: '🛠️' },
-        { id: 'docs', label: 'Documentación', icon: '📚' },
-        ...(userRole === 'SUPER_ADMIN' ? [{ id: 'super-admin', label: 'Organizaciones', icon: '🏢' }] : []),
+        { id: 'calendar', label: 'Calendario', icon: '📅' },
+        // { id: 'voice', label: 'Agentes de Voz', icon: '🎤' }, // Oculto temp
+        { id: 'assistai', label: 'AssistAI', icon: '🤖' },
+        { id: 'reports', label: 'Reportes', icon: '📈' },
         { id: 'settings', label: 'Configuración', icon: '⚙️' },
+        // Conditional ChronusDev Link
+        ...(hasChronusDev ? [{ id: 'developers', label: 'Developers', icon: '🛠️' }] : []),
     ];
+
+    if (userRole === 'SUPER_ADMIN') {
+        menuItems.push({ id: 'super-admin', label: 'Super Admin', icon: '👑' });
+    }
 
     return (
         <aside
+            data-tour="sidebar"
             className={`bg-slate-900 text-white transition-all duration-300 flex flex-col h-full border-r border-slate-800 ${isCollapsed ? 'w-20' : 'w-64'}`}
         >
-            {/* Header / Logo */}
-            <div className="h-16 flex items-center justify-center border-b border-slate-800">
-                <div className="flex items-center gap-3 overflow-hidden px-4">
+            {/* Header / Logo / Org Switcher */}
+            <div className="h-16 flex items-center justify-center border-b border-slate-800 relative">
+                <div
+                    className="flex items-center gap-3 overflow-hidden px-4 cursor-pointer hover:opacity-80 transition-opacity w-full"
+                    onClick={() => !isCollapsed && user?.organizations?.length > 1 && setShowOrgMenu(!showOrgMenu)}
+                >
                     <div className="w-8 h-8 min-w-[32px] bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                        <span className="text-white text-lg font-bold">C</span>
+                        {/* Show Org Avatar or Initial */}
+                        <span className="text-white text-lg font-bold">
+                            {user?.organization?.name?.charAt(0) || 'C'}
+                        </span>
                     </div>
                     {!isCollapsed && (
-                        <span className="text-lg font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent whitespace-nowrap">
-                            ChronusCRM
-                        </span>
+                        <div className="flex-1 min-w-0">
+                            <h2 className="text-sm font-bold text-white truncate">
+                                {user?.organization?.name || 'Chronus CRM'}
+                            </h2>
+                            {user?.organizations?.length > 1 && (
+                                <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                                    Cambiar org <span className="text-[8px]">▼</span>
+                                </p>
+                            )}
+                        </div>
                     )}
                 </div>
+
+                {/* Org Switcher Dropdown */}
+                {showOrgMenu && !isCollapsed && (
+                    <div className="absolute top-16 left-4 right-4 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden animate-fadeIn">
+                        <div className="p-2">
+                            <p className="text-xs font-semibold text-slate-400 px-2 py-1 mb-1 uppercase tracking-wider">Tus Organizaciones</p>
+                            {user?.organizations?.map((org: any) => (
+                                <button
+                                    key={org.id}
+                                    onClick={() => handleSwitchOrg(org.id)}
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between group ${user.organization?.id === org.id
+                                        ? 'bg-emerald-500/10 text-emerald-400'
+                                        : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                                        }`}
+                                >
+                                    <span className="truncate">{org.name}</span>
+                                    {user.organization?.id === org.id && <span className="text-emerald-500">●</span>}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Menu Items */}
@@ -53,7 +118,15 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
                 {menuItems.map((item) => (
                     <button
                         key={item.id}
-                        onClick={() => onChangeView(item.id as View)}
+                        data-tour={item.id} // Add tour hook
+                        onClick={() => {
+                            if (item.id === 'developers') {
+                                const token = localStorage.getItem('crm_token');
+                                window.open(`http://localhost:3000/sso?token=${token}`, '_blank');
+                            } else {
+                                onChangeView(item.id as View);
+                            }
+                        }}
                         className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative ${currentView === item.id
                             ? 'bg-emerald-600/10 text-emerald-400'
                             : 'text-slate-400 hover:bg-slate-800 hover:text-white'
@@ -91,7 +164,7 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
                     {isCollapsed ? '→' : '← Colapsar'}
                 </button>
 
-                {!isCollapsed && (
+                {!isCollapsed && hasChronusDev && (
                     <div className="mt-4 pt-4 border-t border-slate-800">
                         <a
                             href="http://localhost:3000"
@@ -102,7 +175,7 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
                         </a>
                     </div>
                 )}
-                {isCollapsed && (
+                {isCollapsed && hasChronusDev && (
                     <a
                         href="http://localhost:3000"
                         className="mt-4 flex items-center justify-center w-full p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"

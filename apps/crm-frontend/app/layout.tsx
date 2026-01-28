@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { ToastProvider } from '../components/Toast';
+import VoiceWidget from '../components/VoiceWidget';
 
 export const metadata: Metadata = {
   title: 'ChronusDev - Tracking de Proyectos',
@@ -20,6 +21,8 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <ToastProvider>
           {children}
+          {/* Global Support Widget - will show if configured */}
+          {/* <VoiceWidget agentId="bMDKk8fD42Jq79r4a1q5" />  Demo Agent ID for testing */}
         </ToastProvider>
       </body>
     </html>

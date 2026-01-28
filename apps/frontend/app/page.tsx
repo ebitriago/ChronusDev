@@ -14,6 +14,7 @@ import Login from '../components/Login';
 import { Skeleton } from '../components/Skeleton';
 import { useToast } from '../components/Toast';
 import Sidebar from '../components/Sidebar';
+import OnboardingTour from '../components/OnboardingTour';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -24,6 +25,7 @@ export default function Home() {
   const [view, setView] = useState<'dashboard' | 'projects' | 'kanban' | 'clients' | 'team' | 'reports' | 'earnings' | 'superadmin'>('dashboard');
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const loadProjects = useCallback(async () => {
     try {
@@ -76,6 +78,16 @@ export default function Home() {
       setLoading(false);
     }
   }, [loadProjects]);
+
+  // Check onboarding status when user is loaded
+  useEffect(() => {
+    if (user && mounted) {
+      const completed = localStorage.getItem('chronusdev_onboarding_complete');
+      if (!completed) {
+        setShowOnboarding(true);
+      }
+    }
+  }, [user, mounted]);
 
   useEffect(() => {
     if (!mounted) {
@@ -136,6 +148,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
+      {/* Onboarding */}
+      {showOnboarding && <OnboardingTour onComplete={() => setShowOnboarding(false)} />}
 
       {/* Sidebar Navigation */}
       {user && (

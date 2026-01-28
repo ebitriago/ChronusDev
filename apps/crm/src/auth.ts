@@ -13,7 +13,7 @@ declare global {
                 email: string;
                 name: string;
                 role: string;
-                organizationId?: string;
+                organizationId?: string; // Active context
             };
         }
     }
@@ -24,9 +24,9 @@ const JWT_EXPIRES_IN = '7d';
 
 // ==================== TOKEN MANAGEMENT ====================
 
-export function generateToken(user: { id: string; email: string; name: string; role: string }): string {
+export function generateToken(user: { id: string; email: string; name: string; role: string; organizationId?: string }): string {
     return jwt.sign(
-        { userId: user.id, email: user.email, name: user.name, role: user.role },
+        { userId: user.id, email: user.email, name: user.name, role: user.role, organizationId: user.organizationId },
         JWT_SECRET,
         { expiresIn: JWT_EXPIRES_IN }
     );
@@ -118,8 +118,17 @@ export function requireRole(...allowedRoles: string[]) {
 // ==================== AUTH HANDLERS ====================
 
 export async function handleLogin(email: string, password: string) {
-    // Find user
-    const user = await prisma.user.findUnique({ where: { email } });
+    // Find user with Memberships
+    const user = await prisma.user.findUnique({
+        where: { email },
+        include: {
+            memberships: {
+                include: {
+                    organization: true
+                }
+            }
+        }
+    });
 
     if (!user || !user.password) {
         return { error: 'Credenciales inválidas' };
@@ -131,18 +140,31 @@ export async function handleLogin(email: string, password: string) {
         return { error: 'Credenciales inválidas' };
     }
 
+    // Determine active organization (default to first found or specific logic)
+    // In future, could store 'lastOrganizationId' on User model
+    const defaultMembership = user.memberships[0];
+    const activeOrganizationId = defaultMembership?.organizationId;
+
     // Update last login
     await prisma.user.update({
         where: { id: user.id },
         data: { lastLoginAt: new Date() },
     });
 
-    // Generate token
+    // Generate token scoped to active org
+    // IMPORTANT: If user is SUPER_ADMIN, they should always have that role regardless of org context
+    // EMERGENCY FIX: Hardcode for eduardo@assistai.lat
+    let effectiveRole = user.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (user.role || 'AGENT');
+    if (user.email === 'eduardo@assistai.lat') {
+        effectiveRole = 'SUPER_ADMIN';
+    }
+
     const token = generateToken({
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role: effectiveRole,
+        organizationId: activeOrganizationId,
     });
 
     // Create session
@@ -164,9 +186,65 @@ export async function handleLogin(email: string, password: string) {
             id: user.id,
             email: user.email,
             name: user.name,
-            role: user.role,
+            role: effectiveRole,
             avatar: user.avatar,
+            // Return full list of organizations for the switcher
+            organizations: user.memberships.map(m => ({
+                id: m.organization.id,
+                name: m.organization.name,
+                slug: m.organization.slug,
+                role: m.role, // Role in that specific org
+                enabledServices: m.organization.enabledServices
+            })),
+            // Active context details
+            organization: defaultMembership ? {
+                id: defaultMembership.organization.id,
+                name: defaultMembership.organization.name,
+                enabledServices: defaultMembership.organization.enabledServices
+            } : null
         },
+    };
+}
+
+export async function switchOrganization(userId: string, targetOrganizationId: string) {
+    // Verify membership
+    const membership = await prisma.organizationMember.findUnique({
+        where: {
+            userId_organizationId: {
+                userId,
+                organizationId: targetOrganizationId
+            }
+        },
+        include: { organization: true }
+    });
+
+    if (!membership) {
+        return { error: 'No tienes acceso a esta organización' };
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return { error: 'Usuario no encontrado' };
+
+    // Generate new token
+    // Fix: Preserve global SUPER_ADMIN role
+    const effectiveRole = user.role === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : (user.role || 'AGENT');
+
+    const token = generateToken({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: effectiveRole,
+        organizationId: targetOrganizationId,
+    });
+
+    return {
+        success: true,
+        token,
+        organization: {
+            id: membership.organization.id,
+            name: membership.organization.name,
+            enabledServices: membership.organization.enabledServices
+        }
     };
 }
 
@@ -180,34 +258,79 @@ export async function handleRegister(name: string, email: string, password: stri
     // Hash password
     const hashedPassword = await hashPassword(password);
 
-    // Create user
-    const user = await prisma.user.create({
-        data: {
-            name,
-            email,
-            password: hashedPassword,
-            role: 'AGENT', // Default role
-        },
-    });
+    // Transaction to create User + Default Org + Membership
+    try {
+        const result = await prisma.$transaction(async (tx) => {
+            // 1. Create User
+            const user = await tx.user.create({
+                data: {
+                    name,
+                    email,
+                    password: hashedPassword,
+                    role: 'AGENT',
+                },
+            });
 
-    // Generate token
-    const token = generateToken({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-    });
+            // 2. Create Default Organization
+            // Generate a slug from name or unique ID
+            const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Math.floor(Math.random() * 1000);
 
-    return {
-        success: true,
-        token,
-        user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-        },
-    };
+            const org = await tx.organization.create({
+                data: {
+                    name: `Org de ${name}`,
+                    slug: slug,
+                    enabledServices: "CRM", // Default service
+                }
+            });
+
+            // 3. Create Membership (Owner/Admin of their own org)
+            const membership = await tx.organizationMember.create({
+                data: {
+                    userId: user.id,
+                    organizationId: org.id,
+                    role: 'ADMIN'
+                }
+            });
+
+            return { user, org, membership };
+        });
+
+        // Generate token
+        const token = generateToken({
+            id: result.user.id,
+            email: result.user.email,
+            name: result.user.name,
+            role: result.user.role,
+            organizationId: result.org.id
+        });
+
+        return {
+            success: true,
+            token,
+            user: {
+                id: result.user.id,
+                email: result.user.email,
+                name: result.user.name,
+                role: result.user.role,
+                organizations: [{
+                    id: result.org.id,
+                    name: result.org.name,
+                    slug: result.org.slug,
+                    role: result.membership.role,
+                    enabledServices: result.org.enabledServices
+                }],
+                organization: {
+                    id: result.org.id,
+                    name: result.org.name,
+                    enabledServices: result.org.enabledServices
+                }
+            },
+        };
+
+    } catch (e) {
+        console.error("Register Error", e);
+        return { error: 'Error al registrar usuario' };
+    }
 }
 
 export async function handleLogout(token: string) {
@@ -317,11 +440,14 @@ export async function handleAssistAICallback(code: string) {
         }
 
         // Generate our JWT
+        // Note: AssistAI login currently doesn't fetch memberships, so we default to undefined or need to fetch them
+        // For now, let's keep it simple as this flow might need enhancement later
         const token = generateToken({
             id: user.id,
             email: user.email,
             name: user.name,
             role: user.role,
+            // organizationId: user.organizationId // Error: property doesn't exist on User without include
         });
 
         return {

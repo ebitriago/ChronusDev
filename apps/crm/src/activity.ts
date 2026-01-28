@@ -6,6 +6,7 @@ import { ActivityType } from '@prisma/client';
 export async function logActivity(params: {
     type: ActivityType;
     description: string;
+    organizationId: string;
     userId?: string;
     customerId?: string;
     leadId?: string;
@@ -17,6 +18,7 @@ export async function logActivity(params: {
             data: {
                 type: params.type,
                 description: params.description,
+                organizationId: params.organizationId,
                 userId: params.userId,
                 customerId: params.customerId,
                 leadId: params.leadId,
@@ -32,9 +34,9 @@ export async function logActivity(params: {
 }
 
 // Get activities for a customer
-export async function getCustomerActivities(customerId: string, limit = 50) {
+export async function getCustomerActivities(organizationId: string, customerId: string, limit = 50) {
     return prisma.activity.findMany({
-        where: { customerId },
+        where: { customerId, organizationId },
         orderBy: { createdAt: 'desc' },
         take: limit,
         include: {
@@ -44,9 +46,9 @@ export async function getCustomerActivities(customerId: string, limit = 50) {
 }
 
 // Get activities for a lead
-export async function getLeadActivities(leadId: string, limit = 50) {
+export async function getLeadActivities(organizationId: string, leadId: string, limit = 50) {
     return prisma.activity.findMany({
-        where: { leadId },
+        where: { leadId, organizationId },
         orderBy: { createdAt: 'desc' },
         take: limit,
         include: {
@@ -56,9 +58,9 @@ export async function getLeadActivities(leadId: string, limit = 50) {
 }
 
 // Get activities for a ticket
-export async function getTicketActivities(ticketId: string, limit = 50) {
+export async function getTicketActivities(organizationId: string, ticketId: string, limit = 50) {
     return prisma.activity.findMany({
-        where: { ticketId },
+        where: { ticketId, organizationId },
         orderBy: { createdAt: 'desc' },
         take: limit,
         include: {
@@ -68,8 +70,9 @@ export async function getTicketActivities(ticketId: string, limit = 50) {
 }
 
 // Get all recent activities
-export async function getRecentActivities(limit = 100) {
+export async function getRecentActivities(organizationId: string, limit = 100) {
     return prisma.activity.findMany({
+        where: { organizationId },
         orderBy: { createdAt: 'desc' },
         take: limit,
         include: {

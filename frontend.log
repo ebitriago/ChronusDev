@@ -1,0 +1,69 @@
+
+> @chronusdev/crm-frontend@0.1.0 dev
+> next dev -p 3003
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3003
+
+ ✓ Starting...
+ ✓ Ready in 1242ms
+ ○ Compiling / ...
+ ✓ Compiled / in 861ms (621 modules)
+🔗 API configured at: http://127.0.0.1:3002
+ GET / 200 in 1020ms
+ ✓ Compiled in 112ms (300 modules)
+ ✓ Compiled /_not-found in 172ms (610 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 238ms
+🔗 API configured at: http://127.0.0.1:3002
+ GET / 200 in 211ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 13ms
+ GET / 200 in 48ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 26ms
+ GET / 200 in 61ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 65ms
+ GET / 200 in 41ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 31ms
+ GET / 200 in 46ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 54ms
+ GET / 200 in 33ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 29ms
+ GET / 200 in 28ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 22ms
+ GET / 200 in 42ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 39ms
+ GET / 200 in 39ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 35ms
+ GET / 200 in 57ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 21ms
+ GET / 200 in 107ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 28ms
+ ✓ Compiled in 578ms (621 modules)
+🔗 API configured at: http://127.0.0.1:3002
+ GET / 200 in 109ms
+ ✓ Compiled /_not-found in 162ms (610 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 200ms
+🔗 API configured at: http://127.0.0.1:3002
+ GET / 200 in 74ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 37ms
+ GET / 200 in 35ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 52ms
+ GET / 200 in 26ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 41ms
+ GET / 200 in 138ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 43ms
+ ✓ Compiled in 638ms (621 modules)
+🔗 API configured at: http://127.0.0.1:3002
+ GET / 200 in 91ms
+ ✓ Compiled /_not-found in 199ms (610 modules)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 238ms
+🔗 API configured at: http://127.0.0.1:3002
+ GET / 200 in 87ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 25ms
+ GET / 200 in 47ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 36ms
+ GET / 200 in 135ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 51ms
+ GET / 200 in 38ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 48ms
+ GET / 200 in 117ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 35ms

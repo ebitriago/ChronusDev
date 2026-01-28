@@ -7,13 +7,13 @@ export async function checkLeadAutomations(leadId: string, newStatus: LeadStatus
     try {
         const lead = await prisma.lead.findUnique({
             where: { id: leadId },
-            include: { customer: true } // If lead converted to customer? Or lead has phone/email fields directly.
-        });
+            include: { customer: true } as any
+        }) as any;
 
         if (!lead) return;
 
         // Find matching rules for this organization and status
-        const rules = await prisma.pipelineAutomation.findMany({
+        const rules = await (prisma as any).pipelineAutomation.findMany({
             where: {
                 organizationId: lead.organizationId,
                 triggerStatus: newStatus,
@@ -69,7 +69,7 @@ export async function checkLeadAutomations(leadId: string, newStatus: LeadStatus
 
             // Try find customer by email
             const existingCustomer = await prisma.customer.findFirst({
-                where: { email: lead.email, organizationId: lead.organizationId }
+                where: { email: lead.email, organizationId: lead.organizationId } as any
             });
 
             if (existingCustomer) {

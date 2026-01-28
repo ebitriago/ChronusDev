@@ -10,12 +10,17 @@ declare global {
     }
 }
 
-export default function VoiceWidget() {
-    const [agentId, setAgentId] = useState<string | null>(null);
+export default function VoiceWidget({ agentId: propAgentId }: { agentId?: string }) {
+    const [agentId, setAgentId] = useState<string | null>(propAgentId || null);
 
     useEffect(() => {
-        // Intentar leer configuración desde localStorage o usar fallback
-        // En un caso real, esto vendría de un contexto o API
+        // If prop provided, use it
+        if (propAgentId) {
+            setAgentId(propAgentId);
+            return;
+        }
+
+        // Otherwise try local storage or default
         const storedConfig = localStorage.getItem('elevenlabs_config');
         if (storedConfig) {
             try {
@@ -25,20 +30,22 @@ export default function VoiceWidget() {
                 console.error('Error parsing config', e);
             }
         }
+    }, [propAgentId]);
 
-        // Cargar script de ElevenLabs
-        const script = document.createElement('script');
-        script.src = 'https://elevenlabs.io/convai-widget/index.js';
-        script.async = true;
-        script.type = 'text/javascript';
-        document.body.appendChild(script);
+    useEffect(() => {
+        if (!agentId) return;
 
-        return () => {
-            document.body.removeChild(script);
-        };
-    }, []);
+        // Load ElevenLabs script if not already loaded
+        if (!document.querySelector('script[src="https://elevenlabs.io/convai-widget/index.js"]')) {
+            const script = document.createElement('script');
+            script.src = 'https://elevenlabs.io/convai-widget/index.js';
+            script.async = true;
+            script.type = 'text/javascript';
+            document.body.appendChild(script);
+        }
+    }, [agentId]);
 
-    if (!agentId) return null; // No mostrar si no hay agente configurado
+    if (!agentId) return null;
 
     return (
         <elevenlabs-convai agent-id={agentId}></elevenlabs-convai>
