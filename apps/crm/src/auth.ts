@@ -292,7 +292,7 @@ export async function handleRegister(name: string, email: string, password: stri
                     name,
                     email,
                     password: hashedPassword,
-                    role: 'AGENT',
+                    role: 'ADMIN', // User is Admin of their own tenant
                 },
             });
 
@@ -304,7 +304,9 @@ export async function handleRegister(name: string, email: string, password: stri
                 data: {
                     name: `Org de ${name}`,
                     slug: slug,
-                    enabledServices: "CRM", // Default service
+                    enabledServices: "CRM,CHRONUSDEV", // Default services
+                    subscriptionStatus: "TRIALING",
+                    trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days trial
                 }
             });
 

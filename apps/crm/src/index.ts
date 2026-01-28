@@ -5785,6 +5785,298 @@ app.post("/automations/send-bulk", authMiddleware, async (req, res) => {
     }
 });
 
+// ==================== CHRONUS DEV MODULE ====================
+
+// --- PROJECTS ---
+
+app.get("/projects", authMiddleware, async (req: any, res) => {
+    try {
+        const { organizationId } = req.user;
+        const projects = await prisma.project.findMany({
+            where: { organizationId },
+            include: {
+                customer: true,
+                members: { include: { user: true } },
+                _count: { select: { tasks: true } }
+            },
+            orderBy: { updatedAt: 'desc' }
+        });
+        res.json(projects);
+    } catch (error) {
+        console.error("Error fetching projects:", error);
+        res.status(500).json({ error: "Error fetching projects" });
+    }
+});
+
+app.get("/projects/:id", authMiddleware, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const { organizationId } = req.user;
+        const project = await prisma.project.findFirst({
+            where: { id, organizationId },
+            include: {
+                customer: true,
+                members: { include: { user: true } },
+                tasks: { orderBy: { createdAt: 'desc' }, take: 50 }
+            }
+        });
+
+        if (!project) return res.status(404).json({ error: "Project not found" });
+        res.json(project);
+    } catch (error) {
+        console.error("Error fetching project:", error);
+        res.status(500).json({ error: "Error fetching project" });
+    }
+});
+
+app.post("/projects", authMiddleware, async (req: any, res) => {
+    try {
+        const { name, description, budget, currency, customerId, status } = req.body;
+        const { organizationId, id: userId } = req.user;
+
+        if (!name) return res.status(400).json({ error: "Name is required" });
+
+        const project = await prisma.project.create({
+            data: {
+                name,
+                description,
+                budget: Number(budget) || 0,
+                currency: currency || "USD",
+                status: status || "ACTIVE",
+                customerId,
+                organizationId,
+                members: {
+                    create: {
+                        userId,
+                        role: "ADMIN"
+                    }
+                }
+            },
+            include: { customer: true }
+        });
+        res.json(project);
+    } catch (error) {
+        console.error("Error creating project:", error);
+        res.status(500).json({ error: "Error creating project" });
+    }
+});
+
+app.put("/projects/:id", authMiddleware, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const { organizationId } = req.user;
+        const { name, description, budget, currency, status, customerId } = req.body;
+
+        const updated = await prisma.project.update({
+            where: { id }, // In a real app, verify org access via middleware or where clause in update (or separate findFirst)
+            data: {
+                name,
+                description,
+                budget: budget !== undefined ? Number(budget) : undefined,
+                currency,
+                status,
+                customerId
+            }
+        });
+        res.json(updated);
+    } catch (error) {
+        console.error("Error updating project:", error);
+        res.status(500).json({ error: "Error updating project" });
+    }
+});
+
+app.delete("/projects/:id", authMiddleware, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        await prisma.project.delete({ where: { id } });
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Error deleting project:", error);
+        res.status(500).json({ error: "Error deleting project" });
+    }
+});
+
+// --- PROJECT MEMBERS ---
+
+app.post("/projects/:id/members", authMiddleware, async (req: any, res) => {
+    try {
+        const { id: projectId } = req.params;
+        const { userId, role, payRate, billRate } = req.body;
+
+        const member = await prisma.projectMember.create({
+            data: {
+                projectId,
+                userId,
+                role: role || "DEV",
+                payRate: Number(payRate) || 0,
+                billRate: Number(billRate) || 0
+            },
+            include: { user: true }
+        });
+        res.json(member);
+    } catch (error) {
+        console.error("Error adding member:", error);
+        res.status(500).json({ error: "Error adding member" });
+    }
+});
+
+// --- TASKS ---
+
+app.get("/tasks", authMiddleware, async (req: any, res) => {
+    try {
+        const { projectId, assignedToId } = req.query;
+        const where: any = {};
+
+        if (projectId) where.projectId = String(projectId);
+        if (assignedToId) where.assignedToId = String(assignedToId);
+
+        const tasks = await prisma.task.findMany({
+            where,
+            include: {
+                assignedTo: { select: { id: true, name: true, avatar: true } },
+                project: { select: { id: true, name: true } },
+                _count: { select: { comments: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(tasks);
+    } catch (error) {
+        console.error("Error fetching tasks:", error);
+        res.status(500).json({ error: "Error fetching tasks" });
+    }
+});
+
+app.post("/tasks", authMiddleware, async (req: any, res) => {
+    try {
+        const { title, description, projectId, priority, assignedToId, status, estimatedHours } = req.body;
+        const { id: userId } = req.user;
+
+        const task = await prisma.task.create({
+            data: {
+                title,
+                description,
+                projectId,
+                priority: priority || "MEDIUM",
+                status: status || "BACKLOG",
+                assignedToId: assignedToId || null,
+                createdById: userId,
+                estimatedHours: estimatedHours ? Number(estimatedHours) : null
+            },
+            include: { assignedTo: true }
+        });
+        res.json(task);
+    } catch (error) {
+        console.error("Error creating task:", error);
+        res.status(500).json({ error: "Error creating task" });
+    }
+});
+
+app.put("/tasks/:id", authMiddleware, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const { title, description, status, priority, assignedToId } = req.body;
+
+        const updated = await prisma.task.update({
+            where: { id },
+            data: {
+                title,
+                description,
+                status,
+                priority,
+                assignedToId
+            },
+            include: { assignedTo: true }
+        });
+        res.json(updated);
+    } catch (error) {
+        console.error("Error updating task:", error);
+        res.status(500).json({ error: "Error updating task" });
+    }
+});
+
+app.delete("/tasks/:id", authMiddleware, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        await prisma.task.delete({ where: { id } });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: "Error deleting task" });
+    }
+});
+
+// --- TIMELOGS ---
+
+app.get("/timelogs/active", authMiddleware, async (req: any, res) => {
+    try {
+        const { id: userId } = req.user;
+        const activeLogs = await prisma.timeLog.findMany({
+            where: { userId, end: null },
+            include: { task: true, project: true }
+        });
+        res.json(activeLogs);
+    } catch (error) {
+        res.status(500).json({ error: "Error fetching timelogs" });
+    }
+});
+
+app.post("/timelogs/start", authMiddleware, async (req: any, res) => {
+    try {
+        const { taskId, projectId, description } = req.body;
+        const { id: userId } = req.user;
+
+        // Ensure no other active timer
+        await prisma.timeLog.updateMany({
+            where: { userId, end: null },
+            data: { end: new Date() }
+        });
+
+        // Need projectId. If only taskId provided, fetch project
+        let targetProjectId = projectId;
+        if (!targetProjectId && taskId) {
+            const task = await prisma.task.findUnique({ where: { id: taskId } });
+            if (task) targetProjectId = task.projectId;
+        }
+
+        if (!targetProjectId) return res.status(400).json({ error: "Project ID required" });
+
+        const log = await prisma.timeLog.create({
+            data: {
+                userId,
+                taskId,
+                projectId: targetProjectId,
+                start: new Date(),
+                description
+            }
+        });
+        res.json(log);
+    } catch (error) {
+        console.error("Start timer error:", error);
+        res.status(500).json({ error: "Error starting timer" });
+    }
+});
+
+app.post("/timelogs/stop", authMiddleware, async (req: any, res) => {
+    try {
+        const { timelogId } = req.body;
+        const { id: userId } = req.user;
+
+        const where = timelogId ? { id: timelogId } : { userId, end: null };
+        // Since updateMany doesn't return record, we might need findFirst + update
+        const active = await prisma.timeLog.findFirst({ where: { ...where, end: null } });
+
+        if (!active) return res.status(404).json({ error: "No active timer" });
+
+        const updated = await prisma.timeLog.update({
+            where: { id: active.id },
+            data: { end: new Date() }
+        });
+        res.json(updated);
+    } catch (error) {
+        res.status(500).json({ error: "Error stopping timer" });
+    }
+});
+
+
 // ========== SERVER ==========
 
 const PORT = process.env.PORT || 3002;

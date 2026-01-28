@@ -36,6 +36,13 @@ model User {
   pushDevices       PushDevice[]
   notifPrefs        NotificationPreferences?
   
+  // Project Management (ChronusDev)
+  projects        ProjectMember[]
+  assignedTasks   Task[]          @relation("AssignedTasks")
+  createdTasks    Task[]          @relation("CreatedTasks")
+  timeLogs        TimeLog[]
+  taskComments    TaskComment[]
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   lastLoginAt   DateTime?
@@ -88,6 +95,9 @@ model Organization {
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  
+  // Project Management (ChronusDev)
+  projects      Project[]
 }
 
 model OrganizationMember {
@@ -128,6 +138,7 @@ enum Role {
   AGENT
   VIEWER
   SUPER_ADMIN
+  DEV
 }
 
 // ==================== CUSTOMERS ====================
@@ -165,6 +176,9 @@ model Customer {
   tags          CustomerTag[]
   scheduledInteractions ScheduledInteraction[]
   
+  // Project Management (ChronusDev)
+  projects      Project[]
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   
@@ -833,4 +847,132 @@ model NotificationPreferences {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
   @@index([organizationId])
+}
+
+// ==================== PROJECT MANAGEMENT (ChronusDev) ====================
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  
+  // Relations
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  
+  budget      Float    @default(0)
+  currency    String   @default("USD")
+  status      String   @default("ACTIVE") // PLANNING, ACTIVE, ON_HOLD, COMPLETED, CANCELLED
+
+  // Multi-tenancy
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Sub-relations
+  members     ProjectMember[]
+  tasks       Task[]
+  timeLogs    TimeLog[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([organizationId])
+  @@index([customerId])
+}
+
+model ProjectMember {
+  id          String   @id @default(cuid())
+  
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  payRate     Float    @default(0)
+  billRate    Float    @default(0)
+  role        String   @default("DEV") // DEV, MANAGER, ADMIN
+
+  joinedAt    DateTime @default(now())
+  
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  title       String
+  description String?
+  status      String   @default("BACKLOG") // BACKLOG, TODO, IN_PROGRESS, REVIEW, DONE
+  priority    String   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  
+  // Assignee
+  assignedToId String?
+  assignedTo   User?    @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  
+  createdById  String
+  createdBy    User     @relation("CreatedTasks", fields: [createdById], references: [id])
+
+  // Relations
+  comments     TaskComment[]
+  timeLogs     TimeLog[]
+  
+  estimatedHours Float?
+  dueDate      DateTime?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@index([projectId])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  content   String
+  
+  createdAt DateTime @default(now())
+  
+  @@index([taskId])
+}
+
+model TimeLog {
+  id        String   @id @default(cuid())
+  
+  taskId    String?
+  task      Task?     @relation(fields: [taskId], references: [id])
+  
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  start     DateTime
+  end       DateTime?
+  
+  description String?
+  
+  // Snapshot rates at time of log
+  payRate   Float?
+  billRate  Float?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([projectId])
+  @@index([taskId])
 }
