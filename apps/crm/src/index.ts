@@ -5792,7 +5792,7 @@ app.post("/automations/send-bulk", authMiddleware, async (req, res) => {
 app.get("/projects", authMiddleware, async (req: any, res) => {
     try {
         const { organizationId } = req.user;
-        const projects = await prisma.project.findMany({
+        const projects = await (prisma as any).project.findMany({
             where: { organizationId },
             include: {
                 customer: true,
@@ -5812,7 +5812,7 @@ app.get("/projects/:id", authMiddleware, async (req: any, res) => {
     try {
         const { id } = req.params;
         const { organizationId } = req.user;
-        const project = await prisma.project.findFirst({
+        const project = await (prisma as any).project.findFirst({
             where: { id, organizationId },
             include: {
                 customer: true,
@@ -5836,7 +5836,7 @@ app.post("/projects", authMiddleware, async (req: any, res) => {
 
         if (!name) return res.status(400).json({ error: "Name is required" });
 
-        const project = await prisma.project.create({
+        const project = await (prisma as any).project.create({
             data: {
                 name,
                 description,
@@ -5867,7 +5867,7 @@ app.put("/projects/:id", authMiddleware, async (req: any, res) => {
         const { organizationId } = req.user;
         const { name, description, budget, currency, status, customerId } = req.body;
 
-        const updated = await prisma.project.update({
+        const updated = await (prisma as any).project.update({
             where: { id }, // In a real app, verify org access via middleware or where clause in update (or separate findFirst)
             data: {
                 name,
@@ -5888,7 +5888,7 @@ app.put("/projects/:id", authMiddleware, async (req: any, res) => {
 app.delete("/projects/:id", authMiddleware, async (req: any, res) => {
     try {
         const { id } = req.params;
-        await prisma.project.delete({ where: { id } });
+        await (prisma as any).project.delete({ where: { id } });
         res.json({ success: true });
     } catch (error) {
         console.error("Error deleting project:", error);
@@ -5903,7 +5903,7 @@ app.post("/projects/:id/members", authMiddleware, async (req: any, res) => {
         const { id: projectId } = req.params;
         const { userId, role, payRate, billRate } = req.body;
 
-        const member = await prisma.projectMember.create({
+        const member = await (prisma as any).projectMember.create({
             data: {
                 projectId,
                 userId,
@@ -5930,7 +5930,7 @@ app.get("/tasks", authMiddleware, async (req: any, res) => {
         if (projectId) where.projectId = String(projectId);
         if (assignedToId) where.assignedToId = String(assignedToId);
 
-        const tasks = await prisma.task.findMany({
+        const tasks = await (prisma as any).task.findMany({
             where,
             include: {
                 assignedTo: { select: { id: true, name: true, avatar: true } },
@@ -5951,7 +5951,7 @@ app.post("/tasks", authMiddleware, async (req: any, res) => {
         const { title, description, projectId, priority, assignedToId, status, estimatedHours } = req.body;
         const { id: userId } = req.user;
 
-        const task = await prisma.task.create({
+        const task = await (prisma as any).task.create({
             data: {
                 title,
                 description,
@@ -5976,7 +5976,7 @@ app.put("/tasks/:id", authMiddleware, async (req: any, res) => {
         const { id } = req.params;
         const { title, description, status, priority, assignedToId } = req.body;
 
-        const updated = await prisma.task.update({
+        const updated = await (prisma as any).task.update({
             where: { id },
             data: {
                 title,
@@ -5997,7 +5997,7 @@ app.put("/tasks/:id", authMiddleware, async (req: any, res) => {
 app.delete("/tasks/:id", authMiddleware, async (req: any, res) => {
     try {
         const { id } = req.params;
-        await prisma.task.delete({ where: { id } });
+        await (prisma as any).task.delete({ where: { id } });
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: "Error deleting task" });
@@ -6009,7 +6009,7 @@ app.delete("/tasks/:id", authMiddleware, async (req: any, res) => {
 app.get("/timelogs/active", authMiddleware, async (req: any, res) => {
     try {
         const { id: userId } = req.user;
-        const activeLogs = await prisma.timeLog.findMany({
+        const activeLogs = await (prisma as any).timeLog.findMany({
             where: { userId, end: null },
             include: { task: true, project: true }
         });
@@ -6025,7 +6025,7 @@ app.post("/timelogs/start", authMiddleware, async (req: any, res) => {
         const { id: userId } = req.user;
 
         // Ensure no other active timer
-        await prisma.timeLog.updateMany({
+        await (prisma as any).timeLog.updateMany({
             where: { userId, end: null },
             data: { end: new Date() }
         });
@@ -6033,13 +6033,13 @@ app.post("/timelogs/start", authMiddleware, async (req: any, res) => {
         // Need projectId. If only taskId provided, fetch project
         let targetProjectId = projectId;
         if (!targetProjectId && taskId) {
-            const task = await prisma.task.findUnique({ where: { id: taskId } });
+            const task = await (prisma as any).task.findUnique({ where: { id: taskId } });
             if (task) targetProjectId = task.projectId;
         }
 
         if (!targetProjectId) return res.status(400).json({ error: "Project ID required" });
 
-        const log = await prisma.timeLog.create({
+        const log = await (prisma as any).timeLog.create({
             data: {
                 userId,
                 taskId,
@@ -6062,11 +6062,11 @@ app.post("/timelogs/stop", authMiddleware, async (req: any, res) => {
 
         const where = timelogId ? { id: timelogId } : { userId, end: null };
         // Since updateMany doesn't return record, we might need findFirst + update
-        const active = await prisma.timeLog.findFirst({ where: { ...where, end: null } });
+        const active = await (prisma as any).timeLog.findFirst({ where: { ...where, end: null } });
 
         if (!active) return res.status(404).json({ error: "No active timer" });
 
-        const updated = await prisma.timeLog.update({
+        const updated = await (prisma as any).timeLog.update({
             where: { id: active.id },
             data: { end: new Date() }
         });
