@@ -357,6 +357,53 @@ app.get("/clients/:id", authMiddleware, async (req, res) => {
     }
 });
 
+app.put("/clients/:id", authMiddleware, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const organizationId = req.user?.organizationId;
+        const { name, email, contactName, phone, notes } = req.body;
+
+        const customer = await prisma.customer.update({
+            where: { id, organizationId } as any,
+            data: {
+                name,
+                email,
+                company: contactName,
+                phone,
+                notes
+            } as any
+        });
+
+        res.json({
+            id: customer.id,
+            name: customer.name,
+            email: customer.email,
+            contactName: customer.company,
+            phone: customer.phone,
+            notes: customer.notes
+        });
+    } catch (e) {
+        console.error("PUT /clients/:id error:", e);
+        res.status(500).json({ error: "Error updating client" });
+    }
+});
+
+app.delete("/clients/:id", authMiddleware, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const organizationId = req.user?.organizationId;
+
+        await prisma.customer.delete({
+            where: { id, organizationId } as any
+        });
+
+        res.json({ success: true });
+    } catch (e) {
+        console.error("DELETE /clients/:id error:", e);
+        res.status(500).json({ error: "Error deleting client" });
+    }
+});
+
 /**
  * @openapi
  * /clients:
