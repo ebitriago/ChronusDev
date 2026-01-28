@@ -82,7 +82,27 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
             </nav>
 
             {/* Footer / Toggle */}
-            <div className="p-4 border-t border-gray-100">
+            <div className="p-4 border-t border-gray-100 space-y-3">
+
+                {!isCollapsed && (
+                    <a
+                        href={process.env.NEXT_PUBLIC_CRM_APP_URL || "http://localhost:3003"}
+                        className="flex items-center gap-2 w-full px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors text-sm font-medium"
+                    >
+                        <span className="text-lg">💼</span>
+                        <span>Ir al CRM</span>
+                    </a>
+                )}
+                {isCollapsed && (
+                    <a
+                        href={process.env.NEXT_PUBLIC_CRM_APP_URL || "http://localhost:3003"}
+                        className="flex items-center justify-center w-full p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors"
+                        title="Ir al CRM"
+                    >
+                        <span>💼</span>
+                    </a>
+                )}
+
                 <button
                     onClick={toggleCollapse}
                     className="w-full flex items-center justify-center p-2 rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-colors"

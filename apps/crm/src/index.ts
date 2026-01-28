@@ -518,7 +518,9 @@ app.post("/debug/email", authMiddleware, async (req: any, res) => {
         const result = await sendEmail({
             to: to || req.user.email,
             subject: subject || "Test Email from ChronusCRM",
-            html: html || "<p>This is a test email sent from the debug endpoint.</p>"
+            html: html || "<p>This is a test email sent from the debug endpoint.</p>",
+            userId: req.user.id,
+            organizationId: req.user.organizationId
         });
         res.json(result);
     } catch (e: any) {

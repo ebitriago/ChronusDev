@@ -3,30 +3,47 @@ import nodemailer from 'nodemailer';
 import { prisma } from './db.js';
 
 // Helper to get transporter with dynamic credentials
-async function getEmailTransporter() {
-  // 1. Try to find an enabled System or Super Admin Gmail integration
-  const integration = await prisma.integration.findFirst({
-    where: {
-      provider: 'GMAIL',
-      isEnabled: true,
-      OR: [
-        { userId: null }, // System integration (if we supported it)
-        { user: { role: 'SUPER_ADMIN' } } // Configured by Super Admin
-      ]
-    },
-    include: { user: true }
-  });
+async function getEmailTransporter(userId?: string, organizationId?: string) {
+  let integration = null;
+
+  // 1. Try specific user integration first
+  if (userId) {
+    integration = await prisma.integration.findFirst({
+      where: { userId, provider: 'GMAIL', isEnabled: true }
+    });
+  }
+
+  // 2. Try organization integration
+  if (!integration && organizationId) {
+    integration = await prisma.integration.findFirst({
+      where: { organizationId, provider: 'GMAIL', isEnabled: true }
+    });
+  }
+
+  // 3. Fallback to System or Super Admin
+  if (!integration) {
+    integration = await prisma.integration.findFirst({
+      where: {
+        provider: 'GMAIL',
+        isEnabled: true,
+        OR: [
+          { userId: null }, // System integration
+          { user: { role: 'SUPER_ADMIN' } } // Configured by Super Admin
+        ]
+      },
+      include: { user: true }
+    });
+  }
 
   let user = process.env.GMAIL_USER;
   let pass = process.env.GMAIL_APP_PASSWORD;
 
-  // 2. Override with DB credentials if found
+  // 4. Override with DB credentials if found
   if (integration && integration.credentials && typeof integration.credentials === 'object') {
     const creds = integration.credentials as any;
     if (creds.user && creds.appPassword) {
       user = creds.user;
       pass = creds.appPassword;
-      // console.log(`[Email] Using database credentials for ${user}`);
     }
   }
 
@@ -72,14 +89,16 @@ interface EmailOptions {
   text?: string;
   html?: string;
   replyTo?: string;
+  userId?: string;
+  organizationId?: string;
 }
 
 // Send a single email
 export async function sendEmail(options: EmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const transporter = await getEmailTransporter();
+  const transporter = await getEmailTransporter(options.userId, options.organizationId);
 
   if (!transporter) {
-    console.error('[Email] No Gmail configuration found (Env or DB)');
+    console.error('[Email] No Gmail configuration found');
     return { success: false, error: 'Gmail no configurado' };
   }
 

@@ -167,7 +167,7 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
                 {!isCollapsed && hasChronusDev && (
                     <div className="mt-4 pt-4 border-t border-slate-800">
                         <a
-                            href="http://localhost:3000"
+                            href={process.env.NEXT_PUBLIC_CHRONUS_APP_URL || "http://localhost:3000"}
                             className="flex items-center gap-2 w-full px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors text-sm font-medium"
                         >
                             <span className="text-lg">⏱️</span>
@@ -177,7 +177,7 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
                 )}
                 {isCollapsed && hasChronusDev && (
                     <a
-                        href="http://localhost:3000"
+                        href={process.env.NEXT_PUBLIC_CHRONUS_APP_URL || "http://localhost:3000"}
                         className="mt-4 flex items-center justify-center w-full p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
                         title="Ir a ChronusDev"
                     >

@@ -57,16 +57,18 @@ async function main() {
             data: {
                 userId: user.id,
                 organizationId: newOrg.id,
-                role: 'ADMIN' // Assuming Role enum exists, check schema if string or enum
+                role: 'ADMIN'
             }
         });
         organizationId = newOrg.id;
         console.log(`Created Org: ${newOrg.id}`);
         // Refresh user
-        user = await prisma.user.findUnique({
+        const refreshedUser = await prisma.user.findUnique({
             where: { id: user.id },
             include: { memberships: { include: { organization: true } } }
         });
+        if (!refreshedUser) throw new Error("User lost after update");
+        user = refreshedUser;
     }
 
     // Need to update generateToken to take explicit orgId if needed or verify user object has it now
