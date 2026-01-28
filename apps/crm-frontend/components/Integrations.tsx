@@ -488,6 +488,61 @@ export default function Integrations() {
                                             placeholder="xxxx xxxx xxxx xxxx"
                                         />
                                     </div>
+
+                                    {/* Test Email Section */}
+                                    {integrations['GMAIL']?.isEnabled && (
+                                        <div className="mt-6 pt-4 border-t border-gray-200">
+                                            <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                                📧 Probar Envío
+                                            </h4>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="email"
+                                                    placeholder="Enviar prueba a..."
+                                                    className="flex-1 px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none text-sm"
+                                                    id="test-email-input"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        const input = document.getElementById('test-email-input') as HTMLInputElement;
+                                                        const email = input.value;
+                                                        if (!email) {
+                                                            showToast('Ingresa un correo para probar', 'error');
+                                                            return;
+                                                        }
+
+                                                        try {
+                                                            const res = await fetch(`${API_URL}/debug/email`, {
+                                                                method: 'POST',
+                                                                headers: {
+                                                                    'Content-Type': 'application/json',
+                                                                    'Authorization': `Bearer ${localStorage.getItem('crm_token')}`
+                                                                },
+                                                                body: JSON.stringify({
+                                                                    to: email,
+                                                                    subject: "Prueba de Integración Gmail - ChronusCRM",
+                                                                    html: "<h1>¡Funciona!</h1><p>Si lees esto, tu integración de Gmail está enviando correos correctamente.</p>"
+                                                                })
+                                                            });
+
+                                                            const data = await res.json();
+                                                            if (data.success) {
+                                                                showToast(`✅ Correo enviado a ${email}`, 'success');
+                                                            } else {
+                                                                showToast(`❌ Error: ${data.error}`, 'error');
+                                                            }
+                                                        } catch (e) {
+                                                            showToast('Error de conexión', 'error');
+                                                        }
+                                                    }}
+                                                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl transition-colors"
+                                                >
+                                                    Enviar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </>
                             )}
 
@@ -741,7 +796,8 @@ export default function Integrations() {
                         </div>
                     </div>
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 }
