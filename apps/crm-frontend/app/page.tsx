@@ -719,7 +719,7 @@ export default function CRMPage() {
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-between">
                               <div className="flex gap-1 flex-wrap">
-                                {customer.tags.map(tag => (
+                                {(customer.tags || []).map(tag => (
                                   <span key={tag} className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-medium border border-slate-200">
                                     #{tag}
                                   </span>

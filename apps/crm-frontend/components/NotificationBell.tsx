@@ -66,8 +66,8 @@ export default function NotificationBell() {
 
     // Socket connection for real-time notifications
     useEffect(() => {
-        const socketUrl = API_URL.startsWith('http') ? API_URL : undefined;
-        const newSocket = io(socketUrl, { path: '/socket.io' });
+        // Use /api/socket.io to leverage the Next.js rewrite which proxies /api -> backend
+        const newSocket = io({ path: '/api/socket.io' });
         setSocket(newSocket);
 
         newSocket.on('notification', (notif: Notification) => {

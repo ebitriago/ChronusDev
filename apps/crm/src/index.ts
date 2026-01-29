@@ -165,6 +165,11 @@ app.get("/customers", authMiddleware, async (req: any, res) => {
                         tickets: { where: { status: 'OPEN' } },
                         invoices: { where: { status: { in: ['SENT', 'OVERDUE'] } } }
                     }
+                },
+                tags: {
+                    include: {
+                        tag: true
+                    }
                 }
             },
             orderBy: { createdAt: 'desc' }
@@ -172,6 +177,7 @@ app.get("/customers", authMiddleware, async (req: any, res) => {
 
         const enriched = customers.map(c => ({
             ...c,
+            tags: c.tags.map(ct => ct.tag.name),
             openTickets: c._count.tickets,
             pendingInvoices: c._count.invoices,
             communications: []
