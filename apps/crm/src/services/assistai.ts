@@ -112,7 +112,9 @@ export const AssistAIService = {
         order?: 'ASC' | 'DESC';
     } = {}) {
         const { page = 1, take = 25, agentCode, orderBy = 'lastMessageDate', order = 'DESC' } = params;
-        let endpoint = `/conversations?page=${page}&take=${take}&orderBy=${orderBy}&order=${order}`;
+
+        // Singular endpoint per new docs
+        let endpoint = `/conversation?page=${page}&take=${take}&orderBy=${orderBy}&order=${order}`;
         if (agentCode) endpoint += `&agentCode=${agentCode}`;
 
         const response = await assistaiFetch(endpoint, config);
@@ -130,11 +132,13 @@ export const AssistAIService = {
     },
 
     async getMessages(config: AssistAIConfig, uuid: string, limit = 100) {
-        return assistaiFetch(`/conversations/${uuid}/messages?take=${limit}&order=ASC`, config);
+        // Singular endpoint for messages
+        return assistaiFetch(`/conversation/${uuid}/messages?take=${limit}&order=ASC`, config);
     },
 
     async sendMessage(config: AssistAIConfig, uuid: string, content: string, senderName = 'Agent') {
-        return assistaiPost(`/conversations/${uuid}/messages`, {
+        // Singular endpoint for sending
+        return assistaiPost(`/conversation/${uuid}/messages`, {
             content,
             senderMetadata: {
                 id: 0,
@@ -145,36 +149,42 @@ export const AssistAIService = {
         }, config);
     },
 
-    // Full Sync Logic (Agents + Conversations + Messages)
-    async syncAll(config: AssistAIConfig, organizationId: string) {
-        // 1. Get agents for mapping
+    // Sync specific recent conversations (e.g. last 20)
+    async syncRecentConversations(config: AssistAIConfig, organizationId: string, limit = 20) {
+        console.log(`[AssistAI] Syncing last ${limit} conversations...`);
+
+        // 1. Get agents for mapping names
         const agentsData = await this.getAgents(config);
         const agentsMap = new Map<string, string>();
         for (const agent of agentsData.data || []) {
             agentsMap.set(agent.code, agent.name);
         }
 
-        // 2. Get conversations
-        const convData = await assistaiFetch('/conversations?take=100', config);
+        // 2. Fetch recent conversations
+        const convData = await assistaiFetch(`/conversation?take=${limit}&order=DESC`, config);
         const syncedConvs = [];
 
+        // 3. Process and persist
         for (const conv of convData.data || []) {
-            const sessionId = `assistai-${conv.uuid}`;
+            const uuid = conv.id || conv.uuid; // Handle ID variations
+            if (!uuid) continue;
 
-            // Fetch messages
+            const sessionId = `assistai-${uuid}`;
+
+            // Fetch messages for this conversation
             let messages: any[] = [];
             try {
-                const msgData = await this.getMessages(config, conv.uuid);
+                const msgData = await this.getMessages(config, uuid, 50); // Get last 50 messages
                 messages = msgData.data || [];
             } catch (e) {
-                console.warn(`Failed to fetch messages for ${conv.uuid}`);
+                console.warn(`Failed to fetch messages for ${uuid}`);
             }
 
             // Determine Platform
             const firstMessage = messages[0];
             let platform = 'assistai';
-            if (firstMessage?.channel === 'whatsapp') platform = 'whatsapp';
-            else if (firstMessage?.channel === 'instagram') platform = 'instagram';
+            if (firstMessage?.channel === 'whatsapp' || conv.source === 'whatsapp') platform = 'whatsapp';
+            else if (firstMessage?.channel === 'instagram' || conv.source === 'instagram') platform = 'instagram';
 
             // Agent Info
             const agentCode = conv.agentCode || '';
@@ -185,22 +195,24 @@ export const AssistAIService = {
                 const dbConv = await prisma.conversation.upsert({
                     where: { sessionId },
                     update: {
-                        updatedAt: new Date(conv.updatedAt || conv.createdAt),
+                        updatedAt: new Date(conv.updatedAt || conv.createdAt || new Date()),
                         status: 'ACTIVE',
                         agentName: agentName,
-                        agentCode: agentCode
+                        agentCode: agentCode,
+                        lastMessage: conv.lastMessagePreview || (messages.length > 0 ? messages[messages.length - 1].content : '')
                     },
                     create: {
                         sessionId,
                         platform: platform.toUpperCase() as any,
-                        customerName: platform === 'instagram' ? `@${conv.sender || conv.uuid}` : (conv.sender || conv.uuid),
-                        customerContact: conv.sender || conv.contactPhone || conv.uuid,
+                        customerName: conv.guest?.name || conv.contact?.name || `@${conv.sender || uuid}`,
+                        customerContact: conv.contactPhone || conv.sender || uuid,
                         agentCode,
                         agentName,
                         organizationId,
                         status: 'ACTIVE',
-                        createdAt: new Date(conv.createdAt),
-                        updatedAt: new Date(conv.updatedAt || conv.createdAt)
+                        createdAt: new Date(conv.createdAt || new Date()),
+                        updatedAt: new Date(conv.updatedAt || conv.createdAt || new Date()),
+                        lastMessage: conv.lastMessagePreview || (messages.length > 0 ? messages[messages.length - 1].content : '')
                     }
                 });
 
@@ -221,7 +233,7 @@ export const AssistAIService = {
 
                 syncedConvs.push(dbConv);
             } catch (dbErr) {
-                console.error(`Error syncing conversation ${conv.uuid}:`, dbErr);
+                console.error(`Error syncing conversation ${uuid}:`, dbErr);
             }
         }
 
@@ -230,5 +242,10 @@ export const AssistAIService = {
             syncedCount: syncedConvs.length,
             conversations: syncedConvs
         };
+    },
+
+    // Legacy full sync (can reuse new logic or keep separate)
+    async syncAll(config: AssistAIConfig, organizationId: string) {
+        return this.syncRecentConversations(config, organizationId, 100);
     }
 };

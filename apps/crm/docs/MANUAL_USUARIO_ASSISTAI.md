@@ -14,6 +14,10 @@ En la pestaña **AssistAI** del CRM, puedes visualizar todos tus agentes configu
 ### 2. Bandeja de Entrada Unificada (Inbox)
 Todas las conversaciones iniciadas por tus agentes de IA aparecen automáticamente en el Inbox del CRM.
 - **Identificación Clara**: Cada chat muestra si proviene de WhatsApp o Instagram.
+- **Sincronización Inteligente**:
+    - **Automática**: Al conectar un nuevo número de WhatsApp, el sistema descarga automáticamente las últimas 20 conversaciones.
+    - **Manual**: Botón "Sincronizar AssistAI" para forzar una actualización rápida.
+- **Historial Completo**: Si tienes muchas conversaciones, usa el botón **"Cargar más conversaciones"** al final de la lista para ver el historial antiguo.
 - **Intervención**: Puedes responder directamente desde el Inbox.
 
 ### 3. Agente de Voz (ElevenLabs)

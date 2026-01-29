@@ -41,10 +41,21 @@ export default function NotificationBell() {
     const [socket, setSocket] = useState<Socket | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
+    // Helper for auth headers
+    function getAuthHeaders() {
+        if (typeof window === 'undefined') return {};
+        const token = localStorage.getItem('crm_token');
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    }
+
     // Load notifications on mount
     useEffect(() => {
-        fetch(`${API_URL}/notifications?userId=all`)
-            .then(res => res.json())
+        const headers = getAuthHeaders() as any;
+        fetch(`${API_URL}/notifications?userId=all`, { headers })
+            .then(res => {
+                if (res.status === 401) throw new Error('Unauthorized');
+                return res.json();
+            })
             .then(data => {
                 const notifs = Array.isArray(data) ? data : [];
                 setNotifications(notifs.slice(0, 20)); // Keep last 20

@@ -63,6 +63,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 
     const token = authHeader.split(' ')[1];
     const decoded = verifyToken(token);
+    console.log("[Auth] Decoded:", decoded);
 
     if (!decoded) {
         return res.status(401).json({ error: 'No autorizado - Token inválido o expirado' });

@@ -37,7 +37,11 @@ export default function LeadsKanban() {
     const fetchLeads = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/leads`);
+            const token = localStorage.getItem('crm_token');
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(`${API_URL}/leads`, { headers });
             if (res.ok) {
                 const data = await res.json();
                 setLeads(data);
@@ -69,7 +73,10 @@ export default function LeadsKanban() {
         try {
             const res = await fetch(`${API_URL}/leads/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('crm_token')}`
+                },
                 body: JSON.stringify({ status: newStatus }),
             });
             if (!res.ok) throw new Error('Failed to update');
@@ -134,8 +141,8 @@ export default function LeadsKanban() {
                                                 {/* Lead Score Badge */}
                                                 {lead.score !== undefined && (
                                                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${lead.score >= 70 ? 'bg-emerald-100 text-emerald-700' :
-                                                            lead.score >= 40 ? 'bg-amber-100 text-amber-700' :
-                                                                'bg-red-100 text-red-600'
+                                                        lead.score >= 40 ? 'bg-amber-100 text-amber-700' :
+                                                            'bg-red-100 text-red-600'
                                                         }`}>
                                                         📊 {lead.score}
                                                     </span>

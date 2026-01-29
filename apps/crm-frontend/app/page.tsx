@@ -305,6 +305,38 @@ export default function CRMPage() {
     }
   }
 
+  async function handleSendToDev(ticketId: string) {
+    if (!confirm('¿Enviar este ticket a ChronusDev? Se creará una tarea en el proyecto predeterminado del cliente.')) return;
+
+    // Check if we have default project ID logic? Backend handles it.
+
+    const token = localStorage.getItem('crm_token');
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/tickets/${ticketId}/send-to-chronusdev`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({}) // Backend will use default project if available
+      });
+
+      if (res.ok) {
+        alert("Ticket enviado a desarrollo exitosamente.");
+        loadData();
+      } else {
+        const err = await res.json();
+        alert(`Error: ${err.error || 'No se pudo enviar'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión');
+    }
+  }
+
+
   const ticketStatusColors: Record<string, string> = {
     OPEN: 'bg-red-100 text-red-700',
     IN_PROGRESS: 'bg-blue-100 text-blue-700',
@@ -411,18 +443,22 @@ export default function CRMPage() {
                   </div>
                   <div className="text-sm font-medium text-gray-700">{currentUser?.name || 'Usuario'}</div>
                   {/* Dropdown */}
-                  <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                    <div className="p-3 border-b border-gray-100">
-                      <p className="text-xs text-gray-500">Conectado como</p>
-                      <p className="text-sm font-bold text-gray-800 truncate">{currentUser?.email}</p>
-                      <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full mt-1 inline-block">{currentUser?.role}</span>
+                  <div className="absolute top-full right-0 pt-3 w-56 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                    <div className="bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden">
+                      <div className="p-3 border-b border-gray-100 bg-gray-50/50">
+                        <p className="text-xs text-gray-500 font-medium">Conectado como</p>
+                        <p className="text-sm font-bold text-gray-800 truncate" title={currentUser?.email}>{currentUser?.email}</p>
+                        <div className="mt-1 flex gap-2">
+                          <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-bold uppercase tracking-wider">{currentUser?.role}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full p-3 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors font-medium"
+                      >
+                        <span>🚪</span> Cerrar Sesión
+                      </button>
                     </div>
-                    <button
-                      onClick={handleLogout}
-                      className="w-full p-3 text-left text-sm text-red-600 hover:bg-red-50 rounded-b-xl flex items-center gap-2 transition-colors"
-                    >
-                      <span>🚪</span> Cerrar Sesión
-                    </button>
                   </div>
                 </div>
               </div>
@@ -609,7 +645,7 @@ export default function CRMPage() {
                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Plan & Status</th>
                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">MRR</th>
                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Actividad</th>
-                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Tags</th>
+                        <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Tags</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -770,7 +806,7 @@ export default function CRMPage() {
                                 <span>✓ Sincronizado</span>
                               </div>
                             ) : (
-                              <button className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 font-medium">
+                              <button onClick={() => handleSendToDev(ticket.id)} className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 font-medium">
                                 <span>⚡ Enviar a Dev</span>
                               </button>
                             )}

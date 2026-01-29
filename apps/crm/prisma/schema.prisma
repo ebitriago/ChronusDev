@@ -42,6 +42,8 @@ model User {
   createdTasks    Task[]          @relation("CreatedTasks")
   timeLogs        TimeLog[]
   taskComments    TaskComment[]
+  payouts         Payout[]
+  createdPayouts  Payout[]    @relation("CreatedPayouts")
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -92,6 +94,7 @@ model Organization {
   takeovers     Takeover[]
   pushDevices   PushDevice[]
   notifPrefs    NotificationPreferences[]
+  payouts       Payout[]
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -107,6 +110,8 @@ model OrganizationMember {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   role           Role         @default(AGENT) // Role within this org
+  defaultPayRate Float        @default(0)
+
 
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -370,9 +375,13 @@ model Ticket {
   createdById String?
   createdBy   User?        @relation("CreatedTickets", fields: [createdById], references: [id])
   
-  // External
-  chronusDevTaskId String?
-  chronusDevProjectId String?
+  // Linked Task (ChronusDev Integration)
+  taskId      String?
+  task        Task?        @relation(fields: [taskId], references: [id])
+  
+  // Previously just strings, can deprecate or remove. Let's keep for backward compat if needed, or replace.
+  // chronusDevTaskId String?
+  // chronusDevProjectId String?
   
   customFields Json?
 
@@ -918,6 +927,7 @@ model Task {
   createdBy    User     @relation("CreatedTasks", fields: [createdById], references: [id])
 
   // Relations
+  tickets      Ticket[]
   comments     TaskComment[]
   timeLogs     TimeLog[]
   
@@ -975,4 +985,27 @@ model TimeLog {
   @@index([userId])
   @@index([projectId])
   @@index([taskId])
+}
+
+model Payout {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  amount          Float
+  currency        String       @default("USD")
+  month           String       // YYYY-MM
+  note            String?
+  
+  createdById     String
+  createdBy       User         @relation("CreatedPayouts", fields: [createdById], references: [id])
+
+  createdAt       DateTime     @default(now())
+  
+  @@index([userId])
+  @@index([organizationId])
+  @@index([month])
 }

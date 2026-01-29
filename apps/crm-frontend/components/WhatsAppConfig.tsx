@@ -24,6 +24,7 @@ function QRImage({ providerId, onRefresh }: { providerId: string, onRefresh: () 
     const [error, setError] = useState(false);
     const [loading, setLoading] = useState(true);
 
+    // 1. Fetch QR (Slow poll) - Keep QR stable for scanning
     useEffect(() => {
         if (!providerId) return;
         setSrc(''); setError(false); setLoading(true);
@@ -35,23 +36,33 @@ function QRImage({ providerId, onRefresh }: { providerId: string, onRefresh: () 
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    // If it sends a base64 string or blob? The backend simulation sends JSON with 'qr' fields
-                    // If it's the real whatsmeow it might be image/png. 
-                    // Let's assume JSON with base64 for now based on backend logic
+
                     if (data.status === 'connected') {
-                        onRefresh();
+                        onRefresh(); // Parent updates UI
+                        // Trigger recent conversation sync
+                        fetch(`${API_URL}/assistai/sync-recent`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('crm_token')}`
+                            },
+                            body: JSON.stringify({ limit: 20 })
+                        }).catch(console.error);
                         return;
                     }
+
                     if (data.qr && data.qr.startsWith('data:image')) {
                         setSrc(data.qr);
                     } else if (data.qr) {
-                        // Generate QR from string on client side? Or just show the text if it's a simulation
-                        // For simulation we just show a placeholder
+                        // Assuming standard Base64 if no prefix
+                        setSrc(`data:image/png;base64,${data.qr}`);
+                    } else if (!src) {
+                        // Only show placeholder if we don't have a QR yet
                         setSrc('https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg');
                     }
                     setLoading(false);
                 } else {
-                    console.error('QR fetch failed:', res.status, res.statusText);
+                    console.error('QR fetch failed');
                     setError(true);
                     setLoading(false);
                 }
@@ -61,20 +72,42 @@ function QRImage({ providerId, onRefresh }: { providerId: string, onRefresh: () 
                 setLoading(false);
             }
         };
-        loadQR();
 
-        // Poll for status change (confirmed) separately in parent or here?
-        // Let's just poll QR refresh 
-        const interval = setInterval(loadQR, 30000);
+        loadQR();
+        const interval = setInterval(loadQR, 60000); // 60s Refresh
         return () => clearInterval(interval);
     }, [providerId]);
+
+    // 2. Poll Status (Fast poll) - Detect scan immediately
+    useEffect(() => {
+        if (!providerId) return;
+
+        const checkStatus = async () => {
+            try {
+                const res = await fetch(`${API_URL}/whatsapp/providers/${providerId}/status`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('crm_token')}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.status === 'connected') {
+                        onRefresh();
+                    }
+                }
+            } catch (err) {
+                // Ignore silent poll errors
+            }
+        };
+
+        const interval = setInterval(checkStatus, 3000); // 3s Status Check
+        return () => clearInterval(interval);
+    }, [providerId, onRefresh]);
 
     if (error) {
         return (
             <div className="w-48 h-48 bg-gray-100 rounded-lg flex flex-col items-center justify-center text-center p-2">
                 <div className="text-3xl mb-2">⚠️</div>
                 <p className="text-xs text-gray-500 mb-2">Error cargando QR</p>
-                <button onClick={onRefresh} className="text-xs text-blue-500 underline">Reintentar</button>
+                <button onClick={() => window.location.reload()} className="text-xs text-blue-500 underline">Recargar</button>
             </div>
         );
     }
@@ -82,26 +115,15 @@ function QRImage({ providerId, onRefresh }: { providerId: string, onRefresh: () 
     if (loading) {
         return (
             <div className="w-48 h-48 bg-gray-100 rounded-lg flex items-center justify-center animate-pulse">
-                <p className="text-xs text-gray-500">Cargando...</p>
+                <p className="text-xs text-gray-500">Cargando código...</p>
             </div>
         );
     }
 
-    // Pending confirmation button for simulation
-    const simulateScan = async () => {
-        await fetch(`${API_URL}/whatsapp/providers/${providerId}/qr/confirm`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('crm_token')}` }
-        });
-        onRefresh(); // Trigger parent refresh
-    };
-
     return (
         <div className="flex flex-col items-center gap-2">
             <img src={src} alt="QR Code" className="w-48 h-48 border border-gray-200 rounded-lg" />
-            <button onClick={simulateScan} className="text-xs bg-gray-200 px-2 py-1 rounded hover:bg-gray-300">
-                [DEV] Simular Escaneo
-            </button>
+            <p className="text-xs text-gray-500 animate-pulse">Escanea para conectar...</p>
         </div>
     );
 }

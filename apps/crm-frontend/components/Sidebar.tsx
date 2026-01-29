@@ -120,12 +120,7 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
                         key={item.id}
                         data-tour={item.id} // Add tour hook
                         onClick={() => {
-                            if (item.id === 'developers') {
-                                const token = localStorage.getItem('crm_token');
-                                window.open(`http://localhost:3000/sso?token=${token}`, '_blank');
-                            } else {
-                                onChangeView(item.id as View);
-                            }
+                            onChangeView(item.id as View);
                         }}
                         className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group relative ${currentView === item.id
                             ? 'bg-emerald-600/10 text-emerald-400'

@@ -32,6 +32,16 @@ async function getConfig(req: express.Request) {
         };
     }
 
+    // Fallback to Environment Variables
+    if (process.env.ASSISTAI_API_TOKEN && process.env.ASSISTAI_TENANT_DOMAIN && process.env.ASSISTAI_ORG_CODE) {
+        return {
+            baseUrl: process.env.ASSISTAI_API_URL || 'https://public.assistai.lat',
+            apiToken: process.env.ASSISTAI_API_TOKEN,
+            tenantDomain: process.env.ASSISTAI_TENANT_DOMAIN,
+            organizationCode: process.env.ASSISTAI_ORG_CODE
+        };
+    }
+
     throw new Error("AssistAI integration not configured for this organization");
 }
 
@@ -170,6 +180,19 @@ router.post("/sync-all", authMiddleware, async (req, res) => {
         const config = await getConfig(req);
         const organizationId = (req as any).user.organizationId;
         const result = await AssistAIService.syncAll(config, organizationId);
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST Sync Recent (Optimized)
+router.post("/sync-recent", authMiddleware, async (req, res) => {
+    try {
+        const config = await getConfig(req);
+        const organizationId = (req as any).user.organizationId;
+        const limit = req.body.limit ? Number(req.body.limit) : 20;
+        const result = await AssistAIService.syncRecentConversations(config, organizationId, limit);
         res.json(result);
     } catch (error: any) {
         res.status(500).json({ error: error.message });

@@ -819,194 +819,17 @@ app.post("/customers/:id/chronus-task", authMiddleware, async (req: any, res) =>
         res.status(500).json({ error: err.message });
     }
 });
-
-// ========== TICKETS ==========
-
-app.get("/tickets", authMiddleware, async (req, res) => {
-    try {
-        const organizationId = req.user?.organizationId;
-        if (!organizationId) return res.status(400).json({ error: "Organization context required" });
-
-        const { status, customerId } = req.query;
-        const whereClause: any = { organizationId };
-
-        if (status) whereClause.status = status as any;
-        if (customerId) whereClause.customerId = customerId as string;
-
-        const tickets = await prisma.ticket.findMany({
-            where: whereClause,
-            include: { customer: true }
-        });
-
-        res.json(tickets);
-    } catch (e) {
-        console.error("GET /tickets error:", e);
-        res.status(500).json({ error: "Error fetching tickets" });
-    }
-});
-
-app.post("/tickets", authMiddleware, async (req, res) => {
-    try {
-        const organizationId = req.user?.organizationId;
-        if (!organizationId) return res.status(400).json({ error: "Organization context required" });
-
-        const { customerId, title, description, priority = "MEDIUM" } = req.body;
-        if (!customerId || !title) return res.status(400).json({ error: "customerId y title requeridos" });
-
-        const ticket = await prisma.ticket.create({
-            data: {
-                title,
-                description: description || "",
-                status: "OPEN",
-                priority: priority as any,
-                customerId,
-                organizationId
-            } as any
-        });
-
-        // Auto-sync with ChronusDev
-        // Need to refetch customer to check ChronusDev ID
-        const customer = await prisma.customer.findUnique({ where: { id: customerId } });
-        if (customer) {
-            // Keep existing sync logic below...
-            const CHRONUSDEV_URL = process.env.CHRONUSDEV_API_URL || "http://127.0.0.1:3001";
-            // ... (rest of the sync logic will follow in the next chunk, but I need to adapt the surrounding code)
-
-            // To avoid huge diffs, I will keep the sync logic in the next replace call or just assume it continues.
-            // Wait, I am replacing lines 912-942. The sync logic starts at 944.
-            // I need to make sure the sync logic uses `customer` object which I just fetched.
-            // The original used `customers.find()`. Now I use `prisma.customer.findUnique`.
-            // So `customer` is available.
-
-            // I'll emit the sync logic beginning here to bridge the gap.
-            /* 
-            Implementation detail:
-            The original code had `if (customer) { ... }` block starting at 946. 
-            I am returning the response at the end of the sync or earlier. 
-            Actually, I should return the ticket immediately and do sync in background? 
-            Original did sync in background (it didn't await sync to respond? No, it looks like it just fell through).
-            Wait, original code didn't return res.json(ticket) inside the handler shown. It pushed to array. 
-            Where did it return response? It seems it fell off the end of the snippet. I need to see more lines.
-            */
-
-            // Let's finish the replacement correctly.
-            res.json(ticket);
-
-            // Trigger sync asynchronously to not block UI
-            syncTicketToChronusDev(ticket, customer, organizationId).catch(console.error);
-        } else {
-            res.json(ticket);
-        }
-
-    } catch (e) {
-        console.error("POST /tickets error:", e);
-        res.status(500).json({ error: "Error creating ticket" });
-    }
-});
+// Duplicate /tickets endpoints removed. See lines 247+ for active implementation.
 
 
 
-// Helper function for sync
-async function syncTicketToChronusDev(ticket: any, customer: any, organizationId: string) {
-    if (!customer) return;
 
-    const CHRONUSDEV_URL = process.env.CHRONUSDEV_API_URL || "http://127.0.0.1:3001";
-    const AUTH_HEADER = { "Authorization": `Bearer ${process.env.CHRONUSDEV_TOKEN || "token-admin-123"}` };
 
-    try {
-        // Step 1: Ensure customer exists in ChronusDev
-        if (!customer.chronusDevClientId) {
-            console.log(`[Sync] Creating client in ChronusDev: ${customer.name}`);
-            const clientRes = await fetch(`${CHRONUSDEV_URL}/clients`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", ...AUTH_HEADER },
-                body: JSON.stringify({
-                    name: customer.name,
-                    email: customer.email,
-                    phone: customer.phone,
-                    contactName: customer.company || customer.name,
-                }),
-            });
-            if (clientRes.ok) {
-                const client = await clientRes.json();
-                // Update customer in DB
-                await prisma.customer.update({
-                    where: { id: customer.id },
-                    data: { chronusDevClientId: client.id }
-                });
-                customer.chronusDevClientId = client.id; // Update local ref
-                console.log(`[Sync] Client created: ${client.id}`);
-            } else {
-                console.error(`[Sync] Failed to create client: ${clientRes.status}`);
-            }
-        }
-
-        // Step 2: Ensure project exists for this customer
-        if (customer.chronusDevClientId && !customer.chronusDevDefaultProjectId) {
-            console.log(`[Sync] Creating support project for: ${customer.name}`);
-            const projectRes = await fetch(`${CHRONUSDEV_URL}/projects`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", ...AUTH_HEADER },
-                body: JSON.stringify({
-                    name: `Soporte ${customer.name}`,
-                    description: `Proyecto de soporte para ${customer.name}`,
-                    clientId: customer.chronusDevClientId,
-                    budget: 0,
-                    currency: "USD",
-                    status: "ACTIVE",
-                }),
-            });
-            if (projectRes.ok) {
-                const project = await projectRes.json();
-                await prisma.customer.update({
-                    where: { id: customer.id },
-                    data: { chronusDevDefaultProjectId: project.id }
-                });
-                customer.chronusDevDefaultProjectId = project.id;
-                console.log(`[Sync] Project created: ${project.id}`);
-            } else {
-                console.error(`[Sync] Failed to create project: ${projectRes.status}`);
-            }
-        }
-
-        // Step 3: Create task in ChronusDev
-        if (customer.chronusDevDefaultProjectId) {
-            console.log(`[Sync] Creating task for ticket: ${ticket.id}`);
-            const taskRes = await fetch(`${CHRONUSDEV_URL}/tasks`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", ...AUTH_HEADER },
-                body: JSON.stringify({
-                    projectId: customer.chronusDevDefaultProjectId,
-                    title: `[CRM] ${ticket.title}`,
-                    description: `Cliente: ${customer.name}\nTicket ID: ${ticket.id}\n\n${ticket.description}`,
-                    priority: ticket.priority,
-                    status: "BACKLOG",
-                }),
-            });
-
-            if (taskRes.ok) {
-                const task = await taskRes.json();
-                await prisma.ticket.update({
-                    where: { id: ticket.id },
-                    data: {
-                        chronusDevTaskId: task.id,
-                        status: "IN_PROGRESS"
-                    }
-                });
-                console.log(`[Sync] Task created: ${task.id}`);
-            } else {
-                console.error(`[Sync] Failed to create task: ${taskRes.status}`);
-            }
-        }
-    } catch (err) {
-        console.error("[Sync] Error syncing with ChronusDev:", err);
-    }
-}
 
 app.put("/tickets/:id", authMiddleware, async (req, res) => {
     try {
         const organizationId = req.user?.organizationId;
-        const { status, priority, assignedTo, chronusDevTaskId, chronusDevProjectId } = req.body;
+        const { status, priority, assignedTo } = req.body;
 
         const updateData: any = {};
         if (status) {
@@ -1067,8 +890,7 @@ app.post("/api/ai/tickets", async (req, res) => {
             } as any
         });
 
-        // 3. Trigger ChronusDev Sync
-        syncTicketToChronusDev(ticket, customer, (customer as any).organizationId).catch(console.error);
+
 
         res.json(ticket);
     } catch (e: any) {
@@ -1084,56 +906,57 @@ app.post("/api/ai/tickets", async (req, res) => {
 app.post("/tickets/:id/send-to-chronusdev", authMiddleware, async (req: any, res) => {
     try {
         const organizationId = req.user?.organizationId;
-        const ticket = await prisma.ticket.findFirst({
-            where: { id: req.params.id, organizationId } as any,
-            include: { customer: true } as any
-        }) as any;
+        const userId = req.user?.id;
+
+        const ticket = await (prisma as any).ticket.findFirst({
+            where: { id: req.params.id, organizationId },
+            include: { customer: true }
+        });
 
         if (!ticket) return res.status(404).json({ error: "Ticket no encontrado" });
+        if (ticket.taskId) return res.status(400).json({ error: "Ticket ya vinculado a una tarea", taskId: ticket.taskId });
 
-        const { projectId } = req.body;
-        if (!projectId) return res.status(400).json({ error: "projectId requerido" });
+        let { projectId, priority, assignedToId } = req.body;
 
-        const customer = (ticket as any).customer;
-
-        // ChronusDev Logic
-        const CHRONUSDEV_URL = process.env.CHRONUSDEV_API_URL || "http://127.0.0.1:3001";
-        const response = await fetch(`${CHRONUSDEV_URL}/tasks`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${process.env.CHRONUSDEV_TOKEN || "token-admin-123"}`,
-            },
-            body: JSON.stringify({
-                projectId,
-                title: `[CRM] ${ticket.title}`,
-                description: `Cliente: ${(customer as any)?.name || "Desconocido"}\n\n${ticket.description}`,
-                priority: ticket.priority,
-                status: "TODO",
-            }),
-        });
-
-        if (!response.ok) {
-            throw new Error("Error creando tarea en ChronusDev");
+        if (!projectId) {
+            projectId = (ticket.customer as any)?.chronusDevDefaultProjectId;
         }
 
-        const task = await response.json();
+        if (!projectId) return res.status(400).json({ error: "projectId requerido y el cliente no tiene proyecto por defecto" });
 
-        // Update Ticket
-        const updatedTicket = await prisma.ticket.update({
-            where: { id: ticket.id },
+        // Logic: Create Task associated with Project and this Ticket
+        const task = await (prisma as any).task.create({
             data: {
-                chronusDevTaskId: task.id,
-                chronusDevProjectId: projectId,
-                status: "IN_PROGRESS",
-                // updatedAt updated automatically by Prisma? Usually yes if @updatedAt.
-                // But schema says `updatedAt DateTime @updatedAt`? Let's assume yes.
-            } as any
+                title: `[TICKET] ${ticket.title}`,
+                description: `Origen Ticket: ${ticket.id}\nCliente: ${ticket.customer?.name || "N/A"}\n\n${ticket.description || ""}`,
+                priority: priority || ticket.priority || 'MEDIUM',
+                status: 'BACKLOG',
+                projectId: projectId,
+                assignedToId: assignedToId || null,
+                createdById: userId,
+                // Link back to ticket (One-to-many from Task side, though logic suggests 1-1 mostly)
+                tickets: {
+                    connect: { id: ticket.id }
+                }
+            }
         });
 
-        res.json({ ticket: updatedTicket, chronusDevTask: task });
+        // Update Ticket with relations
+        const updatedTicket = await (prisma as any).ticket.update({
+            where: { id: ticket.id },
+            data: {
+                taskId: task.id,
+                status: "IN_PROGRESS", // Auto-advance ticket logic
+                // Legacy fields sync (optional, keeping for safety)
+                chronusDevTaskId: task.id,
+                chronusDevProjectId: projectId
+            }
+        });
+
+        res.json({ success: true, ticket: updatedTicket, task });
     } catch (err: any) {
-        res.status(500).json({ error: err.message || "Error conectando con ChronusDev" });
+        console.error("Error converting ticket to task:", err);
+        res.status(500).json({ error: err.message || "Error interno" });
     }
 });
 
@@ -1754,19 +1577,31 @@ app.post("/whatsapp/providers/:id/test", authMiddleware, async (req: any, res) =
 
         if (integration.provider === 'WHATSMEOW') {
             // Test WhatsMeow connection
-            const apiUrl = config.apiUrl;
-            if (!apiUrl) throw new Error('API URL no configurada');
+            const agentCode = config.agentCode;
+            const agentToken = config.agentToken;
 
-            // TODO: Real API call when available
-            // const response = await fetch(`${apiUrl}/status`, ...);
+            if (!agentCode || !agentToken) throw new Error('Agente no configurado');
 
-            // Update status
-            await prisma.integration.update({
-                where: { id },
-                data: { metadata: { ...(integration.metadata as any), status: 'connected', connectedAt: new Date() } }
-            });
+            try {
+                const agent = await whatsmeow.getAgent(agentCode, agentToken);
+                // If we get here, agent exists and token is valid
 
-            res.json({ success: true, message: 'Conexión WhatsMeow simulada exitosa' });
+                // TODO: Check if device is actually linked in agent details?
+                // For now, if API responds it is "alive"
+
+                await prisma.integration.update({
+                    where: { id },
+                    data: { metadata: { ...(integration.metadata as any), status: 'connected', connectedAt: new Date() } }
+                });
+
+                res.json({ success: true, message: `Conexión WhatsMeow activa (ID: ${agent.id})` });
+            } catch (error: any) {
+                await prisma.integration.update({
+                    where: { id },
+                    data: { metadata: { ...(integration.metadata as any), status: 'error', lastError: error.message } }
+                });
+                throw new Error('No se pudo contactar al agente WhatsMeow: ' + error.message);
+            }
 
         } else if (integration.provider === 'META') { // META
             // Test Meta Business API
@@ -1807,9 +1642,16 @@ app.get("/whatsapp/providers/:id/qr", authMiddleware, async (req: any, res) => {
     const { id } = req.params;
     const organizationId = req.user?.organizationId;
 
-    const integration = await prisma.integration.findFirst({ where: { id, organizationId } });
+    // Relaxed lookup to debug/fix access
+    const integration = await prisma.integration.findUnique({ where: { id } });
 
-    if (!integration) return res.status(404).json({ error: "Provider no encontrado" });
+    if (!integration) return res.status(404).json({ error: "Provider no encontrado (ID inválido)" });
+
+    if (integration.organizationId && integration.organizationId !== organizationId) {
+        console.error(`[Use mismatch] Integration org=${integration.organizationId} vs User org=${organizationId}`);
+        return res.status(403).json({ error: "No tienes acceso a este proveedor" });
+    }
+
     if (integration.provider !== 'WHATSMEOW') {
         return res.status(400).json({ error: "QR solo disponible para WhatsMeow" });
     }
@@ -1877,6 +1719,60 @@ app.get("/whatsapp/providers/:id/qr", authMiddleware, async (req: any, res) => {
         // Return 400 or 503 instead of crash, or a specific status json
         // If external API is down, maybe 503
         res.status(502).json({ error: 'Error comunicando con servicio WhatsApp: ' + err.message });
+    }
+});
+
+// Lightweight status check
+app.get("/whatsapp/providers/:id/status", authMiddleware, async (req: any, res) => {
+    const { id } = req.params;
+    const organizationId = req.user?.organizationId;
+
+    try {
+        const integration = await prisma.integration.findUnique({ where: { id } });
+        if (!integration) return res.status(404).json({ error: "Provider no encontrado" });
+
+        // Access control: Allow if owned or if it's the user's org context
+        if (integration.organizationId && integration.organizationId !== organizationId) {
+            return res.status(403).json({ error: "Acceso denegado" });
+        }
+
+        let status = (integration.metadata as any)?.status || 'disconnected';
+        let connectedAt = (integration.metadata as any)?.connectedAt;
+
+        // Real-time check for WhatsMeow
+        if (integration.provider === 'WHATSMEOW') {
+            const config = integration.credentials as any;
+            if (config?.agentCode && config?.agentToken) {
+                try {
+                    const agent = await whatsmeow.getAgent(config.agentCode, config.agentToken);
+                    const isConnected = !!agent.deviceId;
+
+                    status = isConnected ? 'connected' : 'disconnected';
+
+                    // Update DB if changed
+                    if (status !== (integration.metadata as any)?.status) {
+                        const metadata = {
+                            ...(integration.metadata as any),
+                            status,
+                            connectedAt: isConnected ? (connectedAt || new Date()) : null
+                        };
+                        await prisma.integration.update({
+                            where: { id },
+                            data: { metadata }
+                        });
+                        connectedAt = metadata.connectedAt;
+                    }
+                } catch (e) {
+                    // Agent might be unreachable or invalid token
+                    status = 'error';
+                }
+            }
+        }
+
+        res.json({ status, connectedAt });
+    } catch (e: any) {
+        console.error("GET /status error:", e);
+        res.status(500).json({ error: "Error checking status" });
     }
 });
 
@@ -2029,6 +1925,67 @@ app.post("/whatsapp/send", async (req, res) => {
 
         // Emit to socket for real-time update
         io.emit('whatsapp_message_sent', message);
+
+        // PERSISTENCE: Save to DB for Inbox
+        try {
+            if (provider.organizationId) {
+                const cleanTo = message.to; // Already cleaned above
+                // MATCHING LOGIC: Must match processIncomingMessage specific format for multi-tenancy
+                // Format: session-{organizationId}-{phone}
+                const sessionId = `session-${provider.organizationId}-${cleanTo}`;
+
+                // 1. Find or Create Conversation
+                let conversation = await prisma.conversation.findUnique({
+                    where: { sessionId }
+                });
+
+                if (!conversation) {
+                    conversation = await prisma.conversation.create({
+                        data: {
+                            sessionId: sessionId,
+                            platform: 'WHATSAPP',
+                            organizationId: provider.organizationId,
+                            customerContact: cleanTo,
+                            customerName: cleanTo,
+                            status: 'ACTIVE'
+                        }
+                    });
+                }
+
+                // 2. Create Message
+                // 2. Create Message
+                const savedMessage = await prisma.message.create({
+                    data: {
+                        conversationId: conversation.id,
+                        content: content,
+                        sender: 'AGENT',
+                        status: 'SENT',
+                        metadata: message.metadata
+                    }
+                });
+
+                // Emit for Inbox real-time update
+                const chatMessage = {
+                    id: savedMessage.id,
+                    sessionId: sessionId,
+                    from: 'Agent',
+                    content: savedMessage.content,
+                    platform: 'whatsapp',
+                    sender: 'agent',
+                    timestamp: savedMessage.createdAt.toISOString(),
+                    status: 'sent'
+                };
+
+                io.emit('inbox_update', {
+                    sessionId: sessionId,
+                    message: chatMessage
+                });
+            }
+        } catch (dbErr) {
+            console.error('[DB Persistence Error]', dbErr);
+            // Don't fail the request if message was actually sent
+        }
+
         res.json({ success: true, message });
 
     } catch (err: any) {
@@ -2900,13 +2857,156 @@ app.get("/users", authMiddleware, async (req: any, res) => {
             id: m.userId,
             name: m.user.name,
             email: m.user.email,
-            role: m.role
+            role: m.role,
+            defaultPayRate: (m as any).defaultPayRate || 0
         }));
 
         res.json(orgUsers);
     } catch (err) {
         console.error("Error fetching org users:", err);
         res.status(500).json({ error: "No se pudieron obtener los usuarios" });
+    }
+});
+
+// ========== PAYMENTS & TEAM EARNINGS (ChronusDev) ==========
+
+app.get("/payments/team-summary", authMiddleware, async (req: any, res) => {
+    const organizationId = req.user.organizationId;
+    try {
+        const members = await prisma.organizationMember.findMany({
+            where: { organizationId },
+            include: { user: true }
+        });
+
+        const summary = await Promise.all(members.map(async (m) => {
+            // Total Hours
+            const logs = await (prisma as any).timeLog.findMany({
+                where: { userId: m.userId, project: { organizationId } } as any // project relation
+            });
+            // Calculate Debt
+            let totalDebt = 0;
+            let totalHours = 0;
+
+            logs.forEach((log: any) => {
+                let hours = 0;
+                if (log.end) {
+                    const durationMs = new Date(log.end).getTime() - new Date(log.start).getTime();
+                    hours = durationMs / (1000 * 60 * 60);
+                }
+                const rate = log.payRate || (m as any).defaultPayRate || 0;
+                totalDebt += hours * rate;
+                totalHours += hours;
+            });
+
+            // Total Paid
+            const payouts = await (prisma as any).payout.findMany({
+                where: { userId: m.userId, organizationId }
+            });
+            const totalPaid = payouts.reduce((sum: number, p: any) => sum + p.amount, 0);
+
+            return {
+                userId: m.userId,
+                userName: m.user.name,
+                defaultPayRate: (m as any).defaultPayRate || 0,
+                totalHours,
+                totalDebt,
+                totalPaid,
+                balance: totalDebt - totalPaid
+            };
+        }));
+
+        res.json(summary);
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Error fetching team summary" });
+    }
+});
+
+app.post("/payments", authMiddleware, async (req: any, res) => {
+    try {
+        const { userId, amount, month, note } = req.body;
+        const organizationId = req.user.organizationId;
+
+        const payout = await (prisma as any).payout.create({
+            data: {
+                userId,
+                organizationId,
+                amount: Number(amount),
+                month: month || new Date().toISOString().slice(0, 7),
+                note,
+                createdById: req.user.id
+            }
+        });
+        res.json(payout);
+    } catch (e: any) {
+        console.error("Error referencing Payment:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get("/users/:id/balance", authMiddleware, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const organizationId = req.user.organizationId;
+
+        const member = await prisma.organizationMember.findFirst({
+            where: { userId: id, organizationId },
+            include: { user: true }
+        });
+
+        if (!member) return res.status(404).json({ error: "Usuario no encontrado en la organización" });
+
+        // Calcs
+        const logs = await (prisma as any).timeLog.findMany({
+            where: { userId: id, project: { organizationId } } as any
+        });
+
+        let totalDebt = 0;
+        let totalHours = 0;
+        logs.forEach((log: any) => {
+            let hours = 0;
+            if (log.end) {
+                const durationMs = new Date(log.end).getTime() - new Date(log.start).getTime();
+                hours = durationMs / (1000 * 60 * 60);
+            }
+            const rate = log.payRate || (member as any).defaultPayRate || 0;
+            totalDebt += hours * rate;
+            totalHours += hours;
+        });
+
+        const payouts = await (prisma as any).payout.findMany({
+            where: { userId: id, organizationId },
+            orderBy: { createdAt: 'desc' },
+            include: { createdBy: true }
+        });
+
+        const totalPaid = payouts.reduce((sum: number, p: any) => sum + p.amount, 0);
+
+        const mappedPayments = payouts.map((p: any) => ({
+            id: p.id,
+            userId: p.userId,
+            amount: p.amount,
+            currency: p.currency,
+            month: p.month,
+            note: p.note,
+            createdAt: p.createdAt,
+            createdBy: p.createdById, // Simplify
+            createdByName: p.createdBy?.name
+        }));
+
+        res.json({
+            userId: member.userId,
+            userName: member.user.name,
+            defaultPayRate: (member as any).defaultPayRate || 0,
+            totalHours,
+            totalDebt,
+            totalPaid,
+            balance: totalDebt - totalPaid,
+            payments: mappedPayments
+        });
+    } catch (e: any) {
+        console.error(e);
+        res.status(500).json({ error: e.message });
     }
 });
 
@@ -4345,6 +4445,28 @@ const openApiSpec = {
         },
         '/whatsmeow/disconnect': {
             post: { tags: ['WhatsApp'], summary: 'Desconectar dispositivo WhatsApp', responses: { '200': { description: 'Dispositivo desconectado' } } }
+        },
+        '/assistai/sync-recent': {
+            post: {
+                tags: ['AssistAI'],
+                summary: 'Sincronizar conversaciones recientes',
+                description: 'Descarga las últimas 20 conversaciones desde AssistAI y actualiza la base de datos local.',
+                requestBody: {
+                    content: {
+                        'application/json': {
+                            schema: {
+                                type: 'object',
+                                properties: {
+                                    limit: { type: 'number', description: 'Número de conversaciones a sincronizar (default: 20)' }
+                                }
+                            }
+                        }
+                    }
+                },
+                responses: {
+                    '200': { description: 'Sincronización exitosa', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, syncedCount: { type: 'number' } } } } } }
+                }
+            }
         }
     }
 };

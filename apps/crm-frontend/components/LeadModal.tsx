@@ -58,9 +58,13 @@ export default function LeadModal({ isOpen, onClose, onSuccess, leadToEdit }: Le
             const url = leadToEdit ? `${API_URL}/leads/${leadToEdit.id}` : `${API_URL}/leads`;
             const method = leadToEdit ? 'PUT' : 'POST';
 
+            const token = localStorage.getItem('crm_token');
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const res = await fetch(url, {
                 method,
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(formData),
             });
 
@@ -175,9 +179,13 @@ export default function LeadModal({ isOpen, onClose, onSuccess, leadToEdit }: Le
                                 if (!confirm('¿Estás seguro de convertir este lead en cliente? Se eliminará de leads.')) return;
                                 setLoading(true);
                                 try {
+                                    const token = localStorage.getItem('crm_token');
+                                    const headers: any = { 'Content-Type': 'application/json' };
+                                    if (token) headers['Authorization'] = `Bearer ${token}`;
+
                                     const res = await fetch(`${API_URL}/clients/from-lead/${leadToEdit.id}`, {
                                         method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
+                                        headers,
                                         body: JSON.stringify({ plan: 'STARTER' })
                                     });
                                     if (res.ok) {

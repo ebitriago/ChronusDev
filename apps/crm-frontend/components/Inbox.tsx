@@ -372,31 +372,69 @@ export default function Inbox() {
         );
     };
 
-    // Manual sync
+    // Pagination state
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+
+    // Manual sync (Optimized)
     const handleManualSync = async () => {
         setSyncing(true);
         const headers = getAuthHeaders() as any;
         try {
-            await fetch(`${API_URL}/assistai/sync-all`, { method: 'POST', headers });
-            const convRes = await fetch(`${API_URL}/conversations`, { headers });
+            await fetch(`${API_URL}/assistai/sync-recent`, {
+                method: 'POST',
+                headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ limit: 20 })
+            });
+            // Refresh list
+            const convRes = await fetch(`${API_URL}/conversations?page=1&take=25`, { headers });
             if (convRes.ok) {
                 const convData = await convRes.json();
                 if (Array.isArray(convData)) {
                     setConversations(convData);
+                    setPage(1);
+                    setHasMore(convData.length === 25);
                     setNewMessageCount(0);
                 }
             }
+            showToast('Sincronización completada', 'success');
         } catch (err) {
             console.error('Sync failed', err);
+            showToast('Error al sincronizar', 'error');
         } finally {
             setSyncing(false);
+        }
+    };
+
+    // Load more conversations
+    const handleLoadMore = async () => {
+        const nextPage = page + 1;
+        setLoading(true); // Small loading indicator if needed
+        const headers = getAuthHeaders() as any;
+        try {
+            const res = await fetch(`${API_URL}/conversations?page=${nextPage}&take=25`, { headers });
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                setConversations(prev => [...prev, ...data]);
+                setPage(nextPage);
+                setHasMore(data.length === 25);
+            }
+        } catch (err) {
+            console.error('Load more failed', err);
+        } finally {
+            setLoading(false);
         }
     };
 
     // Check if contact matches a client when selecting conversation
     const fetchClientMatch = async (contactValue: string) => {
         try {
-            const res = await fetch(`${API_URL}/contacts/match?value=${encodeURIComponent(contactValue)}`);
+            const headers = getAuthHeaders() as any;
+            const res = await fetch(`${API_URL}/contacts/match?value=${encodeURIComponent(contactValue)}`, { headers });
+            if (res.status === 401) {
+                console.warn('Unauthorized access to /contacts/match');
+                return;
+            }
             const data = await res.json();
             if (data.matched && data.client) {
                 setMatchedClient({ id: data.clientId, name: data.client.name, contacts: [] });
@@ -824,6 +862,17 @@ export default function Inbox() {
                                     </div>
                                 </div>
                             ))
+                        )}
+                        {/* Load More Button */}
+                        {hasMore && !loading && !searchTerm && (
+                            <div className="p-4 text-center">
+                                <button
+                                    onClick={handleLoadMore}
+                                    className="text-xs text-purple-600 hover:text-purple-800 font-bold hover:underline"
+                                >
+                                    Cargar más conversaciones
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>
