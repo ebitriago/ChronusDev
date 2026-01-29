@@ -100,6 +100,8 @@ import Sidebar from '../components/Sidebar';
 import Finances from '../components/Finances';
 import CustomerDetail from '../components/CustomerDetail';
 import LeadsKanban from '../components/LeadsKanban';
+import TicketsKanban from '../components/TicketsKanban';
+import Calendar from '../components/Calendar';
 import Inbox from '../components/Inbox';
 import AssistAI from '../components/AssistAI';
 import ChannelSettings from '../components/ChannelSettings';
@@ -112,7 +114,7 @@ import SuperAdminPanel from '../components/SuperAdminPanel';
 import AiAgentsPage from './ai-agents/page';
 
 export default function CRMPage() {
-  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'ai-agents' | 'channels' | 'settings' | 'developers' | 'super-admin'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'ai-agents' | 'channels' | 'settings' | 'developers' | 'super-admin' | 'calendar' | 'kanban'>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -735,6 +737,12 @@ export default function CRMPage() {
 
             {/* Channel Settings View */}
             {view === 'channels' && <ChannelSettings />}
+
+            {/* Calendar View */}
+            {view === 'calendar' && <Calendar />}
+
+            {/* Kanban View */}
+            {view === 'kanban' && <TicketsKanban />}
 
             {/* Tickets View */}
             {
