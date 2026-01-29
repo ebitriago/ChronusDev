@@ -102,7 +102,7 @@ services:
       - CRM_BACKEND_INTERNAL_URL=http://chronuscrm-backend:3002
       # Public URL for browser is relative
       - NEXT_PUBLIC_CRM_API_URL=${CHRONUSCRM_API_URL:-/api}
-      - NEXT_PUBLIC_API_URL=${CHRONUSDEV_API_URL:-http://localhost:3001}
+      - NEXT_PUBLIC_API_URL=${CHRONUSDEV_API_URL:-/api}
     depends_on:
       chronuscrm-backend:
         condition: service_healthy

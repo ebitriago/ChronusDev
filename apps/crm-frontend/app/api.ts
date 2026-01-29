@@ -1,6 +1,9 @@
-// Use relative '/api' path to leverage Next.js Rewrites (Proxy) to backend
-// This allows the frontend to work regardless of where the backend is hosted (local or container)
-export const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || '/api';
+// Use relative '/api' path on client-side to always use the Next.js Proxy.
+// On server-side, use the internal Docker URL.
+export const API_URL = typeof window !== 'undefined'
+  ? '/api'
+  : (process.env.CRM_BACKEND_INTERNAL_URL || process.env.NEXT_PUBLIC_CRM_API_URL || 'http://chronuscrm-backend:3002');
+
 console.log('🔗 API configured at:', API_URL);
 
 // ========== TIPOS ==========
