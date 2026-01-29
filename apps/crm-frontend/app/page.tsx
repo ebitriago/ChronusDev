@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '../components/Toast';
 
 // API
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+import { API_URL } from './api';
 
 type Customer = {
   id: string;
@@ -257,9 +257,13 @@ export default function CRMPage() {
     if (!newTicket.title || !newTicket.customerId) return;
 
     try {
+      const token = localStorage.getItem('crm_token');
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${API_URL}/tickets`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(newTicket),
       });
       if (res.ok) {
@@ -275,9 +279,13 @@ export default function CRMPage() {
   async function handleCreateCustomer() {
     if (!newCustomer.name) return;
     try {
+      const token = localStorage.getItem('crm_token');
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${API_URL}/customers`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(newCustomer),
       });
       if (res.ok) {
@@ -293,7 +301,14 @@ export default function CRMPage() {
   async function handleSyncCustomer(e: React.MouseEvent, customerId: string) {
     e.stopPropagation();
     try {
-      const res = await fetch(`${API_URL}/customers/${customerId}/sync`, { method: 'POST' });
+      const token = localStorage.getItem('crm_token');
+      const headers: any = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${API_URL}/customers/${customerId}/sync`, {
+        method: 'POST',
+        headers
+      });
       if (res.ok) {
         // We could use a toast here, but for now alert is fine or we can assume ToastProvider context if we use useToast
         // Ideally utilize useToast if available but context is provided below. 
