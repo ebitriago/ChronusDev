@@ -186,7 +186,7 @@ export default function Inbox() {
     }, [subscribedAgents]);
 
     // Helper for auth headers
-    function getAuthHeaders() {
+    function getAuthHeaders(): HeadersInit {
         const token = localStorage.getItem('crm_token');
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     }
@@ -228,7 +228,7 @@ export default function Inbox() {
                 ? `${API_URL}/assistai/poll?since=${encodeURIComponent(lastPollRef.current)}`
                 : `${API_URL}/assistai/poll`;
 
-            const res = await fetch(url, { headers });
+            const res = await fetch(url, { headers: headers as HeadersInit });
             const data = await res.json();
 
             if (data.success) {
