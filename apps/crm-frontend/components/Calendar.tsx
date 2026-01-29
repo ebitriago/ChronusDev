@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://localhost:3002';
+import { API_URL } from '../app/api';
 
 type CalendarEvent = {
     id: string;

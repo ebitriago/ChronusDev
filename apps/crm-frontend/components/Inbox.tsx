@@ -5,7 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import { useToast } from './Toast';
 import ClientProfile from './ClientProfile';
 
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+import { API_URL } from '../app/api';
 
 type ChatMessage = {
     id: string;
@@ -264,7 +264,10 @@ export default function Inbox() {
 
     // Socket connection
     useEffect(() => {
-        const newSocket = io(API_URL);
+        // If API_URL is relative (proxy), pass undefined to use current origin. 
+        // If absolute, use it.
+        const socketUrl = API_URL.startsWith('http') ? API_URL : undefined;
+        const newSocket = io(socketUrl, { path: '/socket.io' });
         setSocket(newSocket);
 
         newSocket.on('connect', () => console.log('🔌 Connected to chat server'));

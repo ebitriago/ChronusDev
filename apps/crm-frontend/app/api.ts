@@ -1,4 +1,6 @@
-export const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+// Use relative '/api' path to leverage Next.js Rewrites (Proxy) to backend
+// This allows the frontend to work regardless of where the backend is hosted (local or container)
+export const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || '/api';
 console.log('🔗 API configured at:', API_URL);
 
 // ========== TIPOS ==========

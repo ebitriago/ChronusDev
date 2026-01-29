@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+import { API_URL } from '../app/api';
 
 type Notification = {
     id: string;
@@ -66,7 +66,8 @@ export default function NotificationBell() {
 
     // Socket connection for real-time notifications
     useEffect(() => {
-        const newSocket = io(API_URL);
+        const socketUrl = API_URL.startsWith('http') ? API_URL : undefined;
+        const newSocket = io(socketUrl, { path: '/socket.io' });
         setSocket(newSocket);
 
         newSocket.on('notification', (notif: Notification) => {

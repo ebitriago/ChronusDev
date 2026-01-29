@@ -89,7 +89,8 @@ services:
       context: .
       dockerfile: apps/crm-frontend/Dockerfile
       args:
-        - NEXT_PUBLIC_CRM_API_URL=${CHRONUSCRM_API_URL:-http://localhost:3002}
+        # Use relative /api to go through Next.js proxy
+        - NEXT_PUBLIC_CRM_API_URL=${CHRONUSCRM_API_URL:-/api}
         - NEXT_PUBLIC_API_URL=${CHRONUSDEV_API_URL:-http://localhost:3001}
     container_name: chronuscrm-frontend
     ports:
@@ -97,7 +98,10 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3003
-      - NEXT_PUBLIC_CRM_API_URL=${CHRONUSCRM_API_URL:-http://localhost:3002}
+      # Internal URL for checking backend status inside container if needed
+      - CRM_BACKEND_INTERNAL_URL=http://chronuscrm-backend:3002
+      # Public URL for browser is relative
+      - NEXT_PUBLIC_CRM_API_URL=${CHRONUSCRM_API_URL:-/api}
       - NEXT_PUBLIC_API_URL=${CHRONUSDEV_API_URL:-http://localhost:3001}
     depends_on:
       chronuscrm-backend:
