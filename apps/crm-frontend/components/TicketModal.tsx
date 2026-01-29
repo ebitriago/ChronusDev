@@ -13,11 +13,15 @@ type Customer = {
 type Ticket = {
     id?: string;
     title: string;
-    description: string;
+    description?: string;
     status: string;
     priority: string;
     customerId: string;
-    customer?: Customer;
+    customer?: {
+        id?: string;
+        name: string;
+        email: string;
+    };
 };
 
 type Props = {
