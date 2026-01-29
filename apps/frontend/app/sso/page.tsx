@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function SSOPage() {
+function SSOContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -32,11 +32,24 @@ export default function SSOPage() {
     }, [router, searchParams]);
 
     return (
+        <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-emerald-500 rounded-full animate-spin border-t-transparent" />
+            <p>Autenticando con ChronusDev...</p>
+        </div>
+    );
+}
+
+export default function SSOPage() {
+    return (
         <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
-            <div className="flex flex-col items-center gap-4">
-                <div className="w-12 h-12 border-4 border-emerald-500 rounded-full animate-spin border-t-transparent" />
-                <p>Autenticando con ChronusDev...</p>
-            </div>
+            <Suspense fallback={
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-emerald-500 rounded-full animate-spin border-t-transparent" />
+                    <p>Cargando...</p>
+                </div>
+            }>
+                <SSOContent />
+            </Suspense>
         </div>
     );
 }
