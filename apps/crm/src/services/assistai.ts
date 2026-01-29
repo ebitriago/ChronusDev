@@ -198,8 +198,7 @@ export const AssistAIService = {
                         updatedAt: new Date(conv.updatedAt || conv.createdAt || new Date()),
                         status: 'ACTIVE',
                         agentName: agentName,
-                        agentCode: agentCode,
-                        lastMessage: conv.lastMessagePreview || (messages.length > 0 ? messages[messages.length - 1].content : '')
+                        agentCode: agentCode
                     },
                     create: {
                         sessionId,
@@ -211,8 +210,7 @@ export const AssistAIService = {
                         organizationId,
                         status: 'ACTIVE',
                         createdAt: new Date(conv.createdAt || new Date()),
-                        updatedAt: new Date(conv.updatedAt || conv.createdAt || new Date()),
-                        lastMessage: conv.lastMessagePreview || (messages.length > 0 ? messages[messages.length - 1].content : '')
+                        updatedAt: new Date(conv.updatedAt || conv.createdAt || new Date())
                     }
                 });
 
