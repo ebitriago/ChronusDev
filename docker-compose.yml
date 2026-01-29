@@ -52,8 +52,8 @@ services:
   # ==========================================================
   chronuscrm-backend:
     build:
-      context: .
-      dockerfile: apps/crm/Dockerfile
+      context: apps/crm
+      dockerfile: Dockerfile
     container_name: chronuscrm-backend
     ports:
       - "3002:3002"
