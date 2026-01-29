@@ -155,10 +155,37 @@ export default function TicketsKanban() {
                                         <p className="text-xs text-gray-500 mb-3 line-clamp-2">{ticket.description || 'Sin descripción'}</p>
 
                                         <div className="flex items-center gap-2 mb-3">
-                                            {/* Priority Badge */}
                                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${PRIORITY_COLORS[ticket.priority] || 'bg-gray-100 text-gray-600'}`}>
                                                 {PRIORITY_LABELS[ticket.priority] || ticket.priority}
                                             </span>
+                                            {/* Send to Dev Button */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (confirm('¿Enviar a ChronusDev?')) {
+                                                        const token = localStorage.getItem('crm_token');
+                                                        fetch(`${API_URL}/tickets/${ticket.id}/send-to-chronusdev`, {
+                                                            method: 'POST',
+                                                            headers: {
+                                                                'Content-Type': 'application/json',
+                                                                'Authorization': `Bearer ${token}`
+                                                            },
+                                                            body: JSON.stringify({})
+                                                        }).then(res => {
+                                                            if (res.ok) {
+                                                                alert('Enviado a desarrollo');
+                                                                fetchTickets();
+                                                            } else {
+                                                                alert('Error enviando a desarrollo');
+                                                            }
+                                                        });
+                                                    }
+                                                }}
+                                                className="ml-auto text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded border border-indigo-100 transition-colors"
+                                                title="Crear tarea en ChronusDev"
+                                            >
+                                                🚀 Dev
+                                            </button>
                                         </div>
 
                                         <div className="border-t border-gray-50 pt-2 mt-2 flex justify-between items-center">

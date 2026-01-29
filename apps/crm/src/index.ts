@@ -363,6 +363,93 @@ app.get("/clients/:id", authMiddleware, async (req, res) => {
     }
 });
 
+/**
+ * @openapi
+ * /clients/{id}/360:
+ *   get:
+ *     summary: Get comprehensive 360-degree view of a client
+ *     tags: [Clients]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Client detailed view
+ */
+app.get("/clients/:id/360", authMiddleware, async (req: any, res) => {
+    try {
+        const organizationId = req.user?.organizationId;
+        const customer = await prisma.customer.findFirst({
+            where: { id: req.params.id, organizationId } as any,
+            include: {
+                contacts: true,
+                conversations: {
+                    orderBy: { updatedAt: 'desc' },
+                    take: 5
+                },
+                tags: { include: { tag: true } },
+                invoices: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 10
+                },
+                tickets: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 10
+                },
+            }
+        });
+
+        if (!customer) return res.status(404).json({ error: "Cliente no encontrado" });
+
+        const clientData = {
+            client: {
+                id: customer.id,
+                name: customer.name,
+                email: customer.email,
+                phone: customer.phone,
+                company: customer.company,
+                status: customer.status,
+                plan: customer.plan,
+                monthlyRevenue: customer.monthlyRevenue,
+                chronusDevClientId: customer.chronusDevClientId,
+                chronusDevDefaultProjectId: customer.chronusDevDefaultProjectId,
+                notes: customer.notes,
+                tags: (customer.tags || []).map(t => t.tag.name)
+            },
+            contacts: customer.contacts,
+            conversations: customer.conversations.map(c => ({
+                id: c.sessionId,
+                platform: c.platform,
+                contact: c.customerContact,
+                lastMessage: "...",
+                updatedAt: c.updatedAt
+            })),
+            invoices: customer.invoices.map(i => ({
+                id: i.id,
+                date: i.createdAt,
+                amount: i.amount,
+                status: i.status,
+                description: `Invoice #${i.number}`,
+                type: 'INCOME'
+            })),
+            tickets: customer.tickets.map(t => ({
+                id: t.id,
+                title: t.title,
+                status: t.status,
+                createdAt: t.createdAt,
+                taskId: t.taskId
+            }))
+        };
+
+        res.json(clientData);
+    } catch (e: any) {
+        console.error("GET /clients/:id/360 error:", e);
+        res.status(500).json({ error: "Error fetching 360 view" });
+    }
+});
+
 app.put("/clients/:id", authMiddleware, async (req: any, res) => {
     try {
         const { id } = req.params;
