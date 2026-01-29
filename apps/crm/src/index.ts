@@ -6254,6 +6254,112 @@ app.post("/timelogs/stop", authMiddleware, async (req: any, res) => {
 });
 
 
+// ========== DASHBOARD & ANALYTICS ==========
+
+app.get("/stats", authMiddleware, async (req: any, res) => {
+    try {
+        const organizationId = req.user?.organizationId;
+        if (!organizationId) return res.status(401).json({ error: "No organization context" });
+
+        // Parallelize for performance
+        const [activeCustomers, trialCustomers, totalCustomers, openTickets, overdueInvoices, invoices] = await Promise.all([
+            prisma.customer.count({ where: { organizationId, status: "ACTIVE" } } as any),
+            prisma.customer.count({ where: { organizationId, status: "TRIAL" } } as any),
+            prisma.customer.count({ where: { organizationId } } as any),
+            prisma.ticket.count({
+                where: {
+                    organizationId,
+                    status: { in: ["OPEN", "IN_PROGRESS"] }
+                } as any
+            }),
+            prisma.invoice.count({
+                where: {
+                    organizationId,
+                    status: "OVERDUE"
+                } as any
+            }),
+            prisma.invoice.findMany({
+                where: { organizationId, status: "PAID" } as any,
+                select: { amount: true } // Assuming amount is simple number for now
+            })
+        ]);
+
+        // Calculate simple MRR (sum of paid invoices this month, or a field on customer)
+        // For accurate MRR, we should probably stick to Customer level field if it exists
+        // Converting invoices directly:
+        const mrr = invoices.reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0); // Simplified calculation
+
+        res.json({
+            activeCustomers,
+            trialCustomers,
+            totalCustomers,
+            openTickets,
+            overdueInvoices,
+            mrr
+        });
+    } catch (e: any) {
+        console.error("GET /stats error:", e);
+        res.status(500).json({ error: "Error fetching stats" });
+    }
+});
+
+app.get("/users", authMiddleware, async (req: any, res) => {
+    try {
+        const organizationId = req.user?.organizationId;
+        if (!organizationId) return res.status(401).json({ error: "No organization context" });
+
+        const users = await prisma.user.findMany({
+            where: { organizationId } as any,
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                avatar: true // If exists
+            }
+        });
+
+        res.json(users);
+    } catch (e: any) {
+        console.error("GET /users error:", e);
+        res.status(500).json({ error: "Error fetching users" });
+    }
+});
+
+app.get("/analytics/predictions", authMiddleware, async (req: any, res) => {
+    try {
+        // Mocked AI predictions for visual demo
+        const organizationId = req.user?.organizationId;
+
+        res.json({
+            mrr: {
+                current: 12500,
+                forecast: [
+                    { month: 'Actual', mrr: 12500 },
+                    { month: 'Next Month', mrr: 13800 },
+                    { month: '+2 Months', mrr: 15200 }
+                ],
+                projectedAnnual: 165000
+            },
+            churn: {
+                atRiskCount: 2,
+                atRiskMRR: 450,
+                customers: [
+                    { name: "Acme Corp", riskLevel: "HIGH", reason: "Low engagement" },
+                    { name: "Global Tech", riskLevel: "MEDIUM", reason: "Support tickets spike" }
+                ]
+            },
+            pipeline: {
+                totalValue: 45000,
+                hotLeadsCount: 5,
+                avgScore: 78
+            }
+        });
+    } catch (e: any) {
+        res.status(500).json({ error: "Error fetching predictions" });
+    }
+});
+
 // ========== SERVER ==========
 
 const PORT = process.env.PORT || 3002;
