@@ -467,15 +467,21 @@ export async function handleAssistAICallback(code: string) {
             });
         }
 
+        // Fetch memberships to get default org context
+        const userWithOrgs = await prisma.user.findUnique({
+            where: { id: user.id },
+            include: { memberships: true }
+        });
+
+        const defaultOrgId = userWithOrgs?.memberships[0]?.organizationId;
+
         // Generate our JWT
-        // Note: AssistAI login currently doesn't fetch memberships, so we default to undefined or need to fetch them
-        // For now, let's keep it simple as this flow might need enhancement later
         const token = generateToken({
             id: user.id,
             email: user.email,
             name: user.name,
             role: user.role,
-            // organizationId: user.organizationId // Error: property doesn't exist on User without include
+            organizationId: defaultOrgId
         });
 
         return {

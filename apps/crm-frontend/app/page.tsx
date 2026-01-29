@@ -273,11 +273,15 @@ export default function CRMPage() {
       }
     } catch (err) {
       console.error(err);
+      alert('Error de conexión al crear cliente');
     }
   }
 
   async function handleCreateCustomer() {
-    if (!newCustomer.name) return;
+    if (!newCustomer.name || !newCustomer.email) {
+      alert("Por favor ingrese nombre e email");
+      return;
+    }
     try {
       const token = localStorage.getItem('crm_token');
       const headers: any = { 'Content-Type': 'application/json' };
@@ -288,13 +292,19 @@ export default function CRMPage() {
         headers,
         body: JSON.stringify(newCustomer),
       });
+
       if (res.ok) {
         setShowCustomerModal(false);
         setNewCustomer({ name: '', email: '', phone: '', company: '' });
         loadData();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Error creating customer:', errorData);
+        alert(`Error al crear cliente: ${errorData.message || res.statusText}`);
       }
     } catch (err) {
       console.error(err);
+      alert('Error de red al crear cliente. Verifique su conexión y que el backend esté activo.');
     }
   }
 
@@ -1065,7 +1075,7 @@ export default function CRMPage() {
                 </button>
                 <button
                   onClick={handleCreateCustomer}
-                  disabled={!newCustomer.name}
+                  disabled={!newCustomer.name || !newCustomer.email}
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-xl font-medium transition-all"
                 >
                   Crear Cliente
