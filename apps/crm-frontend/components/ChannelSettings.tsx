@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useToast } from './Toast';
-
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+import { API_URL } from '../app/api';
 
 type ChannelConfig = {
     id: string;
@@ -257,8 +256,8 @@ export default function ChannelSettings() {
                                     <button
                                         onClick={() => setFormData({ ...formData, platform: 'whatsapp' })}
                                         className={`flex-1 p-3 rounded-xl border-2 transition-colors ${formData.platform === 'whatsapp'
-                                                ? 'border-green-500 bg-green-50'
-                                                : 'border-gray-200 hover:border-gray-300'
+                                            ? 'border-green-500 bg-green-50'
+                                            : 'border-gray-200 hover:border-gray-300'
                                             }`}
                                     >
                                         <span className="text-2xl">📱</span>
@@ -267,8 +266,8 @@ export default function ChannelSettings() {
                                     <button
                                         onClick={() => setFormData({ ...formData, platform: 'instagram' })}
                                         className={`flex-1 p-3 rounded-xl border-2 transition-colors ${formData.platform === 'instagram'
-                                                ? 'border-pink-500 bg-pink-50'
-                                                : 'border-gray-200 hover:border-gray-300'
+                                            ? 'border-pink-500 bg-pink-50'
+                                            : 'border-gray-200 hover:border-gray-300'
                                             }`}
                                     >
                                         <span className="text-2xl">📸</span>
@@ -300,8 +299,8 @@ export default function ChannelSettings() {
                                             key={mode}
                                             onClick={() => setFormData({ ...formData, mode })}
                                             className={`w-full p-3 rounded-xl border-2 text-left transition-colors ${formData.mode === mode
-                                                    ? 'border-emerald-500 bg-emerald-50'
-                                                    : 'border-gray-200 hover:border-gray-300'
+                                                ? 'border-emerald-500 bg-emerald-50'
+                                                : 'border-gray-200 hover:border-gray-300'
                                                 }`}
                                         >
                                             <div className="flex items-center gap-3">

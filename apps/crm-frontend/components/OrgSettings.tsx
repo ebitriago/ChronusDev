@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useToast } from './Toast';
-
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+import { API_URL } from '../app/api';
 
 export default function OrgSettings() {
     const [config, setConfig] = useState({

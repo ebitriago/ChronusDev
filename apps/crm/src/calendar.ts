@@ -6,17 +6,17 @@ import { prisma } from './db.js';
 // Setup: https://console.cloud.google.com/apis/credentials
 // Enable: Google Calendar API
 
-// Helper to get OAuth2 client with dynamic credentials
-async function getOAuth2Client() {
+// Helper to get OAuth2 client configuration (Client ID & Secret)
+// This usually comes from the Environment or a System-level Integration
+async function getOAuth2Config() {
     // Try to find System/Admin Google config for Client ID/Secret
-    // This allows replacing the Env vars with DB config
     const integration = await prisma.integration.findFirst({
         where: {
             provider: 'GOOGLE',
             isEnabled: true,
             OR: [
                 { userId: null },
-                { user: { role: 'SUPER_ADMIN' } }
+                { user: { role: 'SUPER_ADMIN' } } // Assuming Admin handles the OAuth App credentials
             ]
         }
     });
@@ -30,24 +30,80 @@ async function getOAuth2Client() {
         if (creds.clientId && creds.clientSecret) {
             clientId = creds.clientId;
             clientSecret = creds.clientSecret;
-            // console.log('[Calendar] Using database Client ID/Secret');
         }
     }
 
-    if (!clientId || !clientSecret) {
-        throw new Error("Missing Google Client ID/Secret");
+    if (integration && integration.metadata && typeof integration.metadata === 'object') {
+        const meta = integration.metadata as any;
+        if (meta.redirectUri) redirectUri = meta.redirectUri;
     }
 
-    return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    if (!clientId || !clientSecret) {
+        throw new Error("Missing Google Client ID/Secret configuration");
+    }
+
+    return { clientId, clientSecret, redirectUri };
 }
 
-// Calendar API instance (initialized after auth)
-// Note: Currently simple singleton, which is not ideal for multi-user.
-// Ideally should be cached per user.
-let calendarApi: calendar_v3.Calendar | null = null;
+// Get the OAuth2 Client instance
+// If tokens are provided, they are set.
+export async function getOAuth2Client(tokens?: any) {
+    const { clientId, clientSecret, redirectUri } = await getOAuth2Config();
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+
+    if (tokens) {
+        oauth2Client.setCredentials(tokens);
+    }
+
+    return oauth2Client;
+}
+
+// Get an authenticated Calendar API client for a specific user
+async function getCalendarClient(userId: string): Promise<calendar_v3.Calendar> {
+    const integration = await prisma.integration.findUnique({
+        where: {
+            userId_provider: {
+                userId,
+                provider: 'GOOGLE'
+            }
+        }
+    });
+
+    if (!integration || !integration.metadata) {
+        throw new Error("Google Calendar no conectado");
+    }
+
+    const metadata = integration.metadata as any;
+    if (!metadata.tokens) {
+        throw new Error("Token de Google no encontrado. Por favor reconecte.");
+    }
+
+    const oauth2Client = await getOAuth2Client(metadata.tokens);
+
+    oauth2Client.on('tokens', async (tokens) => {
+        if (tokens.refresh_token) {
+            console.log('[Calendar] Refreshing tokens for user', userId);
+        }
+        await prisma.integration.update({
+            where: { id: integration.id },
+            data: {
+                metadata: {
+                    ...metadata,
+                    tokens: {
+                        ...metadata.tokens,
+                        ...tokens
+                    },
+                    updatedAt: new Date()
+                }
+            }
+        });
+    });
+
+    return google.calendar({ version: 'v3', auth: oauth2Client });
+}
 
 // Get OAuth URL for user authorization
-export async function getGoogleAuthUrl(state?: string): Promise<string> {
+export async function getGoogleAuthUrl(userId?: string): Promise<string> {
     const oauth2Client = await getOAuth2Client();
     const scopes = [
         'https://www.googleapis.com/auth/calendar',
@@ -55,10 +111,10 @@ export async function getGoogleAuthUrl(state?: string): Promise<string> {
     ];
 
     return oauth2Client.generateAuthUrl({
-        access_type: 'offline',
+        access_type: 'offline', // Critical for receiving refresh_token
         scope: scopes,
-        state,
-        prompt: 'consent',
+        state: userId, // Pass userId as state to identify who is connecting
+        prompt: 'consent', // Force consent to ensure we get refresh_token
     });
 }
 
@@ -67,10 +123,7 @@ export async function handleGoogleCallback(code: string, userId: string) {
     try {
         const oauth2Client = await getOAuth2Client();
         const { tokens } = await oauth2Client.getToken(code);
-        oauth2Client.setCredentials(tokens);
 
-        // Store tokens in Integration table to match our unified "Integrations" logic
-        // This makes them visible/editable in the UI if we expose token fields (or just for backend usage)
         if (userId) {
             await prisma.integration.upsert({
                 where: {
@@ -80,45 +133,24 @@ export async function handleGoogleCallback(code: string, userId: string) {
                     }
                 },
                 update: {
-                    // Update credentials with new tokens.
-                    // IMPORTANT: We need to preserve existing credentials (like clientId if stored per user)
-                    // But here we are storing *User* tokens.
-                    // The UI for "Google" asks for ClientID/Secret.
-                    // If we overwrite that with Tokens, the UI might break if it expects ClientID.
-                    // The UI expects: clientId, clientSecret.
-                    // Tokens are usually hidden or in a different field.
-                    // Let's store tokens in 'metadata' or 'credentials.tokens'.
-                    // For now, let's store in metadata to avoid polluting the Config Form which is for App Credentials.
                     metadata: {
                         tokens: tokens as any,
-                        updatedAt: new Date()
+                        updatedAt: new Date(),
+                        connected: true
                     }
                 },
                 create: {
                     userId,
                     provider: 'GOOGLE',
-                    credentials: {}, // User doesn't define ClientID, the Admin does.
+                    credentials: {},
                     metadata: {
                         tokens: tokens as any,
-                        updatedAt: new Date()
+                        updatedAt: new Date(),
+                        connected: true
                     }
                 }
             });
         }
-
-        // Also keep legacy user update if needed, but 'Integration' is the new standard.
-        await prisma.user.update({
-            where: { id: userId },
-            data: {
-                // Legacy support or logging
-            },
-        });
-
-        // Initialize API for THIS request?
-        // Note: Global calendarApi assignment is risky in async multi-user.
-        // We really should return the api instance or store it in a request context.
-        // For backwards compat with existing code, we update the global, but this is a Known Issue.
-        calendarApi = google.calendar({ version: 'v3', auth: oauth2Client });
 
         return { success: true, tokens };
     } catch (err: any) {
@@ -127,18 +159,8 @@ export async function handleGoogleCallback(code: string, userId: string) {
     }
 }
 
-// Initialize calendar with existing tokens
-export async function initCalendar(accessToken: string, refreshToken?: string) {
-    const oauth2Client = await getOAuth2Client();
-    oauth2Client.setCredentials({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-    });
-    calendarApi = google.calendar({ version: 'v3', auth: oauth2Client });
-}
-
 // Type definitions
-interface CalendarEvent {
+export interface CalendarEvent {
     summary: string;
     description?: string;
     start: Date;
@@ -146,27 +168,23 @@ interface CalendarEvent {
     attendees?: string[];
     location?: string;
     reminders?: { method: 'email' | 'popup'; minutes: number }[];
-    addMeet?: boolean; // Add Google Meet video conference
+    addMeet?: boolean;
 }
 
-// Create a calendar event (with optional Google Meet)
-export async function createEvent(event: CalendarEvent): Promise<{ success: boolean; eventId?: string; htmlLink?: string; meetLink?: string; error?: string }> {
-    if (!calendarApi) {
-        return { success: false, error: 'Google Calendar no conectado' };
-    }
-
+// Create a calendar event
+export async function createEvent(userId: string, event: CalendarEvent): Promise<{ success: boolean; eventId?: string; htmlLink?: string; meetLink?: string; error?: string }> {
     try {
+        const calendar = await getCalendarClient(userId);
+
         const requestBody: any = {
             summary: event.summary,
             description: event.description,
             location: event.location,
             start: {
                 dateTime: event.start.toISOString(),
-                timeZone: 'America/Caracas',
             },
             end: {
                 dateTime: event.end.toISOString(),
-                timeZone: 'America/Caracas',
             },
             attendees: event.attendees?.map(email => ({ email })),
             reminders: {
@@ -178,7 +196,6 @@ export async function createEvent(event: CalendarEvent): Promise<{ success: bool
             },
         };
 
-        // Add Google Meet video conference if requested
         if (event.addMeet) {
             requestBody.conferenceData = {
                 createRequest: {
@@ -188,18 +205,16 @@ export async function createEvent(event: CalendarEvent): Promise<{ success: bool
             };
         }
 
-        const response = await calendarApi.events.insert({
+        const response = await calendar.events.insert({
             calendarId: 'primary',
             requestBody,
             conferenceDataVersion: event.addMeet ? 1 : 0,
         });
 
-        // Extract Google Meet link if created
         const meetLink = response.data.conferenceData?.entryPoints?.find(
             (ep: any) => ep.entryPointType === 'video'
         )?.uri;
 
-        console.log(`[Calendar] Event created: ${response.data.id}${meetLink ? ` (Meet: ${meetLink})` : ''}`);
         return {
             success: true,
             eventId: response.data.id || undefined,
@@ -207,25 +222,36 @@ export async function createEvent(event: CalendarEvent): Promise<{ success: bool
             meetLink: meetLink || undefined,
         };
     } catch (err: any) {
-        console.error('[Calendar] Create event error:', err.message);
+        console.error(`[Calendar] Create event error for user ${userId}:`, err.message);
         return { success: false, error: err.message };
     }
 }
 
-// List upcoming events
-export async function listEvents(maxResults = 10): Promise<{ success: boolean; events?: any[]; error?: string }> {
-    if (!calendarApi) {
-        return { success: false, error: 'Google Calendar no conectado' };
-    }
-
+// List upcoming events with support for Range and MaxResults
+export async function listEvents(
+    userId: string,
+    options: { maxResults?: number; timeMin?: Date; timeMax?: Date } = {}
+): Promise<{ success: boolean; events?: any[]; error?: string }> {
     try {
-        const response = await calendarApi.events.list({
+        const calendar = await getCalendarClient(userId);
+
+        const requestParams: any = {
             calendarId: 'primary',
-            timeMin: new Date().toISOString(),
-            maxResults,
             singleEvents: true,
             orderBy: 'startTime',
-        });
+        };
+
+        if (options.maxResults) requestParams.maxResults = options.maxResults;
+        if (options.timeMin) requestParams.timeMin = options.timeMin.toISOString();
+        if (options.timeMax) requestParams.timeMax = options.timeMax.toISOString();
+
+        // Default behavior: upcoming 10 events if no filtering provided
+        if (!options.timeMin && !options.timeMax && !options.maxResults) {
+            requestParams.timeMin = new Date().toISOString();
+            requestParams.maxResults = 10;
+        }
+
+        const response = await calendar.events.list(requestParams);
 
         const events = response.data.items?.map(event => ({
             id: event.id,
@@ -235,32 +261,35 @@ export async function listEvents(maxResults = 10): Promise<{ success: boolean; e
             end: event.end?.dateTime || event.end?.date,
             location: event.location,
             htmlLink: event.htmlLink,
+            meetLink: event.conferenceData?.entryPoints?.find((ep: any) => ep.entryPointType === 'video')?.uri,
             attendees: event.attendees?.map(a => a.email),
-        }));
+        })) || [];
 
         return { success: true, events };
     } catch (err: any) {
-        console.error('[Calendar] List events error:', err.message);
+        // Graceful handling for not connected
+        if (err.message.includes('No conectado') || err.message.includes('Token')) {
+            return { success: false, error: 'Google Calendar no conectado' };
+        }
+        console.error(`[Calendar] List events error for user ${userId}:`, err.message);
         return { success: false, error: err.message };
     }
 }
 
 // Update an event
-export async function updateEvent(eventId: string, updates: Partial<CalendarEvent>): Promise<{ success: boolean; error?: string }> {
-    if (!calendarApi) {
-        return { success: false, error: 'Google Calendar no conectado' };
-    }
-
+export async function updateEvent(userId: string, eventId: string, updates: Partial<CalendarEvent>): Promise<{ success: boolean; error?: string }> {
     try {
+        const calendar = await getCalendarClient(userId);
+
         const requestBody: any = {};
         if (updates.summary) requestBody.summary = updates.summary;
         if (updates.description) requestBody.description = updates.description;
         if (updates.location) requestBody.location = updates.location;
-        if (updates.start) requestBody.start = { dateTime: updates.start.toISOString(), timeZone: 'America/Caracas' };
-        if (updates.end) requestBody.end = { dateTime: updates.end.toISOString(), timeZone: 'America/Caracas' };
+        if (updates.start) requestBody.start = { dateTime: updates.start.toISOString() };
+        if (updates.end) requestBody.end = { dateTime: updates.end.toISOString() };
         if (updates.attendees) requestBody.attendees = updates.attendees.map(email => ({ email }));
 
-        await calendarApi.events.patch({
+        await calendar.events.patch({
             calendarId: 'primary',
             eventId,
             requestBody,
@@ -268,41 +297,39 @@ export async function updateEvent(eventId: string, updates: Partial<CalendarEven
 
         return { success: true };
     } catch (err: any) {
-        console.error('[Calendar] Update event error:', err.message);
+        console.error(`[Calendar] Update event error for user ${userId}:`, err.message);
         return { success: false, error: err.message };
     }
 }
 
 // Delete an event
-export async function deleteEvent(eventId: string): Promise<{ success: boolean; error?: string }> {
-    if (!calendarApi) {
-        return { success: false, error: 'Google Calendar no conectado' };
-    }
-
+export async function deleteEvent(userId: string, eventId: string): Promise<{ success: boolean; error?: string }> {
     try {
-        await calendarApi.events.delete({
+        const calendar = await getCalendarClient(userId);
+        await calendar.events.delete({
             calendarId: 'primary',
             eventId,
         });
         return { success: true };
     } catch (err: any) {
-        console.error('[Calendar] Delete event error:', err.message);
+        console.error(`[Calendar] Delete event error for user ${userId}:`, err.message);
         return { success: false, error: err.message };
     }
 }
 
-// Quick create: Meeting with client (with Google Meet)
+// Quick create: Meeting with client
 export async function createClientMeeting(
+    userId: string,
     clientName: string,
     clientEmail: string,
     dateTime: Date,
     durationMinutes = 30,
     notes?: string,
-    withMeet = true // Default to including Google Meet
+    withMeet = true
 ) {
     const endTime = new Date(dateTime.getTime() + durationMinutes * 60000);
 
-    return createEvent({
+    return createEvent(userId, {
         summary: `Reunión con ${clientName}`,
         description: notes || `Reunión agendada desde ChronusCRM con ${clientName}`,
         start: dateTime,
@@ -318,15 +345,16 @@ export async function createClientMeeting(
 
 // Quick create: Follow-up reminder
 export async function createFollowUpReminder(
+    userId: string,
     entityType: 'lead' | 'customer' | 'ticket',
     entityName: string,
     dateTime: Date,
     notes?: string
 ) {
     const emojis = { lead: '🎯', customer: '👥', ticket: '🎫' };
-    const endTime = new Date(dateTime.getTime() + 15 * 60000); // 15 min block
+    const endTime = new Date(dateTime.getTime() + 15 * 60000);
 
-    return createEvent({
+    return createEvent(userId, {
         summary: `${emojis[entityType]} Seguimiento: ${entityName}`,
         description: notes || `Recordatorio de seguimiento para ${entityType}: ${entityName}`,
         start: dateTime,
@@ -337,14 +365,15 @@ export async function createFollowUpReminder(
     });
 }
 
+// IMPORTANT: Do not export 'initCalendar' anymore as we do per-request init
 export default {
     getGoogleAuthUrl,
     handleGoogleCallback,
-    initCalendar,
     createEvent,
     listEvents,
     updateEvent,
     deleteEvent,
     createClientMeeting,
     createFollowUpReminder,
+    getOAuth2Client // verification export
 };

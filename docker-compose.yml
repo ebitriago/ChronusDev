@@ -4,26 +4,7 @@ services:
   # ==========================================================
   # CHRONUSDEV BACKEND (API Principal - Project Management)
   # ==========================================================
-  chronusdev-backend:
-    build:
-      context: .
-      dockerfile: apps/backend/Dockerfile
-    container_name: chronusdev-backend
-    ports:
-      - "3001:3001"
-    environment:
-      - NODE_ENV=production
-      - PORT=3001
-      - JWT_SECRET=${JWT_SECRET:-chronusdev-super-secret-change-me-in-production}
-    restart: unless-stopped
-    healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:3001/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    networks:
-      - chronus-network
+
 
   # ==========================================================
   # CHRONUSDEV FRONTEND (Next.js - Project Management UI)
@@ -33,15 +14,16 @@ services:
       context: .
       dockerfile: apps/frontend/Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=${CHRONUSDEV_API_URL:-http://chronusdev-backend:3001}
+        - NEXT_PUBLIC_API_URL=${CHRONUSDEV_FRONTEND_API_URL:-/api}
     container_name: chronusdev-frontend
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=${CHRONUSDEV_API_URL:-http://chronusdev-backend:3001}
+      - NEXT_PUBLIC_API_URL=${CHRONUSDEV_FRONTEND_API_URL:-/api}
+      - CRM_BACKEND_INTERNAL_URL=http://chronuscrm-backend:3002
     depends_on:
-      chronusdev-backend:
+      chronuscrm-backend:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -61,16 +43,14 @@ services:
       - NODE_ENV=production
       - PORT=3002
       # Integration with ChronusDev
-      - CHRONUSDEV_URL=http://chronusdev-backend:3001
+      - CHRONUSDEV_URL=${CHRONUSDEV_URL:-http://chronuscrm-backend:3002}
       - CHRONUSDEV_TOKEN=${CHRONUSDEV_TOKEN:-token-admin-123}
+      - CRM_FRONTEND_URL=${CRM_FRONTEND_URL:-http://localhost:3003}
       # AssistAI Integration
       - ASSISTAI_API_URL=${ASSISTAI_API_URL:-https://public.assistai.lat}
       - ASSISTAI_API_TOKEN=${ASSISTAI_API_TOKEN}
       - ASSISTAI_TENANT_DOMAIN=${ASSISTAI_TENANT_DOMAIN}
       - ASSISTAI_ORG_CODE=${ASSISTAI_ORG_CODE}
-    depends_on:
-      chronusdev-backend:
-        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:3002/health" ]

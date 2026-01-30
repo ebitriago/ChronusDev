@@ -17,6 +17,7 @@ import {
   removeProjectMember,
   getProjectSummary,
   downloadPayrollCSV,
+  API_URL,
   type Project,
   type Client,
   type User,
@@ -81,7 +82,6 @@ export default function DashboardAdmin() {
 
       // Load AI Predictions
       try {
-        const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
         const predRes = await fetch(`${API_URL}/analytics/predictions`);
         if (predRes.ok) {
           const predData = await predRes.json();

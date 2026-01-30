@@ -1,16 +1,1 @@
-t=2026-01-28T23:37:30-0400 lvl=info msg="no configuration paths supplied"
-t=2026-01-28T23:37:30-0400 lvl=info msg="using configuration at default config path" path="/Users/eduardobitriagoe/Library/Application Support/ngrok/ngrok.yml"
-t=2026-01-28T23:37:30-0400 lvl=info msg="open config file" path="/Users/eduardobitriagoe/Library/Application Support/ngrok/ngrok.yml" err=nil
-t=2026-01-28T23:37:30-0400 lvl=info msg="FIPS 140 mode" enabled=false
-t=2026-01-28T23:37:30-0400 lvl=info msg="starting web service" obj=web addr=127.0.0.1:4040 allow_hosts=[]
-t=2026-01-28T23:37:31-0400 lvl=eror msg="failed to reconnect session" obj=tunnels.session err="authentication failed: We do not allow agents to connect to ngrok from your IP address (200.82.188.39).\r\n\r\nERR_NGROK_9040\r\n"
-t=2026-01-28T23:37:31-0400 lvl=eror msg="session closing" obj=tunnels.session err="authentication failed: We do not allow agents to connect to ngrok from your IP address (200.82.188.39).\r\n\r\nERR_NGROK_9040\r\n"
-t=2026-01-28T23:37:31-0400 lvl=info msg="received stop request" obj=app stopReq="{err:{Remote:true Inner:{Inner:0x14000054440}} restart:false}"
-t=2026-01-28T23:37:31-0400 lvl=eror msg="terminating with error" obj=app err="authentication failed: We do not allow agents to connect to ngrok from your IP address (200.82.188.39).\r\n\r\nERR_NGROK_9040\r\n"
-t=2026-01-28T23:37:31-0400 lvl=crit msg="command failed" err="authentication failed: We do not allow agents to connect to ngrok from your IP address (200.82.188.39).\r\n\r\nERR_NGROK_9040\r\n"
-ERROR:  authentication failed: We do not allow agents to connect to ngrok from your IP address (200.82.188.39).
-ERROR:  
-t=2026-01-28T23:37:31-0400 lvl=info msg="no more state changes" obj=tunnels.session
-ERROR:  ERR_NGROK_9040
-ERROR:  https://ngrok.com/docs/errors/err_ngrok_9040
-ERROR:  
+zsh: command not found: ngrok

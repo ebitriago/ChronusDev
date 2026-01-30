@@ -101,6 +101,9 @@ model Organization {
   
   // Project Management (ChronusDev)
   projects      Project[]
+  
+  // Automated Reminders
+  reminderTemplates ReminderTemplate[]
 }
 
 model OrganizationMember {
@@ -164,6 +167,10 @@ model Customer {
   // External IDs
   chronusDevClientId      String?
   chronusDevDefaultProjectId String?
+  
+  // Reminder dates
+  birthDate       DateTime?
+  paymentDueDay   Int?       // Day of month (1-28) for recurring billing reminders
 
   // Multi-tenancy
   organizationId  String
@@ -259,6 +266,42 @@ model ScheduledInteraction {
   @@index([scheduledAt])
   @@index([status])
   @@index([type])
+}
+
+// ==================== AUTOMATED REMINDERS ====================
+
+enum ReminderTriggerType {
+  BIRTHDAY
+  PAYMENT_DUE
+  CUSTOM_DATE
+}
+
+enum ReminderChannel {
+  WHATSAPP
+  EMAIL
+  VOICE
+}
+
+model ReminderTemplate {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  name            String        // "Birthday Greeting", "Payment Reminder"
+  triggerType     ReminderTriggerType
+  daysBefore      Int @default(0)  // Send X days before the date (0 = on the day)
+  channel         ReminderChannel
+  
+  subject         String?       // For EMAIL
+  content         String        // Template with placeholders: {{name}}, {{date}}, {{company}}
+  
+  isEnabled       Boolean @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([organizationId])
+  @@index([triggerType])
 }
 
 model Contact {

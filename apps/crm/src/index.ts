@@ -37,6 +37,7 @@ const ASSISTAI_CONFIG = {
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
+    path: '/api/socket.io',
     cors: {
         origin: "*",
         methods: ["GET", "POST"]
@@ -51,7 +52,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 // Global Rate Limiter (relaxed for development)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Higher limit for development
+    max: process.env.NODE_ENV === 'production' ? 200 : 5000, // Much higher limit for development
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
     message: { error: "Demasiadas solicitudes, por favor intente más tarde." }
@@ -679,9 +680,13 @@ app.post("/integrations", authMiddleware, async (req: any, res) => {
 
 import { initiateOutboundCall, handleElevenLabsTranscript } from './voice.js';
 import { initScheduler } from './scheduler.js';
+import { initReminderScheduler, processReminders } from './reminderScheduler.js';
 
 // Initialize the scheduler for pending calls
 initScheduler();
+
+// Initialize the reminder scheduler for automated messages
+initReminderScheduler();
 
 /**
  * @openapi
@@ -765,6 +770,170 @@ app.post("/webhooks/elevenlabs/transcript", async (req, res) => {
         res.status(500).json({ error: "Internal Error" });
     }
 });
+
+// ========== REMINDER TEMPLATES ==========
+
+/**
+ * @openapi
+ * /reminders/templates:
+ *   get:
+ *     summary: List all reminder templates for the organization
+ *     tags: [Reminders]
+ */
+app.get("/reminders/templates", authMiddleware, async (req: any, res) => {
+    try {
+        const organizationId = req.user?.organizationId;
+        if (!organizationId) return res.status(400).json({ error: "Organization context required" });
+
+        const templates = await prisma.reminderTemplate.findMany({
+            where: { organizationId },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        res.json(templates);
+    } catch (err: any) {
+        console.error("GET /reminders/templates error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * @openapi
+ * /reminders/templates:
+ *   post:
+ *     summary: Create a new reminder template
+ *     tags: [Reminders]
+ */
+app.post("/reminders/templates", authMiddleware, async (req: any, res) => {
+    try {
+        const organizationId = req.user?.organizationId;
+        if (!organizationId) return res.status(400).json({ error: "Organization context required" });
+
+        const { name, triggerType, daysBefore, channel, subject, content, isEnabled } = req.body;
+
+        if (!name || !triggerType || !channel || !content) {
+            return res.status(400).json({ error: "Campos requeridos: name, triggerType, channel, content" });
+        }
+
+        const template = await prisma.reminderTemplate.create({
+            data: {
+                organizationId,
+                name,
+                triggerType,
+                daysBefore: daysBefore || 0,
+                channel,
+                subject,
+                content,
+                isEnabled: isEnabled !== false
+            }
+        });
+
+        res.json(template);
+    } catch (err: any) {
+        console.error("POST /reminders/templates error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * @openapi
+ * /reminders/templates/{id}:
+ *   put:
+ *     summary: Update a reminder template
+ *     tags: [Reminders]
+ */
+app.put("/reminders/templates/:id", authMiddleware, async (req: any, res) => {
+    try {
+        const organizationId = req.user?.organizationId;
+        if (!organizationId) return res.status(400).json({ error: "Organization context required" });
+
+        const { id } = req.params;
+        const { name, triggerType, daysBefore, channel, subject, content, isEnabled } = req.body;
+
+        // Verify ownership
+        const existing = await prisma.reminderTemplate.findFirst({
+            where: { id, organizationId }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ error: "Template no encontrado" });
+        }
+
+        const template = await prisma.reminderTemplate.update({
+            where: { id },
+            data: {
+                name,
+                triggerType,
+                daysBefore,
+                channel,
+                subject,
+                content,
+                isEnabled
+            }
+        });
+
+        res.json(template);
+    } catch (err: any) {
+        console.error("PUT /reminders/templates error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * @openapi
+ * /reminders/templates/{id}:
+ *   delete:
+ *     summary: Delete a reminder template
+ *     tags: [Reminders]
+ */
+app.delete("/reminders/templates/:id", authMiddleware, async (req: any, res) => {
+    try {
+        const organizationId = req.user?.organizationId;
+        if (!organizationId) return res.status(400).json({ error: "Organization context required" });
+
+        const { id } = req.params;
+
+        // Verify ownership
+        const existing = await prisma.reminderTemplate.findFirst({
+            where: { id, organizationId }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ error: "Template no encontrado" });
+        }
+
+        await prisma.reminderTemplate.delete({ where: { id } });
+
+        res.json({ success: true });
+    } catch (err: any) {
+        console.error("DELETE /reminders/templates error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * @openapi
+ * /reminders/process:
+ *   post:
+ *     summary: Manually trigger reminder processing (for testing)
+ *     tags: [Reminders]
+ */
+app.post("/reminders/process", authMiddleware, async (req: any, res) => {
+    try {
+        // Only allow admins/super admins
+        if (!['ADMIN', 'SUPER_ADMIN'].includes(req.user?.role)) {
+            return res.status(403).json({ error: "No autorizado" });
+        }
+
+        await processReminders();
+        res.json({ success: true, message: "Reminders processed" });
+    } catch (err: any) {
+        console.error("POST /reminders/process error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ========== END REMINDER TEMPLATES ==========
 
 // ========== END VOICE ==========
 
@@ -1463,7 +1632,12 @@ app.get("/whatsapp/providers", authMiddleware, async (req, res) => {
             status: ((i.metadata as any)?.status as any) || 'disconnected',
             lastError: (i.metadata as any)?.lastError,
             connectedAt: (i.metadata as any)?.connectedAt ? new Date((i.metadata as any).connectedAt) : undefined,
-            createdAt: i.createdAt
+            createdAt: i.createdAt,
+            // Channel mode config
+            mode: (i.metadata as any)?.mode || 'HYBRID',
+            assistaiAgentCode: (i.metadata as any)?.assistaiAgentCode || '',
+            autoResumeMinutes: (i.metadata as any)?.autoResumeMinutes ?? 30,
+            phoneNumber: (i.metadata as any)?.phoneNumber || (i.credentials as any)?.phoneNumber || ''
         }));
 
         // IF DB is empty, let's seed the "slots" so the UI has something to show (optional, but good for UX)
@@ -1904,6 +2078,36 @@ app.post("/whatsapp/providers/:id/disconnect", authMiddleware, async (req: any, 
 
         io.emit('whatsapp_disconnected', { providerId: id });
         res.json({ success: true, message: 'Desconectado exitosamente' });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Update channel mode/AI config for a provider
+app.put("/whatsapp/providers/:id/channel-config", authMiddleware, async (req: any, res) => {
+    const { id } = req.params;
+    const { mode, assistaiAgentCode, autoResumeMinutes } = req.body;
+
+    try {
+        const existing = await prisma.integration.findUnique({ where: { id } });
+        if (!existing) {
+            return res.status(404).json({ error: "Proveedor no encontrado" });
+        }
+
+        const currentMeta = (existing.metadata as any) || {};
+        const updatedMeta = {
+            ...currentMeta,
+            mode: mode || currentMeta.mode || 'HYBRID',
+            assistaiAgentCode: assistaiAgentCode ?? currentMeta.assistaiAgentCode,
+            autoResumeMinutes: autoResumeMinutes ?? currentMeta.autoResumeMinutes ?? 30
+        };
+
+        await prisma.integration.update({
+            where: { id },
+            data: { metadata: updatedMeta }
+        });
+
+        res.json({ success: true, message: 'Configuración guardada', config: updatedMeta });
     } catch (err: any) {
         res.status(500).json({ error: err.message });
     }
@@ -4862,7 +5066,8 @@ app.get("/auth/assistai/callback", async (req, res) => {
         return res.status(400).json({ error: result.error });
     }
     // Redirect to frontend with token
-    res.redirect(`http://localhost:3003/auth/callback?token=${result.token}`);
+    const frontendUrl = process.env.CRM_FRONTEND_URL || 'http://localhost:3003';
+    res.redirect(`${frontendUrl}/auth/callback?token=${result.token}`);
 });
 
 // ========== ACTIVITY TIMELINE ENDPOINTS ==========
@@ -5027,7 +5232,8 @@ app.get("/auth/google/callback", async (req, res) => {
     const userId = state as string || '';
     const result = await handleGoogleCallback(code, userId);
     if (result.success) {
-        res.redirect('http://localhost:3003/settings?calendar=connected');
+        const frontendUrl = process.env.CRM_FRONTEND_URL || 'http://localhost:3003';
+        res.redirect(`${frontendUrl}/settings?calendar=connected`);
     } else {
         res.status(400).json({ error: result.error });
     }
@@ -5035,11 +5241,22 @@ app.get("/auth/google/callback", async (req, res) => {
 
 // List upcoming events
 app.get("/calendar/events", authMiddleware, async (req, res) => {
-    const limit = Number(req.query.limit) || 10;
-    const result = await listEvents(limit);
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const start = req.query.start ? new Date(String(req.query.start)) : undefined;
+    const end = req.query.end ? new Date(String(req.query.end)) : undefined;
+
+    const result = await listEvents((req as any).user.id, {
+        maxResults: limit || (start ? 250 : 10), // If range provided, fetch more
+        timeMin: start,
+        timeMax: end
+    });
     if (result.success) {
         res.json(result.events);
     } else {
+        // Return 401 if not connected so frontend can show connect button
+        if (result.error?.includes('no conectado') || result.error?.includes('Token')) {
+            return res.status(401).json({ error: result.error, notConnected: true });
+        }
         res.status(500).json({ error: result.error });
     }
 });
@@ -5050,7 +5267,7 @@ app.post("/calendar/events", authMiddleware, async (req, res) => {
     if (!summary || !start || !end) {
         return res.status(400).json({ error: "summary, start y end requeridos" });
     }
-    const result = await createEvent({
+    const result = await createEvent((req as any).user.id, {
         summary,
         description,
         start: new Date(start),
@@ -5073,6 +5290,7 @@ app.post("/calendar/meeting", authMiddleware, async (req, res) => {
         return res.status(400).json({ error: "clientName, clientEmail y dateTime requeridos" });
     }
     const result = await createClientMeeting(
+        (req as any).user.id,
         clientName,
         clientEmail,
         new Date(dateTime),
@@ -5106,7 +5324,7 @@ app.post("/calendar/followup", authMiddleware, async (req, res) => {
     if (!['lead', 'customer', 'ticket'].includes(entityType)) {
         return res.status(400).json({ error: "entityType debe ser: lead, customer, o ticket" });
     }
-    const result = await createFollowUpReminder(entityType, entityName, new Date(dateTime), notes);
+    const result = await createFollowUpReminder((req as any).user.id, entityType, entityName, new Date(dateTime), notes);
     if (result.success) {
         res.status(201).json(result);
     } else {
@@ -5114,11 +5332,38 @@ app.post("/calendar/followup", authMiddleware, async (req, res) => {
     }
 });
 
-// Check calendar configuration status
-app.get("/calendar/status", (req, res) => {
-    res.json({
-        configured: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
-    });
+// Check calendar configuration status (per-user)
+app.get("/calendar/status", authMiddleware, async (req: any, res) => {
+    try {
+        const userId = req.user?.id;
+        const systemConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+
+        if (!userId) {
+            return res.json({ configured: systemConfigured, connected: false });
+        }
+
+        // Check if user has connected their Google account
+        const integration = await prisma.integration.findUnique({
+            where: {
+                userId_provider: {
+                    userId,
+                    provider: 'GOOGLE'
+                }
+            }
+        });
+
+        const metadata = integration?.metadata as any;
+        const hasTokens = !!(metadata?.tokens?.access_token);
+
+        res.json({
+            configured: systemConfigured,
+            connected: hasTokens,
+            connectedAt: metadata?.updatedAt
+        });
+    } catch (e: any) {
+        console.error("GET /calendar/status error:", e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // ========== USER INTEGRATIONS ==========
@@ -6453,78 +6698,8 @@ app.get("/analytics/predictions", authMiddleware, async (req: any, res) => {
     }
 });
 
-// ========== CALENDAR ==========
+// Calendar logic consolidated in lines ~5000
 
-app.get("/calendar/events", authMiddleware, async (req: any, res) => {
-    try {
-        const organizationId = req.user?.organizationId;
-        if (!organizationId) return res.status(401).json({ error: "No organization context" });
-
-        // Note: listEvents uses a global calendarApi which might not be initialized for this user
-        // Ideally we should pass tokens or userId to init logic. 
-        // For now we assume the system/admin integration is active as per src/calendar.ts logic.
-        // Or if the user has their own integration.
-
-        // We really should try to init connection first if possible
-        // But src/calendar.ts seems to use a global singleton 'calendarApi'
-        // which is risky. However, respecting existing architecture:
-
-        const result = await listEvents(50); // Fetch 50 events
-
-        if (!result.success) {
-            // Try to init?
-            // Checking if we have tokens for this user?
-            if (result.error === 'Google Calendar no conectado') {
-                return res.status(401).json({ error: result.error });
-            }
-            return res.status(500).json({ error: result.error });
-        }
-        res.json({ events: result.events });
-    } catch (e: any) {
-        console.error("GET /calendar/events error:", e);
-        res.status(500).json({ error: "Error fetching events" });
-    }
-});
-
-app.post("/calendar/events", authMiddleware, async (req: any, res) => {
-    try {
-        const { summary, description, start, end, attendees } = req.body;
-
-        if (!summary || !start || !end) {
-            return res.status(400).json({ error: "Missing required fields" });
-        }
-
-        const result = await createEvent({
-            summary,
-            description,
-            start: new Date(start),
-            end: new Date(end),
-            attendees,
-            addMeet: true // Default to adding Meet
-        });
-
-        if (!result.success) {
-            if (result.error === 'Google Calendar no conectado') {
-                return res.status(401).json({ error: result.error });
-            }
-            return res.status(500).json({ error: result.error });
-        }
-
-        res.json(result);
-    } catch (e: any) {
-        console.error("POST /calendar/events error:", e);
-        res.status(500).json({ error: "Error creating event" });
-    }
-});
-
-app.get("/auth/google", async (req, res) => {
-    try {
-        const url = await getGoogleAuthUrl();
-        res.redirect(url);
-    } catch (e) {
-        res.status(500).send("Error generating auth url");
-    }
-});
 
 app.get("/auth/google/callback", async (req: any, res) => {
     try {

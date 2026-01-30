@@ -254,10 +254,10 @@ export default function Inbox() {
         }
     }, []);
 
-    // Polling interval (5 seconds for faster real-time updates)
+    // Polling interval (15 seconds - real-time handled via Socket.IO)
     useEffect(() => {
-        const interval = setInterval(pollForUpdates, 5000);
-        // Also poll immediately on mount
+        const interval = setInterval(pollForUpdates, 15000);
+        // Also poll once on mount
         pollForUpdates();
         return () => clearInterval(interval);
     }, [pollForUpdates]);
@@ -267,7 +267,12 @@ export default function Inbox() {
         // If API_URL is relative (proxy), pass undefined to use current origin. 
         // If absolute, use it.
         const socketUrl = API_URL.startsWith('http') ? API_URL : undefined;
-        const newSocket = io(socketUrl, { path: '/socket.io' });
+        const token = localStorage.getItem('crm_token');
+        const newSocket = io(socketUrl, {
+            path: '/api/socket.io',
+            auth: { token },
+            transports: ['websocket', 'polling']
+        });
         setSocket(newSocket);
 
         newSocket.on('connect', () => console.log('🔌 Connected to chat server'));
@@ -467,7 +472,7 @@ export default function Inbox() {
             console.log('[DEBUG] Sending POST request to /clients/from-chat');
             const res = await fetch(`${API_URL}/clients/from-chat`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({
                     name: newClientData.name,
                     email: newClientData.email,
@@ -505,7 +510,7 @@ export default function Inbox() {
         try {
             const res = await fetch(`${API_URL}/clients/${clientId}/contacts`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({
                     type: selectedConversation.platform,
                     value: selectedConversation.customerContact
@@ -538,7 +543,7 @@ export default function Inbox() {
     // Check takeover status for a conversation
     const checkTakeoverStatus = async (sessionId: string) => {
         try {
-            const res = await fetch(`${API_URL}/conversations/${sessionId}/takeover-status`);
+            const res = await fetch(`${API_URL}/conversations/${sessionId}/takeover-status`, { headers: getAuthHeaders() });
             const data = await res.json();
             setTakeoverStatus(data);
         } catch (err) {
@@ -554,7 +559,7 @@ export default function Inbox() {
         try {
             const res = await fetch(`${API_URL}/conversations/${selectedConversation.sessionId}/takeover`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({ userId: 'admin', durationMinutes: 60 })
             });
             if (res.ok) {
@@ -576,7 +581,8 @@ export default function Inbox() {
         if (!selectedConversation) return;
         try {
             const res = await fetch(`${API_URL}/conversations/${selectedConversation.sessionId}/release`, {
-                method: 'POST'
+                method: 'POST',
+                headers: getAuthHeaders()
             });
             if (res.ok) {
                 setTakeoverStatus({ active: false });
@@ -610,7 +616,7 @@ export default function Inbox() {
             // Unified Send: Use /chat/send for ALL platforms (AssistAI, WhatsApp, Instagram, etc.)
             const res = await fetch(`${API_URL}/chat/send`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({
                     sessionId: selectedConversation.sessionId,
                     content: replyText.trim()
@@ -656,7 +662,7 @@ export default function Inbox() {
         try {
             const res = await fetch(`${API_URL}/ai/suggest-reply`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({
                     sessionId: selectedConversation.sessionId,
                     lastMessages: selectedConversation.messages.slice(-5)
@@ -689,7 +695,7 @@ export default function Inbox() {
         try {
             const res = await fetch(`${API_URL}/conversations/lookup`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({ phone: newChatPhone.trim(), platform: newChatPlatform })
             });
             const data = await res.json();

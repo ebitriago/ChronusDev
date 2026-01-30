@@ -6,6 +6,7 @@ import TeamSettings from './TeamSettings';
 import Integrations from './Integrations';
 import WhatsAppConfig from './WhatsAppConfig';
 import OrgSettings from './OrgSettings';
+import ReminderSettings from './ReminderSettings';
 
 // ... (existing imports, skipping to avoid clutter)
 
@@ -26,10 +27,10 @@ type Tag = {
 };
 
 
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || "http://localhost:3002";
+const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || "/api";
 
 export default function Settings() {
-    const [activeTab, setActiveTab] = useState<'profile' | 'tags' | 'whatsapp' | 'integrations' | 'notifications' | 'organization'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'tags' | 'whatsapp' | 'integrations' | 'notifications' | 'organization' | 'reminders'>('profile');
     const [tags, setTags] = useState<Tag[]>([]);
     const [loading, setLoading] = useState(false);
     const [showTagModal, setShowTagModal] = useState(false);
@@ -141,7 +142,8 @@ export default function Settings() {
                     // Conditional Tab for Admin
                     ...(userRole === 'ADMIN' || userRole === 'SUPER_ADMIN' ? [
                         { id: 'team', label: 'Equipo', icon: '👥' },
-                        { id: 'organization', label: 'Organización', icon: '🏢' }
+                        { id: 'organization', label: 'Organización', icon: '🏢' },
+                        { id: 'reminders', label: 'Recordatorios', icon: '⏰' }
                     ] : [])
                 ].map((tab) => (
                     <button
@@ -316,6 +318,9 @@ export default function Settings() {
 
             {/* Organization Tab */}
             {activeTab === 'organization' && <OrgSettings />}
+
+            {/* Reminders Tab */}
+            {activeTab === 'reminders' && <ReminderSettings />}
 
             {/* Create Tag Modal */}
             {showTagModal && (

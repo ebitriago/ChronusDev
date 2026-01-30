@@ -112,9 +112,10 @@ import NotificationBell from '../components/NotificationBell';
 import AuthPage from '../components/AuthPage';
 import SuperAdminPanel from '../components/SuperAdminPanel';
 import AiAgentsPage from './ai-agents/page';
+import Reports from '../components/Reports';
 
 export default function CRMPage() {
-  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'ai-agents' | 'channels' | 'settings' | 'developers' | 'super-admin' | 'calendar' | 'kanban'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'ai-agents' | 'channels' | 'settings' | 'developers' | 'super-admin' | 'calendar' | 'kanban' | 'reports'>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -448,6 +449,7 @@ export default function CRMPage() {
                   {view === 'assistai' && `AssistAI - Agentes de IA`}
                   {view === 'settings' && `Configuración del Sistema`}
                   {view === 'developers' && `Developer Tools`}
+                  {view === 'reports' && `Reportes y Analytics`}
                 </h1>
               </div>
 
@@ -768,6 +770,9 @@ export default function CRMPage() {
 
             {/* Kanban View */}
             {view === 'kanban' && <TicketsKanban />}
+
+            {/* Reports View */}
+            {view === 'reports' && <Reports />}
 
             {/* Tickets View */}
             {

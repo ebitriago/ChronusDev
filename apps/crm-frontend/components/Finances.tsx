@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import TransactionModal from './TransactionModal';
-
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+import { API_URL } from '../app/api';
 
 type Transaction = {
     id: string;
@@ -26,7 +25,12 @@ export default function Finances({ customers }: { customers: any[] }) {
     const fetchTransactions = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/transactions`);
+            const token = localStorage.getItem('crm_token');
+            const res = await fetch(`${API_URL}/transactions`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
             if (res.ok) {
                 const data = await res.json();
                 setTransactions(data);

@@ -1,10 +1,10 @@
 "use client";
 
 import { useToast } from "./Toast";
+import { API_URL } from "../app/api";
 
 export default function Developers() {
     const { showToast } = useToast();
-    const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || "http://localhost:3002";
     const TEST_TOKEN = "token-admin-123";
 
     return (

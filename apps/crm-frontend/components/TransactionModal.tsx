@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { API_URL } from '../app/api';
 
 type TransactionType = 'INCOME' | 'EXPENSE';
 
@@ -10,8 +11,6 @@ interface TransactionModalProps {
     onSuccess: () => void;
     customers: { id: string; name: string }[];
 }
-
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
 
 export default function TransactionModal({ isOpen, onClose, onSuccess, customers }: TransactionModalProps) {
     const [loading, setLoading] = useState(false);
@@ -29,9 +28,13 @@ export default function TransactionModal({ isOpen, onClose, onSuccess, customers
         setLoading(true);
 
         try {
+            const token = localStorage.getItem('crm_token');
             const res = await fetch(`${API_URL}/transactions`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(formData),
             });
 

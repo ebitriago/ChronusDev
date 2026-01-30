@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { useToast } from './Toast';
-
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+import { API_URL } from '../app/api';
 
 type ScheduleInteractionModalProps = {
     customerId: string;
@@ -87,8 +86,8 @@ export default function ScheduleInteractionModal({ customerId, customerName, cus
                                 key={t}
                                 onClick={() => setType(t)}
                                 className={`flex-1 py-1.5 text-sm font-bold rounded-lg transition-all ${type === t
-                                        ? 'bg-white text-emerald-600 shadow-sm'
-                                        : 'text-gray-500 hover:text-gray-700'
+                                    ? 'bg-white text-emerald-600 shadow-sm'
+                                    : 'text-gray-500 hover:text-gray-700'
                                     }`}
                             >
                                 {t === 'VOICE' ? '📞 Llamada' : t === 'WHATSAPP' ? '💬 WhatsApp' : '✉️ Email'}

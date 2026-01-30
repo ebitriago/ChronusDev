@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useToast } from './Toast';
-
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+import { API_URL } from '../app/api';
 
 type Contact = {
     id: string;
@@ -222,8 +221,8 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
                             key={tab}
                             onClick={() => setActiveTab(tab)}
                             className={`flex-1 px-4 py-3 text-sm font-bold transition-colors ${activeTab === tab
-                                    ? 'text-emerald-600 border-b-2 border-emerald-600 bg-white'
-                                    : 'text-gray-500 hover:text-gray-700'
+                                ? 'text-emerald-600 border-b-2 border-emerald-600 bg-white'
+                                : 'text-gray-500 hover:text-gray-700'
                                 }`}
                         >
                             {tab === 'info' && '👤 Información'}
@@ -265,8 +264,8 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
                                     <button
                                         onClick={() => isEditing ? handleSaveEdit() : setIsEditing(true)}
                                         className={`text-sm font-bold px-3 py-1 rounded-lg transition-colors ${isEditing
-                                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                                : 'text-emerald-600 hover:bg-emerald-50'
+                                            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                            : 'text-emerald-600 hover:bg-emerald-50'
                                             }`}
                                     >
                                         {isEditing ? '💾 Guardar' : '✏️ Editar'}
@@ -352,8 +351,8 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <span className={`px-2 py-1 text-xs font-bold rounded ${ticket.status === 'OPEN' ? 'bg-red-100 text-red-700' :
-                                                        ticket.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
-                                                            'bg-green-100 text-green-700'
+                                                    ticket.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
+                                                        'bg-green-100 text-green-700'
                                                     }`}>
                                                     {ticket.status}
                                                 </span>
@@ -408,8 +407,8 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
                                         <div className="text-right">
                                             <p className="font-bold text-gray-800">${inv.amount?.toFixed(2)}</p>
                                             <span className={`px-2 py-0.5 text-xs font-bold rounded ${inv.status === 'PAID' ? 'bg-green-100 text-green-700' :
-                                                    inv.status === 'OVERDUE' ? 'bg-red-100 text-red-700' :
-                                                        'bg-yellow-100 text-yellow-700'
+                                                inv.status === 'OVERDUE' ? 'bg-red-100 text-red-700' :
+                                                    'bg-yellow-100 text-yellow-700'
                                                 }`}>
                                                 {inv.status}
                                             </span>

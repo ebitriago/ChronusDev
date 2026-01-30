@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+import { API_URL } from '../app/api';
 
 type Customer = any;
 type Transaction = any;
@@ -28,25 +27,27 @@ export default function CustomerDetail({ customerId, onBack }: { customerId: str
         // Fetch fetch 360 view
         const fetchDetails = async () => {
             setLoading(true);
+            const token = localStorage.getItem('crm_token');
+            const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+
             try {
-                const res = await fetch(`${API_URL}/clients/${customerId}/360`);
+                const res = await fetch(`${API_URL}/clients/${customerId}/360`, { headers });
                 if (res.ok) {
                     const data = await res.json();
                     setCustomer(data.client);
                     setContacts(data.contacts || []);
                     setConversations(data.conversations || []);
-                    setTransactions(data.invoices || []); // Assuming transactions/invoices are similar or mapped
+                    setTransactions(data.invoices || []);
 
                     // Also fetch transactions if not fully covered by 360 or if different endpoint needed
-                    // Keeping original fetch for transactions just in case, or relying on 360
-                    const txnRes = await fetch(`${API_URL}/transactions?customerId=${customerId}`);
+                    const txnRes = await fetch(`${API_URL}/transactions?customerId=${customerId}`, { headers });
                     if (txnRes.ok) {
                         const txnData = await txnRes.json();
                         setTransactions(txnData);
                     }
                 } else {
                     // Fallback to basic fetch if 360 fails (or for backward compat)
-                    const custRes = await fetch(`${API_URL}/customers/${customerId}`);
+                    const custRes = await fetch(`${API_URL}/customers/${customerId}`, { headers });
                     if (custRes.ok) setCustomer(await custRes.json());
                 }
             } catch (err) {

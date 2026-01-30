@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useToast } from './Toast';
-
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+import { API_URL } from '../app/api';
 
 type Customer = {
     id: string;
@@ -41,6 +40,14 @@ export default function Invoices() {
         description: 'Servicio profesional'
     });
 
+    const getHeaders = () => {
+        const token = localStorage.getItem('crm_token');
+        return {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        };
+    };
+
     useEffect(() => {
         fetchData();
     }, []);
@@ -48,9 +55,10 @@ export default function Invoices() {
     const fetchData = async () => {
         setLoading(true);
         try {
+            const headers = getHeaders();
             const [invRes, custRes] = await Promise.all([
-                fetch(`${API_URL}/invoices`),
-                fetch(`${API_URL}/customers`)
+                fetch(`${API_URL}/invoices`, { headers }),
+                fetch(`${API_URL}/customers`, { headers })
             ]);
             if (invRes.ok) setInvoices(await invRes.json());
             if (custRes.ok) setCustomers(await custRes.json());
@@ -69,7 +77,7 @@ export default function Invoices() {
         try {
             const res = await fetch(`${API_URL}/invoices`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getHeaders(),
                 body: JSON.stringify({
                     customerId: newInvoice.customerId,
                     amount: newInvoice.amount,
@@ -93,7 +101,7 @@ export default function Invoices() {
         try {
             const res = await fetch(`${API_URL}/invoices/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getHeaders(),
                 body: JSON.stringify({ status })
             });
             if (res.ok) {
@@ -158,8 +166,8 @@ export default function Invoices() {
                             key={status}
                             onClick={() => setFilter(status)}
                             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === status
-                                    ? 'bg-emerald-600 text-white'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                 }`}
                         >
                             {status || 'Todas'}

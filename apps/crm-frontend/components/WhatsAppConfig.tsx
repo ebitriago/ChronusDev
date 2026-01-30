@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useToast } from './Toast';
-
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+import { API_URL } from '../app/api';
 
 type ProviderType = 'whatsmeow' | 'meta';
 
@@ -16,6 +15,10 @@ type WhatsAppProvider = {
     status: 'disconnected' | 'connecting' | 'connected' | 'error';
     lastError?: string;
     connectedAt?: string;
+    phoneNumber?: string;
+    mode?: 'AI_ONLY' | 'HUMAN_ONLY' | 'HYBRID';
+    assistaiAgentCode?: string;
+    autoResumeMinutes?: number;
 };
 
 // Component to load QR with auth header
@@ -144,6 +147,85 @@ export default function WhatsAppConfig() {
     const [testPhone, setTestPhone] = useState('');
     const [testMessage, setTestMessage] = useState('');
     const [sending, setSending] = useState(false);
+    const [webhookUrl, setWebhookUrl] = useState('');
+    const [savingWebhook, setSavingWebhook] = useState(false);
+    const [agents, setAgents] = useState<any[]>([]);
+    const [savingConfig, setSavingConfig] = useState(false);
+    const [selectedSendNumber, setSelectedSendNumber] = useState<string | null>(null);
+
+    // Fetch AssistAI agents
+    useEffect(() => {
+        const token = localStorage.getItem('crm_token');
+        fetch(`${API_URL}/assistai/agents`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+            .then(r => r.ok ? r.json() : { data: [] })
+            .then(data => setAgents(data.data || []))
+            .catch(() => setAgents([]));
+    }, []);
+
+    // Auto-set sendNumber when providers load
+    useEffect(() => {
+        const connected = providers.filter(p => p.status === 'connected');
+        if (connected.length > 0 && !selectedSendNumber) {
+            setSelectedSendNumber(connected[0].id);
+        }
+    }, [providers, selectedSendNumber]);
+
+    // Save channel mode/agent config
+    const handleSaveChannelConfig = async (providerId: string, mode: string, agentCode: string, autoResume: number) => {
+        setSavingConfig(true);
+        try {
+            const res = await fetch(`${API_URL}/whatsapp/providers/${providerId}/channel-config`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('crm_token')}`
+                },
+                body: JSON.stringify({ mode, assistaiAgentCode: agentCode, autoResumeMinutes: autoResume })
+            });
+            if (res.ok) {
+                showToast('Configuración guardada', 'success');
+                fetchProviders();
+            } else {
+                showToast('Error al guardar', 'error');
+            }
+        } catch (e) {
+            showToast('Error de conexión', 'error');
+        } finally {
+            setSavingConfig(false);
+        }
+    };
+
+    // Save webhook URL for WhatsMeow
+    const handleSaveWebhook = async (providerId: string) => {
+        if (!webhookUrl.trim()) {
+            showToast('Ingresa una URL de webhook válida', 'error');
+            return;
+        }
+        setSavingWebhook(true);
+        try {
+            const res = await fetch(`${API_URL}/whatsmeow/configure-webhook`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('crm_token')}`
+                },
+                body: JSON.stringify({ webhookUrl: webhookUrl.trim() })
+            });
+            if (res.ok) {
+                showToast('Webhook configurado exitosamente', 'success');
+                fetchProviders();
+            } else {
+                const err = await res.json();
+                showToast(err.error || 'Error al guardar webhook', 'error');
+            }
+        } catch (e) {
+            showToast('Error de conexión', 'error');
+        } finally {
+            setSavingWebhook(false);
+        }
+    };
 
     const fetchProviders = async () => {
         try {
@@ -409,36 +491,165 @@ export default function WhatsAppConfig() {
                         </div>
                     )}
 
+                    {/* Webhook Config for Connected WhatsMeow */}
+                    {selectedProvider.type === 'whatsmeow' && selectedProvider.status === 'connected' && (
+                        <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                            <h4 className="font-medium text-gray-900 mb-4">⚙️ Configuración Webhook</h4>
+                            <p className="text-sm text-gray-600 mb-4">
+                                Configura la URL donde recibirás los mensajes entrantes de WhatsApp.
+                            </p>
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Webhook URL</label>
+                                    <input
+                                        type="url"
+                                        className="w-full px-3 py-2 border rounded-lg text-sm font-mono"
+                                        placeholder="https://tu-servidor.com/whatsmeow/webhook"
+                                        value={webhookUrl || selectedProvider.config?.webhookUrl || ''}
+                                        onChange={e => setWebhookUrl(e.target.value)}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Ejemplo: https://chronuscrm.loca.lt/whatsmeow/webhook
+                                    </p>
+                                </div>
+                                {selectedProvider.config?.webhookUrl && (
+                                    <div className="bg-white p-3 rounded-lg border text-sm">
+                                        <span className="text-gray-500">Webhook actual: </span>
+                                        <code className="text-green-600">{selectedProvider.config.webhookUrl}</code>
+                                    </div>
+                                )}
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={() => handleSaveWebhook(selectedProvider.id)}
+                                        disabled={savingWebhook}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm disabled:bg-gray-400"
+                                    >
+                                        {savingWebhook ? 'Guardando...' : '💾 Guardar Webhook'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Test Sender */}
+                    {providers.some(p => p.status === 'connected') && (
+                        <div className="border-t pt-6">
+                            <h4 className="font-medium text-gray-900 mb-4">📤 Enviar Mensaje de Prueba</h4>
+                            <form onSubmit={(e) => handleSendTest(e, selectedSendNumber || selectedProvider.id)} className="space-y-4">
+                                {/* Number Selector */}
+                                {providers.filter(p => p.status === 'connected').length > 1 && (
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Enviar desde</label>
+                                        <select
+                                            className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                                            value={selectedSendNumber || ''}
+                                            onChange={e => setSelectedSendNumber(e.target.value)}
+                                        >
+                                            {providers.filter(p => p.status === 'connected').map(p => (
+                                                <option key={p.id} value={p.id}>
+                                                    {p.phoneNumber || p.name} {p.mode ? `(${p.mode})` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+                                <div className="flex gap-3 items-start">
+                                    <div className="flex-1 space-y-3">
+                                        <input
+                                            type="tel"
+                                            placeholder="+58414..."
+                                            className="w-full px-3 py-2 border rounded-lg text-sm"
+                                            value={testPhone}
+                                            onChange={e => setTestPhone(e.target.value)}
+                                            required
+                                        />
+                                        <textarea
+                                            placeholder="Mensaje..."
+                                            className="w-full px-3 py-2 border rounded-lg text-sm h-20 resize-none"
+                                            value={testMessage}
+                                            onChange={e => setTestMessage(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        disabled={sending}
+                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm whitespace-nowrap"
+                                    >
+                                        {sending ? 'Enviando...' : '📤 Enviar'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    {/* Channel Mode/AI Config */}
                     {selectedProvider.status === 'connected' && (
                         <div className="border-t pt-6">
-                            <h4 className="font-medium text-gray-900 mb-4">Enviar Mensaje de Prueba</h4>
-                            <form onSubmit={(e) => handleSendTest(e, selectedProvider.id)} className="flex gap-3 items-start">
-                                <div className="flex-1 space-y-3">
-                                    <input
-                                        type="tel"
-                                        placeholder="+58414..."
-                                        className="w-full px-3 py-2 border rounded-lg text-sm"
-                                        value={testPhone}
-                                        onChange={e => setTestPhone(e.target.value)}
-                                        required
-                                    />
-                                    <textarea
-                                        placeholder="Mensaje..."
-                                        className="w-full px-3 py-2 border rounded-lg text-sm h-20 resize-none"
-                                        value={testMessage}
-                                        onChange={e => setTestMessage(e.target.value)}
-                                        required
-                                    />
+                            <h4 className="font-medium text-gray-900 mb-4">🤖 Modo de Atención</h4>
+                            <p className="text-sm text-gray-600 mb-4">
+                                Configura cómo se manejan las conversaciones en este número.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {/* Mode */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Modo</label>
+                                    <select
+                                        id={`mode-${selectedProvider.id}`}
+                                        defaultValue={selectedProvider.mode || 'HYBRID'}
+                                        className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                                    >
+                                        <option value="AI_ONLY">🤖 Solo IA</option>
+                                        <option value="HUMAN_ONLY">👤 Solo Humano</option>
+                                        <option value="HYBRID">🔄 Híbrido</option>
+                                    </select>
                                 </div>
+                                {/* Agent */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Agente IA</label>
+                                    <select
+                                        id={`agent-${selectedProvider.id}`}
+                                        defaultValue={selectedProvider.assistaiAgentCode || ''}
+                                        className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                                    >
+                                        <option value="">Sin agente</option>
+                                        {agents.map((agent: any) => (
+                                            <option key={agent.code} value={agent.code}>
+                                                {agent.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {/* Auto Resume */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Auto-reanudar IA</label>
+                                    <select
+                                        id={`resume-${selectedProvider.id}`}
+                                        defaultValue={selectedProvider.autoResumeMinutes || 30}
+                                        className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                                    >
+                                        <option value={15}>15 minutos</option>
+                                        <option value={30}>30 minutos</option>
+                                        <option value={60}>1 hora</option>
+                                        <option value={120}>2 horas</option>
+                                        <option value={0}>Nunca</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="flex justify-end mt-4">
                                 <button
-                                    type="submit"
-                                    disabled={sending}
-                                    className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black text-sm whitespace-nowrap"
+                                    onClick={() => {
+                                        const mode = (document.getElementById(`mode-${selectedProvider.id}`) as HTMLSelectElement)?.value || 'HYBRID';
+                                        const agent = (document.getElementById(`agent-${selectedProvider.id}`) as HTMLSelectElement)?.value || '';
+                                        const resume = parseInt((document.getElementById(`resume-${selectedProvider.id}`) as HTMLSelectElement)?.value || '30');
+                                        handleSaveChannelConfig(selectedProvider.id, mode, agent, resume);
+                                    }}
+                                    disabled={savingConfig}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm disabled:bg-gray-400"
                                 >
-                                    {sending ? 'Enviando...' : 'Enviar'}
+                                    {savingConfig ? 'Guardando...' : '💾 Guardar Configuración'}
                                 </button>
-                            </form>
+                            </div>
                         </div>
                     )}
                 </div>

@@ -3,9 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from './Toast';
 import { Skeleton } from './Skeleton';
-
-// API functions
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
+import { API_URL } from '../app/api';
 
 function getHeaders() {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };

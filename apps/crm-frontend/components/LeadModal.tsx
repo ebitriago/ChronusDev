@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { API_URL } from '../app/api';
 
 type Lead = {
     id?: string;
@@ -19,8 +20,6 @@ interface LeadModalProps {
     onSuccess: () => void;
     leadToEdit?: Lead | null;
 }
-
-const API_URL = process.env.NEXT_PUBLIC_CRM_API_URL || 'http://127.0.0.1:3002';
 
 export default function LeadModal({ isOpen, onClose, onSuccess, leadToEdit }: LeadModalProps) {
     const [loading, setLoading] = useState(false);
