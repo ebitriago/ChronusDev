@@ -51,11 +51,19 @@ router.put('/products/:id', authMiddleware, async (req: any, res) => {
         const organizationId = req.user?.organizationId;
         const { name, description, price, sku, stock, category, imageUrl } = req.body;
 
+        // Build update data dynamically to support partial updates
+        const updateData: any = {};
+        if (name !== undefined) updateData.name = name;
+        if (description !== undefined) updateData.description = description;
+        if (price !== undefined) updateData.price = Number(price);
+        if (sku !== undefined) updateData.sku = sku;
+        if (stock !== undefined) updateData.stock = Number(stock);
+        if (category !== undefined) updateData.category = category;
+        if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+
         const product = await prisma.globalProduct.update({
             where: { id, organizationId },
-            data: {
-                name, description, price: Number(price), sku, stock: Number(stock), category, imageUrl
-            }
+            data: updateData
         });
         res.json(product);
     } catch (e: any) {

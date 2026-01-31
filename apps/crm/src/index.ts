@@ -251,6 +251,112 @@ app.post("/customers", authMiddleware, async (req: any, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+
+/**
+ * @openapi
+ * /customers/{id}:
+ *   put:
+ *     tags: [Customers]
+ *     summary: Update an existing customer
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               company:
+ *                 type: string
+ *               plan:
+ *                 type: string
+ *               status:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Customer updated successfully
+ */
+app.put("/customers/:id", authMiddleware, async (req: any, res) => {
+    try {
+        const organizationId = req.user?.organizationId;
+        if (!organizationId) return res.status(401).json({ error: "No organization context" });
+
+        const { id } = req.params;
+        const { name, email, phone, company, plan, status, notes, monthlyRevenue, currency, birthDate, paymentDueDay } = req.body;
+
+        // Build update data dynamically to support partial updates
+        const updateData: any = {};
+        if (name !== undefined) updateData.name = name;
+        if (email !== undefined) updateData.email = email;
+        if (phone !== undefined) updateData.phone = phone;
+        if (company !== undefined) updateData.company = company;
+        if (plan !== undefined) updateData.plan = (plan as string).toUpperCase();
+        if (status !== undefined) updateData.status = (status as string).toUpperCase();
+        if (notes !== undefined) updateData.notes = notes;
+        if (monthlyRevenue !== undefined) updateData.monthlyRevenue = Number(monthlyRevenue);
+        if (currency !== undefined) updateData.currency = currency;
+        if (birthDate !== undefined) updateData.birthDate = birthDate ? new Date(birthDate) : null;
+        if (paymentDueDay !== undefined) updateData.paymentDueDay = paymentDueDay;
+
+        const customer = await prisma.customer.update({
+            where: { id, organizationId },
+            data: updateData
+        });
+
+        res.json(customer);
+    } catch (e: any) {
+        console.error("PUT /customers/:id error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * @openapi
+ * /customers/{id}:
+ *   delete:
+ *     tags: [Customers]
+ *     summary: Delete a customer
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Customer deleted successfully
+ */
+app.delete("/customers/:id", authMiddleware, async (req: any, res) => {
+    try {
+        const organizationId = req.user?.organizationId;
+        if (!organizationId) return res.status(401).json({ error: "No organization context" });
+
+        const { id } = req.params;
+
+        await prisma.customer.delete({
+            where: { id, organizationId }
+        });
+
+        res.json({ success: true, message: "Customer deleted successfully" });
+    } catch (e: any) {
+        console.error("DELETE /customers/:id error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
 // ========== TICKETS ==========
 
 app.get("/tickets", authMiddleware, async (req: any, res) => {
