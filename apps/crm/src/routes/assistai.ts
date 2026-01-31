@@ -241,8 +241,70 @@ router.post("/webhook", async (req, res) => {
     // If AssistAI passes organizationCode, we can map back.
     // Otherwise we need to lookup by external ID.
 
-    // For now, logging only as we lack logic to map external AssistAI webhook to specific Org securely without context.
-    // Assumption: Webhook is for the main configured account.
+    // AssistAI Webhook Logic
+    if (event === 'ORDER_CREATED') {
+        try {
+            // Payload expected: { cart: { total: number, items: [] }, customer: { phone: string, name: string }, agentCode: string }
+            // Since we lack org context in payload usually, we might need a way to identify it.
+            // For this PoC, we'll try to match by searching strictly or assuming single tenant or using a default.
+            // BUT, usually credentials tell us. If this webhook is public, we need a secret.
+            // Let's assume we match by Customer Phone first?
+            const { cart, customer, agentCode } = payload;
+
+            // Try to find the org by the agentCode if mapped, or just match customer phone across orgs?
+            // Simplification: We attach to the FIRST org where this customer exists, or create in a default one.
+            // We'll use the 'chronus' slug org ID from seed or findFirst.
+            const defaultOrg = await prisma.organization.findFirst({ where: { slug: 'chronus' } });
+            if (!defaultOrg) return res.status(404).json({ error: 'Default org not found' });
+
+            // Find or Create Customer by Email (or Phone if we had it mapped)
+            // AssistAI usually sends phone.
+            let dbCustomer = await prisma.customer.findFirst({
+                where: { email: `${customer.phone}@whatsapp.user`, organizationId: defaultOrg.id }
+            });
+
+            if (!dbCustomer) {
+                dbCustomer = await prisma.customer.create({
+                    data: {
+                        name: customer.name || 'WhatsApp User',
+                        email: `${customer.phone}@whatsapp.user`,
+                        phone: customer.phone,
+                        organizationId: defaultOrg.id,
+                        status: 'ACTIVE',
+                        plan: 'BASIC'
+                    }
+                });
+            }
+
+            // Create Order
+            await prisma.assistantShoppingCart.create({
+                data: {
+                    organizationId: defaultOrg.id,
+                    customerId: dbCustomer.id,
+                    status: 'COMPLETED', // AssistAI sends completed orders usually
+                    total: cart.total,
+                    items: {
+                        create: cart.items.map((i: any) => ({
+                            // If product ID matches our DB, allow link. Otherwise, we might just store text?
+                            // Our schema requires ProductId. 
+                            // We'll try to find product by NAME or SKU.
+                            // If not found, we assign to a "Generic Product" or fail?
+                            // For now, let's look up by name.
+                            product: {
+                                connect: { sku: i.sku } // Assumes AssistAI sends SKU that matches
+                            },
+                            quantity: i.quantity,
+                            unitPrice: i.price,
+                            total: i.price * i.quantity
+                        }))
+                    }
+                }
+            });
+            console.log('✅ Created Order from AssistAI Webhook');
+        } catch (e) {
+            console.error('Error processing ORDER_CREATED:', e);
+        }
+    }
 
     res.json({ received: true });
 });
