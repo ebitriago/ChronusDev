@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { ToastProvider } from '../components/Toast';
+import AuthProvider from '../components/AuthProvider';
 import VoiceWidget from '../components/VoiceWidget';
 
 export const metadata: Metadata = {
@@ -20,9 +21,11 @@ export default function RootLayout({
     <html lang="es" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <ToastProvider>
-          {children}
-          {/* Global Support Widget - will show if configured */}
-          {/* <VoiceWidget agentId="bMDKk8fD42Jq79r4a1q5" />  Demo Agent ID for testing */}
+          <AuthProvider>
+            {children}
+            {/* Global Support Widget - will show if configured */}
+            {/* <VoiceWidget agentId="bMDKk8fD42Jq79r4a1q5" />  Demo Agent ID for testing */}
+          </AuthProvider>
         </ToastProvider>
       </body>
     </html>
