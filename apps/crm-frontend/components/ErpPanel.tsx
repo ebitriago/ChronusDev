@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from './AuthProvider';
 import { toast } from 'react-hot-toast';
 
 export default function ErpPanel() {
@@ -129,7 +129,7 @@ export default function ErpPanel() {
                                     <td className="p-4 font-bold text-gray-900">${o.total.toFixed(2)}</td>
                                     <td className="p-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${o.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
-                                                o.status === 'OPEN' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                                            o.status === 'OPEN' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
                                             }`}>
                                             {o.status}
                                         </span>
