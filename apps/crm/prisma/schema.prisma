@@ -104,6 +104,10 @@ model Organization {
   
   // Automated Reminders
   reminderTemplates ReminderTemplate[]
+
+  // Mini ERP
+  globalProducts GlobalProduct[]
+  shoppingCarts  AssistantShoppingCart[]
 }
 
 model OrganizationMember {
@@ -190,6 +194,9 @@ model Customer {
   
   // Project Management (ChronusDev)
   projects      Project[]
+
+  // Mini ERP
+  shoppingCarts AssistantShoppingCart[]
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -1051,4 +1058,70 @@ model Payout {
   @@index([userId])
   @@index([organizationId])
   @@index([month])
+}
+  // ... (previous content)
+
+// ==================== MINI ERP (ASSISTAI) ====================
+
+model GlobalProduct {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  sku         String   @unique
+  stock       Int      @default(0)
+  imageUrl    String?
+  category    String?
+  
+  // Multi-tenancy
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  cartItems   AssistantShoppingCartItem[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("global_products")
+  @@index([organizationId])
+}
+
+model AssistantShoppingCart {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  status      String   @default("OPEN") // OPEN, COMPLETED, ABANDONED
+  total       Float    @default(0)
+  
+  // Multi-tenancy
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  items       AssistantShoppingCartItem[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("assistant_shopping_carts")
+  @@index([customerId])
+  @@index([organizationId])
+}
+
+model AssistantShoppingCartItem {
+  id              String                @id @default(cuid())
+  shoppingCartId  String
+  shoppingCart    AssistantShoppingCart @relation(fields: [shoppingCartId], references: [id], onDelete: Cascade)
+  
+  productId       String
+  product         GlobalProduct         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  quantity        Int
+  unitPrice       Float
+  total           Float
+  
+  createdAt       DateTime @default(now())
+
+  @@map("assistant_shopping_cart_items")
+  @@index([shoppingCartId])
+  @@index([productId])
 }

@@ -12,6 +12,7 @@ import { conversationTakeovers, type ConversationTakeover } from "./data.js";
 import type { Customer, Ticket, Invoice, Communication, TicketStatus, Transaction, Lead, Tag, ChatMessage, Conversation, ContactIdentity, ContactType } from "./types.js";
 import { authMiddleware, optionalAuth, requireRole, handleLogin, handleRegister, handleLogout, getAssistAIAuthUrl, handleAssistAICallback, switchOrganization, generateToken } from "./auth.js";
 import { prisma } from "./db.js";
+import erpRouter from "./routes/erp.js";
 import { logActivity, getCustomerActivities, getLeadActivities, getTicketActivities, getRecentActivities, activityTypeLabels, activityTypeIcons } from "./activity.js";
 import { sendEmail, verifyEmailConnection, emailTemplates } from "./email.js";
 import { getGoogleAuthUrl, handleGoogleCallback, createEvent, listEvents, createClientMeeting, createFollowUpReminder } from "./calendar.js";
@@ -67,6 +68,7 @@ const authLimiter = rateLimit({
 
 app.use(limiter);
 app.use("/auth/login", authLimiter);
+app.use("/erp", erpRouter);
 
 
 

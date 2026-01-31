@@ -113,9 +113,10 @@ import AuthPage from '../components/AuthPage';
 import SuperAdminPanel from '../components/SuperAdminPanel';
 import AiAgentsPage from './ai-agents/page';
 import Reports from '../components/Reports';
+import ErpPanel from '../components/ErpPanel';
 
 export default function CRMPage() {
-  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'ai-agents' | 'channels' | 'settings' | 'developers' | 'super-admin' | 'calendar' | 'kanban' | 'reports'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'ai-agents' | 'channels' | 'settings' | 'developers' | 'super-admin' | 'calendar' | 'kanban' | 'reports' | 'erp'>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -773,6 +774,9 @@ export default function CRMPage() {
 
             {/* Reports View */}
             {view === 'reports' && <Reports />}
+
+            {/* ERP View */}
+            {view === 'erp' && <ErpPanel />}
 
             {/* Tickets View */}
             {

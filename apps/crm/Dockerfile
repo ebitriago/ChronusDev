@@ -19,5 +19,8 @@ COPY --from=builder /app/prisma ./prisma
 # Copy public assets if any
 COPY --from=builder /app/public ./public 
 
+# Install dependencies strictly needed for runtime
+RUN apk add --no-cache openssl curl libc6-compat
+
 EXPOSE 3002
 CMD ["node", "dist/index.js"]

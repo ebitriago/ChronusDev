@@ -13,7 +13,7 @@ const dbPath = path.join(__dirname, 'dev.db');
 
 // Prisma adapter factory
 const adapter = new PrismaLibSql({ url: `file:${dbPath}` });
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient({ adapter }) as any;
 
 async function main() {
     console.log('🌱 Seeding database...');
@@ -39,25 +39,30 @@ async function main() {
     ];
 
     for (const u of users) {
-        await prisma.user.upsert({
+        const user = await prisma.user.upsert({
             where: { email: u.email },
-            update: {
-                role: u.role,
-                memberships: {
-                    connectOrCreate: {
-                        where: { userId_organizationId: { userId: 'placeholder', organizationId: organization.id } }, // Logic handled by connect if exists
-                        create: { organizationId: organization.id }
-                    }
-                }
-            },
+            update: { role: u.role },
             create: {
                 email: u.email,
                 name: u.name,
                 password,
-                role: u.role,
-                memberships: {
-                    create: { organizationId: organization.id }
+                role: u.role
+            }
+        });
+
+        // Ensure membership exists
+        await prisma.organizationMember.upsert({
+            where: {
+                userId_organizationId: {
+                    userId: user.id,
+                    organizationId: organization.id
                 }
+            },
+            update: { role: u.role },
+            create: {
+                userId: user.id,
+                organizationId: organization.id,
+                role: u.role
             }
         });
     }
@@ -99,6 +104,59 @@ async function main() {
                 }
             });
         }
+    }
+
+    // 5. Create ERP Products & Orders
+    console.log('🛍️ Seeding ERP data...');
+    // Create Products
+    const products = [
+        { name: 'Laptop Pro X', description: 'High performance laptop', price: 1299.99, sku: 'LP-PRO-X', stock: 50, category: 'Electronics', imageUrl: 'https://placehold.co/600x400/2563eb/white?text=Laptop' },
+        { name: 'Wireless Headphones', description: 'Noise cancelling', price: 199.99, sku: 'WH-NC-1', stock: 100, category: 'Audio', imageUrl: 'https://placehold.co/600x400/db2777/white?text=Headphones' },
+        { name: 'Ergonomic Chair', description: 'Office comfort', price: 299.00, sku: 'EC-V2', stock: 20, category: 'Furniture', imageUrl: 'https://placehold.co/600x400/059669/white?text=Chair' }
+    ];
+
+    const createdProducts = [];
+    for (const p of products) {
+        const prod = await prisma.globalProduct.upsert({
+            where: { sku: p.sku },
+            update: {},
+            create: {
+                ...p,
+                organizationId: organization.id
+            }
+        });
+        createdProducts.push(prod);
+    }
+    console.log('✅ Created', createdProducts.length, 'products');
+
+    // Create Sample Order for first customer
+    const firstCustomer = await prisma.customer.findFirst({ where: { organizationId: organization.id } });
+    if (firstCustomer && createdProducts.length > 0) {
+        const order = await prisma.assistantShoppingCart.create({
+            data: {
+                customerId: firstCustomer.id,
+                organizationId: organization.id,
+                status: 'COMPLETED',
+                total: 1499.98,
+                items: {
+                    create: [
+                        {
+                            productId: createdProducts[0].id,
+                            quantity: 1,
+                            unitPrice: createdProducts[0].price,
+                            total: createdProducts[0].price
+                        },
+                        {
+                            productId: createdProducts[1].id,
+                            quantity: 1,
+                            unitPrice: createdProducts[1].price,
+                            total: createdProducts[1].price
+                        }
+                    ]
+                }
+            }
+        });
+        console.log('✅ Created sample order:', order.id);
     }
 
     console.log('🎉 Seeding complete!');

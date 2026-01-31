@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-type View = 'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'ai-agents' | 'channels' | 'settings' | 'developers' | 'super-admin' | 'calendar' | 'kanban' | 'reports';
+type View = 'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'ai-agents' | 'channels' | 'settings' | 'developers' | 'super-admin' | 'calendar' | 'kanban' | 'reports' | 'erp';
 
 interface SidebarProps {
     currentView: View;
@@ -51,6 +51,7 @@ export default function Sidebar({ currentView, onChangeView, isCollapsed, toggle
         { id: 'assistai', label: 'AssistAI', icon: '🤖' },
         { id: 'reports', label: 'Reportes', icon: '📈' },
         { id: 'settings', label: 'Configuración', icon: '⚙️' },
+        { id: 'erp', label: 'Pedidos (ERP)', icon: '🛍️' },
         // Conditional ChronusDev Link
         ...(hasChronusDev ? [{ id: 'developers', label: 'Developers', icon: '🛠️' }] : []),
     ];
