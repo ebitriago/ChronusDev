@@ -244,23 +244,27 @@ router.post("/webhook", async (req, res) => {
     // AssistAI Webhook Logic
     if (event === 'ORDER_CREATED') {
         try {
-            // Payload expected: { cart: { total: number, items: [] }, customer: { phone: string, name: string }, agentCode: string }
-            // Since we lack org context in payload usually, we might need a way to identify it.
-            // For this PoC, we'll try to match by searching strictly or assuming single tenant or using a default.
-            // BUT, usually credentials tell us. If this webhook is public, we need a secret.
-            // Let's assume we match by Customer Phone first?
+            console.log('[AssistAI Webhook] Processing ORDER_CREATED', payload);
             const { cart, customer, agentCode } = payload;
 
-            // Try to find the org by the agentCode if mapped, or just match customer phone across orgs?
-            // Simplification: We attach to the FIRST org where this customer exists, or create in a default one.
-            // We'll use the 'chronus' slug org ID from seed or findFirst.
+            // 1. Resolve Organization
+            // Ideally use agentCode or payload.organizationCode
+            // Fallback to 'chronus' slug for demo/PoC
             const defaultOrg = await prisma.organization.findFirst({ where: { slug: 'chronus' } });
-            if (!defaultOrg) return res.status(404).json({ error: 'Default org not found' });
+            if (!defaultOrg) {
+                console.error('[AssistAI Webhook] Default org not found');
+                return res.status(404).json({ error: 'Default org not found' });
+            }
 
-            // Find or Create Customer by Email (or Phone if we had it mapped)
-            // AssistAI usually sends phone.
+            // 2. Resolve Customer
             let dbCustomer = await prisma.customer.findFirst({
-                where: { email: `${customer.phone}@whatsapp.user`, organizationId: defaultOrg.id }
+                where: {
+                    OR: [
+                        { email: `${customer.phone}@whatsapp.user` },
+                        { phone: customer.phone }
+                    ],
+                    organizationId: defaultOrg.id
+                }
             });
 
             if (!dbCustomer) {
@@ -276,33 +280,58 @@ router.post("/webhook", async (req, res) => {
                 });
             }
 
-            // Create Order
-            await prisma.assistantShoppingCart.create({
+            // 3. Resolve Items & Create Products if missing (Auto-Catalog)
+            const orderItems = [];
+            for (const i of cart.items) {
+                // Try to find product by SKU
+                let product = await prisma.globalProduct.findFirst({
+                    where: {
+                        sku: i.sku,
+                        organizationId: defaultOrg.id
+                    }
+                });
+
+                // If not found, Auto-Create it! (Logical fix: Don't crash, learn)
+                if (!product) {
+                    console.log(`[AssistAI Webhook] Auto-creating missing product: ${i.sku}`);
+                    product = await prisma.globalProduct.create({
+                        data: {
+                            name: i.name || `Producto ${i.sku}`,
+                            description: 'Auto-created from AssistAI Order',
+                            sku: i.sku,
+                            price: Number(i.price),
+                            stock: 0, // Unknown stock
+                            organizationId: defaultOrg.id,
+                            category: 'Uncategorized'
+                        }
+                    });
+                }
+
+                orderItems.push({
+                    productId: product.id,
+                    quantity: i.quantity,
+                    unitPrice: Number(i.price),
+                    total: Number(i.price) * Number(i.quantity)
+                });
+            }
+
+            // 4. Create Order
+            const order = await prisma.assistantShoppingCart.create({
                 data: {
                     organizationId: defaultOrg.id,
                     customerId: dbCustomer.id,
-                    status: 'COMPLETED', // AssistAI sends completed orders usually
-                    total: cart.total,
+                    status: 'COMPLETED',
+                    total: Number(cart.total),
                     items: {
-                        create: cart.items.map((i: any) => ({
-                            // If product ID matches our DB, allow link. Otherwise, we might just store text?
-                            // Our schema requires ProductId. 
-                            // We'll try to find product by NAME or SKU.
-                            // If not found, we assign to a "Generic Product" or fail?
-                            // For now, let's look up by name.
-                            product: {
-                                connect: { sku: i.sku } // Assumes AssistAI sends SKU that matches
-                            },
-                            quantity: i.quantity,
-                            unitPrice: i.price,
-                            total: i.price * i.quantity
-                        }))
+                        create: orderItems
                     }
                 }
             });
-            console.log('✅ Created Order from AssistAI Webhook');
+            console.log('✅ Created Order from AssistAI Webhook:', order.id);
+
         } catch (e) {
             console.error('Error processing ORDER_CREATED:', e);
+            return res.status(500).json({ error: 'Internal Error processing webhook' });
         }
     }
 

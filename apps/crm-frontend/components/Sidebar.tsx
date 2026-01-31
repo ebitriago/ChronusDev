@@ -15,8 +15,8 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentView, onChangeView, isCollapsed, toggleCollapse, userRole, enabledServices, user }: SidebarProps) {
-    // Force enable ChronusDev link for now as per user request
-    const hasChronusDev = true; // enabledServices?.includes('CHRONUSDEV') || enabledServices?.includes('ALL');
+    // Logic: Enable if explicitly in services OR if Super Admin
+    const hasChronusDev = enabledServices?.includes('CHRONUSDEV') || enabledServices?.includes('ALL') || userRole === 'SUPER_ADMIN';
     const [showOrgMenu, setShowOrgMenu] = useState(false);
 
     const handleSwitchOrg = async (orgId: string) => {
