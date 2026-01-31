@@ -230,6 +230,49 @@ router.get("/poll", authMiddleware, async (req: any, res) => {
 });
 
 // POST Webhook (AssistAI calls this)
+/**
+ * @openapi
+ * /assistai/webhook:
+ *   post:
+ *     tags: [AssistAI]
+ *     summary: Receive events from AssistAI (e.g., Order Created)
+ *     description: Public webhook to receive real-time events from AssistAI agents.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               agentCode:
+ *                 type: string
+ *               customer:
+ *                 type: object
+ *                 properties:
+ *                   name: 
+ *                     type: string
+ *                   phone: 
+ *                     type: string
+ *               cart:
+ *                 type: object
+ *                 properties:
+ *                   total: 
+ *                     type: number
+ *                   items:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         sku: 
+ *                           type: string
+ *                         quantity: 
+ *                           type: number
+ *                         price: 
+ *                           type: number
+ *     responses:
+ *       200:
+ *         description: Event received successfully
+ */
 router.post("/webhook", async (req, res) => {
     // Simplified webhook handler
     const payload = req.body;
