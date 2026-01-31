@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 type View = 'dashboard' | 'projects' | 'kanban' | 'clients' | 'team' | 'reports' | 'earnings' | 'superadmin';
+type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'DEV' | 'AGENT' | 'VIEWER';
 
 interface SidebarProps {
     currentView: View;
@@ -10,21 +11,39 @@ interface SidebarProps {
     isCollapsed: boolean;
     toggleCollapse: () => void;
     isSuperAdmin: boolean;
+    userRole?: UserRole;
 }
 
-export default function Sidebar({ currentView, onChangeView, isCollapsed, toggleCollapse, isSuperAdmin }: SidebarProps) {
-    const menuItems = [
-        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-        { id: 'projects', label: 'Proyectos', icon: '🚀' },
-        { id: 'kanban', label: 'Tareas', icon: '📋' },
-        { id: 'clients', label: 'Clientes', icon: '🏢' },
-        { id: 'team', label: 'Equipo', icon: '👥' },
-        { id: 'reports', label: 'Reportes', icon: '📈' },
-        { id: 'earnings', label: 'Nómina', icon: '💰' },
+export default function Sidebar({ currentView, onChangeView, isCollapsed, toggleCollapse, isSuperAdmin, userRole = 'DEV' }: SidebarProps) {
+    // Role-based menu filtering
+    // DEV: dashboard, projects, kanban (personal tasks)
+    // MANAGER: + team, reports, clients
+    // ADMIN: + earnings (finances)
+    // SUPER_ADMIN: + superadmin panel
+
+    const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+    const isManagerOrAbove = isAdmin || userRole === 'MANAGER';
+
+    const allMenuItems = [
+        { id: 'dashboard', label: 'Dashboard', icon: '📊', minRole: 'DEV' },
+        { id: 'projects', label: 'Proyectos', icon: '🚀', minRole: 'DEV' },
+        { id: 'kanban', label: 'Tareas', icon: '📋', minRole: 'DEV' },
+        { id: 'clients', label: 'Clientes', icon: '🏢', minRole: 'MANAGER' },
+        { id: 'team', label: 'Equipo', icon: '👥', minRole: 'MANAGER' },
+        { id: 'reports', label: 'Reportes', icon: '📈', minRole: 'MANAGER' },
+        { id: 'earnings', label: 'Nómina', icon: '💰', minRole: 'ADMIN' },
     ];
 
+    // Filter menu based on user role
+    const menuItems = allMenuItems.filter(item => {
+        if (item.minRole === 'DEV') return true;
+        if (item.minRole === 'MANAGER') return isManagerOrAbove;
+        if (item.minRole === 'ADMIN') return isAdmin;
+        return false;
+    });
+
     if (isSuperAdmin) {
-        menuItems.push({ id: 'superadmin', label: 'Orgs', icon: '👑' });
+        menuItems.push({ id: 'superadmin', label: 'Orgs', icon: '👑', minRole: 'SUPER_ADMIN' });
     }
 
     return (

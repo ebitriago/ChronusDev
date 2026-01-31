@@ -18,97 +18,86 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
     console.log('🌱 Seeding database...');
 
-    // Create admin user
-    const hashedPassword = await bcrypt.hash('admin123', 10);
-    const admin = await prisma.user.upsert({
-        where: { email: 'admin@chronuscrm.com' },
+    // 1. Create Default Organization
+    const organization = await prisma.organization.upsert({
+        where: { slug: 'chronus' },
         update: {},
         create: {
-            email: 'admin@chronuscrm.com',
-            password: hashedPassword,
-            name: 'Admin User',
-            role: Role.ADMIN,
-        },
+            name: 'Chronus Tech',
+            slug: 'chronus'
+        }
     });
-    console.log('✅ Created admin user:', admin.email);
+    console.log('✅ Organization:', organization.name);
 
-    // Create agent user
-    const agent = await prisma.user.upsert({
-        where: { email: 'agent@chronuscrm.com' },
-        update: {},
-        create: {
-            email: 'agent@chronuscrm.com',
-            password: await bcrypt.hash('agent123', 10),
-            name: 'Support Agent',
-            role: Role.AGENT,
-        },
-    });
-    console.log('✅ Created agent user:', agent.email);
+    // 2. Create Users linked to Organization
+    const password = await bcrypt.hash('password123', 10);
 
-    // Create sample customers
+    const users = [
+        { email: 'admin@chronuscrm.com', name: 'Admin User', role: Role.ADMIN },
+        { email: 'superadmin@chronuscrm.com', name: 'Super Admin', role: Role.SUPER_ADMIN },
+        { email: 'agent@chronuscrm.com', name: 'Support Agent', role: Role.AGENT }
+    ];
+
+    for (const u of users) {
+        await prisma.user.upsert({
+            where: { email: u.email },
+            update: {
+                role: u.role,
+                memberships: {
+                    connectOrCreate: {
+                        where: { userId_organizationId: { userId: 'placeholder', organizationId: organization.id } }, // Logic handled by connect if exists
+                        create: { organizationId: organization.id }
+                    }
+                }
+            },
+            create: {
+                email: u.email,
+                name: u.name,
+                password,
+                role: u.role,
+                memberships: {
+                    create: { organizationId: organization.id }
+                }
+            }
+        });
+    }
+    console.log('✅ Created users');
+
+    // Get agent for assignment
+    const agent = await prisma.user.findUnique({ where: { email: 'agent@chronuscrm.com' } });
+
+    // 3. Create Customers
     const customers = [
-        { name: 'TechCorp Solutions', email: 'contact@techcorp.com', company: 'TechCorp', plan: Plan.PRO, status: CustomerStatus.ACTIVE, monthlyRevenue: 299 },
-        { name: 'Digital Agency', email: 'hello@digitalagency.com', company: 'Digital Agency', plan: Plan.ENTERPRISE, status: CustomerStatus.ACTIVE, monthlyRevenue: 599 },
-        { name: 'StartupX', email: 'info@startupx.io', company: 'StartupX', plan: Plan.BASIC, status: CustomerStatus.TRIAL, monthlyRevenue: 49 },
-        { name: 'Maria Rodriguez', email: 'maria@ejemplo.com', company: 'Freelancer', plan: Plan.FREE, status: CustomerStatus.ACTIVE, monthlyRevenue: 0 },
+        { name: 'TechCorp', email: 'contact@techcorp.com', plan: Plan.PRO, status: CustomerStatus.ACTIVE },
+        { name: 'StartUp', email: 'hello@startup.io', plan: Plan.BASIC, status: CustomerStatus.TRIAL }
     ];
 
     for (const c of customers) {
         await prisma.customer.upsert({
             where: { email: c.email },
             update: {},
-            create: c,
-        });
-    }
-    console.log('✅ Created', customers.length, 'customers');
-
-    // Create sample leads
-    const leads = [
-        { name: 'Carlos Mendez', email: 'carlos@prospect.com', company: 'Prospect Inc', value: 5000, status: LeadStatus.NEW, source: LeadSource.ORGANIC },
-        { name: 'Ana Torres', email: 'ana@potential.com', company: 'Potential Corp', value: 12000, status: LeadStatus.QUALIFIED, source: LeadSource.REFERRAL },
-        { name: 'Luis Vargas', email: 'luis@bigclient.com', company: 'Big Client', value: 25000, status: LeadStatus.PROPOSAL, source: LeadSource.PAID },
-    ];
-
-    for (const l of leads) {
-        const existingLead = await prisma.lead.findFirst({ where: { email: l.email } });
-        if (!existingLead) {
-            await prisma.lead.create({ data: l });
-        }
-    }
-    console.log('✅ Created', leads.length, 'leads');
-
-    // Create sample tags
-    const tags = [
-        { name: 'VIP', color: '#EAB308' },
-        { name: 'Premium', color: '#8B5CF6' },
-        { name: 'At Risk', color: '#EF4444' },
-        { name: 'Enterprise', color: '#3B82F6' },
-    ];
-
-    for (const t of tags) {
-        await prisma.tag.upsert({
-            where: { name: t.name },
-            update: {},
-            create: t,
-        });
-    }
-    console.log('✅ Created', tags.length, 'tags');
-
-    // Get first customer for tickets
-    const firstCustomer = await prisma.customer.findFirst();
-    if (firstCustomer) {
-        // Check if tickets exist
-        const ticketCount = await prisma.ticket.count();
-        if (ticketCount === 0) {
-            const tickets = [
-                { title: 'Login issue', description: 'Cannot login to the platform', priority: Priority.HIGH, status: TicketStatus.OPEN, customerId: firstCustomer.id, assignedToId: agent.id },
-                { title: 'Billing question', description: 'Need clarification on invoice', priority: Priority.MEDIUM, status: TicketStatus.IN_PROGRESS, customerId: firstCustomer.id, assignedToId: agent.id },
-            ];
-
-            for (const t of tickets) {
-                await prisma.ticket.create({ data: t });
+            create: {
+                ...c,
+                organizationId: organization.id
             }
-            console.log('✅ Created', tickets.length, 'tickets');
+        });
+    }
+
+    // 4. Create Tickets
+    if (agent) {
+        const customer = await prisma.customer.findFirst({ where: { organizationId: organization.id } });
+        if (customer) {
+            await prisma.ticket.create({
+                data: {
+                    title: 'Login Issue',
+                    description: 'User cannot login',
+                    status: TicketStatus.OPEN,
+                    priority: Priority.HIGH,
+                    customerId: customer.id,
+                    organizationId: organization.id,
+                    assignedToId: agent.id
+                }
+            });
         }
     }
 

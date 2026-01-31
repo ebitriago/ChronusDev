@@ -417,6 +417,62 @@ export default function Integrations() {
                         Configurar
                     </button>
                 </div>
+
+                {/* Meta WhatsApp Business API */}
+                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" className="w-full h-full object-contain" />
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-gray-900">WhatsApp Business API (Meta)</h4>
+                            <p className="text-xs text-gray-500 mb-1">API oficial de Meta/Facebook para empresas</p>
+                            {integrations['META']?.isEnabled ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Conectado
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
+                                    No configurado
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => handleEdit('META')}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                    >
+                        Configurar
+                    </button>
+                </div>
+
+                {/* Instagram Messaging API */}
+                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Instagram_icon.png" alt="Instagram" className="w-full h-full object-contain" />
+                        </div>
+                        <div>
+                            <h4 className="font-bold text-gray-900">Instagram DM</h4>
+                            <p className="text-xs text-gray-500 mb-1">Recibe y responde mensajes de Instagram</p>
+                            {integrations['INSTAGRAM']?.isEnabled ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Conectado
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
+                                    No configurado
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => handleEdit('INSTAGRAM')}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                    >
+                        Configurar
+                    </button>
+                </div>
             </div>
 
             {/* Config Modal */}
@@ -775,6 +831,105 @@ export default function Integrations() {
                                             Crear Agente WhatsApp
                                         </button>
                                     )}
+                                </>
+                            )}
+
+                            {editingProvider === 'META' && (
+                                <>
+                                    <div className="bg-green-50 text-green-800 text-xs p-3 rounded-lg mb-4">
+                                        ℹ️ Configura tu cuenta de WhatsApp Business API desde <a href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer" className="underline font-bold">Meta Developers</a>.
+                                        <br />Tu Webhook URL es: <code className="bg-white px-1 rounded">{API_URL}/meta/webhook</code>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Access Token</label>
+                                        <input
+                                            type="password"
+                                            value={formData.accessToken || ''}
+                                            onChange={e => setFormData({ ...formData, accessToken: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="EAAxxxxxxx..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number ID</label>
+                                        <input
+                                            type="text"
+                                            value={formData.phoneNumberId || ''}
+                                            onChange={e => setFormData({ ...formData, phoneNumberId: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="Ej: 123456789012345"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Business Account ID</label>
+                                        <input
+                                            type="text"
+                                            value={formData.businessAccountId || ''}
+                                            onChange={e => setFormData({ ...formData, businessAccountId: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="Ej: 987654321098765"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Verify Token (para Webhook)</label>
+                                        <input
+                                            type="text"
+                                            value={formData.verifyToken || ''}
+                                            onChange={e => setFormData({ ...formData, verifyToken: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="Token personalizado para verificar webhook"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">Elige un token secreto y colócalo en Meta Developers al configurar el webhook</p>
+                                    </div>
+                                </>
+                            )}
+
+                            {editingProvider === 'INSTAGRAM' && (
+                                <>
+                                    <div className="bg-pink-50 text-pink-800 text-xs p-3 rounded-lg mb-4">
+                                        ℹ️ Configura Instagram Messaging desde <a href="https://developers.facebook.com/apps" target="_blank" rel="noreferrer" className="underline font-bold">Meta Developers</a>.
+                                        <br />Tu Webhook URL es: <code className="bg-white px-1 rounded">{API_URL}/instagram/webhook</code>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Access Token</label>
+                                        <input
+                                            type="password"
+                                            value={formData.accessToken || ''}
+                                            onChange={e => setFormData({ ...formData, accessToken: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="EAAxxxxxxx..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Instagram User ID</label>
+                                        <input
+                                            type="text"
+                                            value={formData.igUserId || ''}
+                                            onChange={e => setFormData({ ...formData, igUserId: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="ID de tu cuenta de Instagram Business"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Facebook Page ID</label>
+                                        <input
+                                            type="text"
+                                            value={formData.pageId || ''}
+                                            onChange={e => setFormData({ ...formData, pageId: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="ID de la página de Facebook conectada"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Verify Token (para Webhook)</label>
+                                        <input
+                                            type="text"
+                                            value={formData.verifyToken || ''}
+                                            onChange={e => setFormData({ ...formData, verifyToken: e.target.value })}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                            placeholder="Token personalizado para verificar webhook"
+                                        />
+                                    </div>
                                 </>
                             )}
 

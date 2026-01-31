@@ -170,6 +170,7 @@ export default function Home() {
               isCollapsed={sidebarCollapsed}
               toggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
               isSuperAdmin={isSuperAdmin}
+              userRole={user.role as any}
             />
           </div>
         </>
@@ -238,15 +239,23 @@ export default function Home() {
 
         {/* Contenido principal */}
         <main className="animate-fadeIn">
-          {isAdmin && view === 'dashboard' && <DashboardAdmin />}
-          {isAdmin && view === 'clients' && <Clients />}
-          {isAdmin && view === 'team' && <Team />}
-          {isAdmin && view === 'reports' && <Reports />}
+          {/* Dashboard - visible to all users */}
+          {view === 'dashboard' && <DashboardAdmin />}
+
+          {/* Manager+ views: clients, team, reports */}
+          {(isAdmin || user.role === 'MANAGER') && view === 'clients' && <Clients />}
+          {(isAdmin || user.role === 'MANAGER') && view === 'team' && <Team />}
+          {(isAdmin || user.role === 'MANAGER') && view === 'reports' && <Reports />}
+
+          {/* Admin only: earnings/finances */}
           {isAdmin && view === 'earnings' && <TeamEarningsReport />}
+
+          {/* Super Admin only */}
           {isSuperAdmin && view === 'superadmin' && <SuperAdminPanel />}
 
-          {isAdmin && view === 'projects' && (
-            <div className="p-6 max-w-7xl mx-auto">
+          {/* Projects - visible to all users */}
+          {view === 'projects' && (
+            <div className="p-4 md:p-6 max-w-7xl mx-auto">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">Proyectos</h2>
@@ -296,8 +305,8 @@ export default function Home() {
               </div>
             </div>
           )}
-
-          {(view === 'kanban' || !isAdmin) && selectedProject && (
+          {/* Kanban - visible to all users */}
+          {view === 'kanban' && selectedProject && (
             <Kanban
               project={selectedProject}
               allProjects={projects}

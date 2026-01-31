@@ -1,9 +1,10 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001';
-console.log('🔗 API configured at:', API_URL);
+// ChronusDev uses the same backend as CRM (unified Prisma database)
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3002';
+console.log('🔗 ChronusDev API configured at:', API_URL);
 
 // ========== TIPOS ==========
 
-export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'DEV';
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'DEV' | 'AGENT' | 'VIEWER';
 export type ProjectStatus = 'PLANNING' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
 export type TaskStatus = 'BACKLOG' | 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
 
@@ -30,10 +31,12 @@ export type Project = {
   name: string;
   description?: string;
   clientId: string;
+  customerId?: string; // CRM uses customerId
   budget: number;
   currency: string;
   status: ProjectStatus;
   client?: Client;
+  customer?: { id: string; name: string; email?: string }; // CRM Customer relation
   members?: ProjectMember[];
 };
 
@@ -54,7 +57,9 @@ export type Task = {
   description?: string;
   status: TaskStatus;
   assignedTo?: string;
+  assignedToId?: string; // CRM uses assignedToId
   createdBy: string;
+  createdById?: string; // CRM uses createdById
   estimatedHours?: number;
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   dueDate?: string;
@@ -63,6 +68,8 @@ export type Task = {
   commentsCount?: number;
   assignedUser?: { id: string; name: string };
   comments?: TaskComment[];
+  // Link to CRM ticket
+  tickets?: { id: string; title: string; status: string }[];
 };
 
 export type TaskComment = {
@@ -87,6 +94,7 @@ export type TimeLog = {
   billCost?: number;
   status: 'RUNNING' | 'STOPPED';
   note?: string;
+  description?: string; // CRM uses description
   task?: { id: string; title: string };
   project?: { id: string; name: string };
 };
@@ -107,7 +115,8 @@ export type ProjectSummary = {
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    return localStorage.getItem('authToken');
+    // Try CRM token first (shared session), then legacy authToken
+    return localStorage.getItem('crm_token') || localStorage.getItem('authToken');
   } catch {
     return null;
   }
@@ -120,7 +129,6 @@ function getHeaders(): HeadersInit {
   };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
-    headers['x-auth-token'] = token;
   }
   return headers;
 }
@@ -139,7 +147,9 @@ export async function login(email: string, password: string): Promise<{ user: Us
   }
   const data = await res.json();
   if (typeof window !== 'undefined') {
+    // Save both tokens for cross-app compatibility (CRM and ChronusDev)
     localStorage.setItem('authToken', data.token);
+    localStorage.setItem('crm_token', data.token);
     localStorage.setItem('userId', data.user.id);
   }
   return data;
@@ -157,7 +167,9 @@ export async function register(email: string, password: string, name: string): P
   }
   const data = await res.json();
   if (typeof window !== 'undefined') {
+    // Save both tokens for cross-app compatibility
     localStorage.setItem('authToken', data.token);
+    localStorage.setItem('crm_token', data.token);
     localStorage.setItem('userId', data.user.id);
   }
   return data;
@@ -183,6 +195,7 @@ export async function getCurrentUser(): Promise<User> {
 export function logout() {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('crm_token');
     localStorage.removeItem('userId');
   }
 }

@@ -14,13 +14,15 @@ services:
       context: .
       dockerfile: apps/frontend/Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=${CHRONUSDEV_FRONTEND_API_URL:-/api}
+        # Use CRM backend for unified database
+        - NEXT_PUBLIC_API_URL=http://chronuscrm-backend:3002
     container_name: chronusdev-frontend
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=${CHRONUSDEV_FRONTEND_API_URL:-/api}
+      - NEXT_PUBLIC_API_URL=http://chronuscrm-backend:3002
+      - NEXT_PUBLIC_CRM_APP_URL=http://localhost:3003
       - CRM_BACKEND_INTERNAL_URL=http://chronuscrm-backend:3002
     depends_on:
       chronuscrm-backend:

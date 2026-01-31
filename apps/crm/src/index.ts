@@ -1170,6 +1170,10 @@ app.post("/tickets/:id/send-to-chronusdev", authMiddleware, async (req: any, res
         const organizationId = req.user?.organizationId;
         const userId = req.user?.id;
 
+        if (!organizationId) {
+            return res.status(400).json({ error: "Organization context required" });
+        }
+
         const ticket = await (prisma as any).ticket.findFirst({
             where: { id: req.params.id, organizationId },
             include: { customer: true }
@@ -1180,13 +1184,48 @@ app.post("/tickets/:id/send-to-chronusdev", authMiddleware, async (req: any, res
 
         let { projectId, priority, assignedToId } = req.body;
 
-        if (!projectId) {
-            projectId = (ticket.customer as any)?.chronusDevDefaultProjectId;
+        // Try to get project from customer's default
+        if (!projectId && ticket.customer) {
+            projectId = ticket.customer.chronusDevDefaultProjectId;
         }
 
-        if (!projectId) return res.status(400).json({ error: "projectId requerido y el cliente no tiene proyecto por defecto" });
+        // If still no project, auto-create one for the customer or organization
+        if (!projectId) {
+            console.log('[ChronusDev] No project found, auto-creating one...');
 
-        // Logic: Create Task associated with Project and this Ticket
+            // Find or create a default project
+            let project = await (prisma as any).project.findFirst({
+                where: {
+                    organizationId,
+                    name: 'Tickets de Soporte'
+                }
+            });
+
+            if (!project) {
+                project = await (prisma as any).project.create({
+                    data: {
+                        name: 'Tickets de Soporte',
+                        description: 'Proyecto automático para gestión de tickets',
+                        status: 'ACTIVE',
+                        organizationId,
+                        customerId: ticket.customerId || null
+                    }
+                });
+                console.log('[ChronusDev] Created default project:', project.id);
+            }
+
+            projectId = project.id;
+
+            // Update customer with default project if they don't have one
+            if (ticket.customerId && !ticket.customer?.chronusDevDefaultProjectId) {
+                await (prisma as any).customer.update({
+                    where: { id: ticket.customerId },
+                    data: { chronusDevDefaultProjectId: projectId }
+                });
+            }
+        }
+
+        // Create Task associated with Project
         const task = await (prisma as any).task.create({
             data: {
                 title: `[TICKET] ${ticket.title}`,
@@ -1196,25 +1235,24 @@ app.post("/tickets/:id/send-to-chronusdev", authMiddleware, async (req: any, res
                 projectId: projectId,
                 assignedToId: assignedToId || null,
                 createdById: userId,
-                // Link back to ticket (One-to-many from Task side, though logic suggests 1-1 mostly)
                 tickets: {
                     connect: { id: ticket.id }
                 }
             }
         });
 
-        // Update Ticket with relations
+        // Update Ticket with task link
         const updatedTicket = await (prisma as any).ticket.update({
             where: { id: ticket.id },
             data: {
                 taskId: task.id,
-                status: "IN_PROGRESS", // Auto-advance ticket logic
-                // Legacy fields sync (optional, keeping for safety)
+                status: "IN_PROGRESS",
                 chronusDevTaskId: task.id,
                 chronusDevProjectId: projectId
             }
         });
 
+        console.log(`[ChronusDev] Created task ${task.id} for ticket ${ticket.id}`);
         res.json({ success: true, ticket: updatedTicket, task });
     } catch (err: any) {
         console.error("Error converting ticket to task:", err);
@@ -3575,6 +3613,16 @@ app.use("/api/assistai", assistaiRouter);
 // If frontend calls /assistai/agents, allow mounting at /assistai too.
 app.use("/assistai", assistaiRouter);
 
+// ========== META WHATSAPP BUSINESS API ==========
+import { metaWhatsAppRouter } from "./routes/meta-whatsapp.js";
+app.use("/meta", metaWhatsAppRouter);
+app.use("/api/meta", metaWhatsAppRouter);
+
+// ========== INSTAGRAM MESSAGING API ==========
+import { instagramRouter } from "./routes/instagram.js";
+app.use("/instagram", instagramRouter);
+app.use("/api/instagram", instagramRouter);
+
 // Helper to get AssistAI Config for a User (Moved logic to Service if needed, or keep for Auth/limited use)
 // For now keeping this as it touches Prisma and User model directly which Service might not have access to yet without circular deps?
 // Actually we can keep this for Multi-tenancy support if specialized.
@@ -3652,19 +3700,47 @@ app.get("/organizations", authMiddleware, requireRole('SUPER_ADMIN'), async (req
 
 app.put("/organizations/:id", authMiddleware, requireRole('SUPER_ADMIN'), async (req: any, res) => {
     const { id } = req.params;
-    const { name, enabledServices } = req.body;
+    const { name, slug, enabledServices, isActive } = req.body;
 
     try {
+        const updateData: any = {};
+        if (name !== undefined) updateData.name = name;
+        if (slug !== undefined) updateData.slug = slug;
+        if (enabledServices !== undefined) updateData.enabledServices = enabledServices;
+        if (isActive !== undefined) updateData.isActive = isActive;
+
         const org = await prisma.organization.update({
             where: { id },
-            data: {
-                name,
-                enabledServices
-            }
+            data: updateData
         });
         res.json(org);
     } catch (e) {
         res.status(500).json({ error: "Failed to update organization" });
+    }
+});
+
+// Delete Organization (Super Admin only)
+app.delete("/organizations/:id", authMiddleware, requireRole('SUPER_ADMIN'), async (req: any, res) => {
+    const { id } = req.params;
+
+    try {
+        // First check if org exists
+        const org = await prisma.organization.findUnique({ where: { id } });
+        if (!org) {
+            return res.status(404).json({ error: "Organización no encontrada" });
+        }
+
+        // Delete related data (memberships, integrations, etc.)
+        await prisma.organizationMember.deleteMany({ where: { organizationId: id } });
+        await prisma.integration.deleteMany({ where: { organizationId: id } });
+
+        // Delete the organization
+        await prisma.organization.delete({ where: { id } });
+
+        res.json({ success: true, message: "Organización eliminada" });
+    } catch (e: any) {
+        console.error("Delete org error:", e);
+        res.status(500).json({ error: e.message || "Failed to delete organization" });
     }
 });
 
@@ -3761,6 +3837,123 @@ app.patch("/admin/users/:id", authMiddleware, requireRole('SUPER_ADMIN'), async 
         res.json(rest);
     } catch (err: any) {
         res.status(400).json({ error: err.message });
+    }
+});
+
+// ========== SUPER ADMIN SAAS METRICS ==========
+
+// Get comprehensive platform metrics for Super Admin dashboard
+app.get("/admin/saas-metrics", authMiddleware, requireRole('SUPER_ADMIN'), async (req: any, res) => {
+    try {
+        const now = new Date();
+        const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+        // Parallel queries for performance
+        const [
+            totalOrgs,
+            activeOrgs,
+            totalUsers,
+            newUsersThisMonth,
+            totalCustomers,
+            newCustomersThisMonth,
+            totalTickets,
+            openTickets,
+            ticketsThisMonth,
+            totalProjects,
+            activeProjects,
+            usersByRole,
+            orgsByMonth,
+            customersByPlan
+        ] = await Promise.all([
+            prisma.organization.count(),
+            (prisma.organization.count as any)({ where: { isActive: true } }),
+            prisma.user.count(),
+            prisma.user.count({ where: { createdAt: { gte: thisMonth } } }),
+            prisma.customer.count(),
+            prisma.customer.count({ where: { createdAt: { gte: thisMonth } } }),
+            prisma.ticket.count(),
+            prisma.ticket.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
+            prisma.ticket.count({ where: { createdAt: { gte: thisMonth } } }),
+            (prisma as any).project.count(),
+            (prisma as any).project.count({ where: { status: 'ACTIVE' } }),
+            prisma.user.groupBy({ by: ['role'], _count: { role: true } }),
+            prisma.organization.groupBy({
+                by: ['createdAt'],
+                _count: { id: true },
+                orderBy: { createdAt: 'asc' }
+            }),
+            prisma.customer.groupBy({ by: ['plan'], _count: { plan: true } })
+        ]);
+
+        // Calculate MRR estimate based on customers by plan
+        const planPricing: Record<string, number> = {
+            'FREE': 0,
+            'BASIC': 29,
+            'PRO': 79,
+            'ENTERPRISE': 199,
+            'PREMIUM': 99,
+            'TRIAL': 0
+        };
+
+        const mrr = customersByPlan.reduce((sum, item) => {
+            const price = planPricing[item.plan] || 0;
+            return sum + (price * item._count.plan);
+        }, 0);
+
+        // Format users by role
+        const roleStats = usersByRole.reduce((acc, item) => {
+            acc[item.role] = item._count.role;
+            return acc;
+        }, {} as Record<string, number>);
+
+        // Calculate growth rates
+        const suspendedOrgs = totalOrgs - activeOrgs;
+        const ticketResolutionRate = totalTickets > 0
+            ? Math.round(((totalTickets - openTickets) / totalTickets) * 100)
+            : 0;
+
+        res.json({
+            // Overview
+            overview: {
+                totalOrganizations: totalOrgs,
+                activeOrganizations: activeOrgs,
+                suspendedOrganizations: suspendedOrgs,
+                totalUsers: totalUsers,
+                newUsersThisMonth: newUsersThisMonth,
+                totalCustomers: totalCustomers,
+                newCustomersThisMonth: newCustomersThisMonth
+            },
+            // Tickets & Support
+            support: {
+                totalTickets: totalTickets,
+                openTickets: openTickets,
+                ticketsThisMonth: ticketsThisMonth,
+                resolutionRate: ticketResolutionRate
+            },
+            // Projects (ChronusDev)
+            projects: {
+                total: totalProjects,
+                active: activeProjects
+            },
+            // Revenue
+            revenue: {
+                estimatedMRR: mrr,
+                customersByPlan: customersByPlan.map(p => ({
+                    plan: p.plan,
+                    count: p._count.plan,
+                    revenue: (planPricing[p.plan] || 0) * p._count.plan
+                }))
+            },
+            // User breakdown
+            usersByRole: roleStats,
+            // Timestamps
+            generatedAt: now.toISOString()
+        });
+    } catch (err: any) {
+        console.error("Error fetching SaaS metrics:", err);
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -4607,6 +4800,8 @@ const openApiSpec = {
     },
     servers: [{ url: 'http://localhost:3002', description: 'Servidor de desarrollo' }],
     tags: [
+        { name: 'SuperAdmin', description: 'Métricas y gestión global de la plataforma (SaaS)' },
+        { name: 'Notifications', description: 'Centro de notificaciones y preferencias' },
         { name: 'Customers', description: 'Gestión de clientes' },
         { name: 'Tickets', description: 'Tickets de soporte' },
         { name: 'Invoices', description: 'Facturación' },
@@ -4614,7 +4809,6 @@ const openApiSpec = {
         { name: 'Inbox', description: 'Bandeja de entrada unificada' },
         { name: 'Leads', description: 'Gestión de leads' },
         { name: 'Finance', description: 'Transacciones financieras' },
-        { name: 'Notifications', description: 'Sistema de notificaciones' },
         { name: 'Email', description: 'Servicios de Email (Gmail)' },
         { name: 'Calendar', description: 'Google Calendar & Meet' },
         { name: 'Integrations', description: 'Gestión de credenciales de usuario' },
@@ -4622,6 +4816,55 @@ const openApiSpec = {
         { name: 'Reports', description: 'Reportes y PDF' }
     ],
     paths: {
+        '/admin/saas-metrics': {
+            get: {
+                tags: ['SuperAdmin'],
+                summary: 'Métricas SaaS Globales',
+                description: 'Devuelve un resumen completo del estado de la plataforma: MRR estimado, crecimiento de usuarios, tickets, y estado de las organizaciones.',
+                responses: {
+                    '200': {
+                        description: 'Dashboard de métricas',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        overview: { type: 'object' },
+                                        revenue: { type: 'object', description: 'MRR y desglose por plan' },
+                                        support: { type: 'object', description: 'Métricas de tickets' },
+                                        projects: { type: 'object' },
+                                        usersByRole: { type: 'object' }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        '/notifications': {
+            get: {
+                tags: ['Notifications'],
+                summary: 'Listar notificaciones',
+                description: 'Obtiene las últimas 50 notificaciones del usuario autenticado.',
+                responses: { '200': { description: 'Lista de notificaciones' } }
+            }
+        },
+        '/notifications/{id}/read': {
+            patch: {
+                tags: ['Notifications'],
+                summary: 'Marcar como leída',
+                parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+                responses: { '200': { description: 'Marcada como leída' } }
+            }
+        },
+        '/notifications/read-all': {
+            patch: {
+                tags: ['Notifications'],
+                summary: 'Marcar todas como leídas',
+                responses: { '200': { description: 'Todas marcadas como leídas' } }
+            }
+        },
         '/customers': {
             get: { tags: ['Customers'], summary: 'Listar todos los clientes', responses: { '200': { description: 'Lista de clientes' } } },
             post: { tags: ['Customers'], summary: 'Crear cliente', requestBody: { content: { 'application/json': { schema: { type: 'object' } } } }, responses: { '201': { description: 'Cliente creado' } } }
@@ -4675,24 +4918,6 @@ const openApiSpec = {
         '/transactions': {
             get: { tags: ['Finance'], summary: 'Listar transacciones', responses: { '200': { description: 'Transacciones' } } },
             post: { tags: ['Finance'], summary: 'Crear transacción', responses: { '201': { description: 'Creada' } } }
-        },
-        '/notifications': {
-            get: { tags: ['Notifications'], summary: 'Listar notificaciones de usuario', parameters: [{ name: 'userId', in: 'query', schema: { type: 'string' } }, { name: 'unread', in: 'query', schema: { type: 'boolean' } }], responses: { '200': { description: 'Lista de notificaciones con contador de no leídas' } } },
-            post: { tags: ['Notifications'], summary: 'Crear notificación', requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { userId: { type: 'string' }, type: { type: 'string', enum: ['message', 'ticket', 'invoice', 'system', 'assistai'] }, title: { type: 'string' }, body: { type: 'string' } } } } } }, responses: { '201': { description: 'Notificación creada y emitida via socket' } } }
-        },
-        '/notifications/{id}/read': {
-            patch: { tags: ['Notifications'], summary: 'Marcar como leída', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { '200': { description: 'Notificación marcada como leída' } } }
-        },
-        '/notifications/mark-all-read': {
-            post: { tags: ['Notifications'], summary: 'Marcar todas como leídas', responses: { '200': { description: 'Todas marcadas' } } }
-        },
-        '/notifications/devices': {
-            get: { tags: ['Notifications'], summary: 'Listar dispositivos push de usuario', responses: { '200': { description: 'Dispositivos registrados' } } },
-            post: { tags: ['Notifications'], summary: 'Registrar dispositivo para push', description: 'Registra un dispositivo iOS, Android o Web para recibir notificaciones push', requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { userId: { type: 'string' }, token: { type: 'string' }, platform: { type: 'string', enum: ['ios', 'android', 'web'] } } } } } }, responses: { '201': { description: 'Dispositivo registrado' } } }
-        },
-        '/notifications/preferences': {
-            get: { tags: ['Notifications'], summary: 'Obtener preferencias de notificación', responses: { '200': { description: 'Preferencias del usuario' } } },
-            put: { tags: ['Notifications'], summary: 'Actualizar preferencias', requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { userId: { type: 'string' }, pushEnabled: { type: 'boolean' }, emailEnabled: { type: 'boolean' }, channels: { type: 'object' } } } } } }, responses: { '200': { description: 'Preferencias actualizadas' } } }
         },
         '/email/send': {
             post: { tags: ['Email'], summary: 'Enviar email', requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['to', 'subject'], properties: { to: { type: 'string' }, subject: { type: 'string' }, text: { type: 'string' }, html: { type: 'string' } } } } } }, responses: { '200': { description: 'Email enviado' } } }
@@ -6491,6 +6716,12 @@ app.put("/tasks/:id", authMiddleware, async (req: any, res) => {
         const { id } = req.params;
         const { title, description, status, priority, assignedToId } = req.body;
 
+        // Get current task to check for status change
+        const currentTask = await (prisma as any).task.findUnique({
+            where: { id },
+            select: { status: true }
+        });
+
         const updated = await (prisma as any).task.update({
             where: { id },
             data: {
@@ -6500,8 +6731,26 @@ app.put("/tasks/:id", authMiddleware, async (req: any, res) => {
                 priority,
                 assignedToId
             },
-            include: { assignedTo: true }
+            include: {
+                assignedTo: true,
+                tickets: { select: { id: true, status: true } }
+            }
         });
+
+        // 🔄 SYNC: When task is completed, update linked tickets to RESOLVED
+        if (status === 'DONE' && currentTask?.status !== 'DONE') {
+            const ticketsToUpdate = updated.tickets || [];
+            for (const ticket of ticketsToUpdate) {
+                if (ticket.status !== 'CLOSED' && ticket.status !== 'RESOLVED') {
+                    await (prisma as any).ticket.update({
+                        where: { id: ticket.id },
+                        data: { status: 'RESOLVED' }
+                    });
+                    console.log(`[Sync] Task ${id} DONE → Ticket ${ticket.id} RESOLVED`);
+                }
+            }
+        }
+
         res.json(updated);
     } catch (error) {
         console.error("Error updating task:", error);
@@ -6727,6 +6976,76 @@ app.get("/auth/google/callback", async (req: any, res) => {
 
     } catch (e) {
         res.status(500).send("Error in callback");
+    }
+});
+
+// ========== NOTIFICATIONS ==========
+
+// Get user notifications
+app.get("/notifications", authMiddleware, async (req: any, res) => {
+    try {
+        const userId = req.user?.id;
+        const organizationId = req.user?.organizationId;
+
+        if (!userId || !organizationId) {
+            return res.status(401).json({ error: "Not authenticated" });
+        }
+
+        const notifications = await prisma.notification.findMany({
+            where: { userId, organizationId },
+            orderBy: { createdAt: 'desc' },
+            take: 50
+        });
+
+        // Map to frontend-expected format
+        const mapped = notifications.map(n => ({
+            id: n.id,
+            type: n.type,
+            title: n.title,
+            message: n.body,
+            read: n.read,
+            link: (n.data as any)?.link || null,
+            createdAt: n.createdAt.toISOString()
+        }));
+
+        res.json(mapped);
+    } catch (err: any) {
+        console.error("Error fetching notifications:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Mark single notification as read
+app.patch("/notifications/:id/read", authMiddleware, async (req: any, res) => {
+    try {
+        const userId = req.user?.id;
+        const { id } = req.params;
+
+        const notification = await prisma.notification.updateMany({
+            where: { id, userId },
+            data: { read: true }
+        });
+
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Mark all notifications as read
+app.patch("/notifications/read-all", authMiddleware, async (req: any, res) => {
+    try {
+        const userId = req.user?.id;
+        const organizationId = req.user?.organizationId;
+
+        await prisma.notification.updateMany({
+            where: { userId, organizationId, read: false },
+            data: { read: true }
+        });
+
+        res.json({ success: true });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message });
     }
 });
 
