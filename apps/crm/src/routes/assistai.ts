@@ -1,3 +1,68 @@
+
+/**
+ * @openapi
+ * /assistai/agents:
+ *   get:
+ *     tags: [AssistAI]
+ *     summary: List all AI Agents
+ *     responses:
+ *       200:
+ *         description: List of agents
+ */
+/**
+ * @openapi
+ * /assistai/conversations:
+ *   get:
+ *     tags: [AssistAI]
+ *     summary: List conversations
+ *     parameters:
+ *       - in: query
+ *         name: agentCode
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of conversations
+ */
+/**
+ * @openapi
+ * /assistai/conversations/{uuid}/messages:
+ *   get:
+ *     tags: [AssistAI]
+ *     summary: Get messages for a conversation
+ *     parameters:
+ *       - in: path
+ *         name: uuid
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of messages
+ */
+/**
+ * @openapi
+ * /assistai/conversations/{uuid}/export:
+ *   get:
+ *     tags: [AssistAI]
+ *     summary: Export Conversation History
+ *     description: Download conversation history as JSON or TXT.
+ *     parameters:
+ *       - in: path
+ *         name: uuid
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [json, txt]
+ *         description: Format of the export (default json)
+ *     responses:
+ *       200:
+ *         description: File download
+ */
 import express from "express";
 import { AssistAIService } from "../services/assistai.js";
 import { authMiddleware } from "../auth.js";
@@ -13,14 +78,25 @@ async function getConfig(req: express.Request) {
         throw new Error("User does not belong to an organization");
     }
 
-    // Try to find Integration record for this org
-    const integration = await prisma.integration.findFirst({
+    // Try to find Integration record for this org (or global)
+    let integration = await prisma.integration.findFirst({
         where: {
             organizationId: user.organizationId,
             provider: 'ASSISTAI',
             isEnabled: true
         }
     });
+
+    // Fallback to global integration (organizationId is NULL)
+    if (!integration) {
+        integration = await prisma.integration.findFirst({
+            where: {
+                organizationId: null,
+                provider: 'ASSISTAI',
+                isEnabled: true
+            }
+        });
+    }
 
     if (integration && integration.credentials) {
         const creds = integration.credentials as any;
@@ -57,6 +133,8 @@ router.get("/agents", async (req, res) => {
         res.status(503).json({ error: error.message });
     }
 });
+
+
 
 // GET Single Agent + Details
 router.get("/agents/:code", authMiddleware, async (req: any, res) => {
@@ -151,6 +229,63 @@ router.get("/conversations", authMiddleware, async (req, res) => {
     }
 });
 
+// POST Preview Chat - Create or continue a test conversation with an agent
+router.post("/preview/chat", authMiddleware, async (req: any, res) => {
+    try {
+        const config = await getConfig(req);
+        const { agentCode, message, conversationId } = req.body;
+
+        if (!agentCode || !message) {
+            return res.status(400).json({ error: "agentCode and message are required" });
+        }
+
+        let uuid = conversationId;
+
+        // If no conversationId, create a new conversation
+        if (!uuid) {
+            console.log(`[AssistAI Preview] Creating new conversation for agent: ${agentCode}`);
+            const convResult = await AssistAIService.createConversation(config, {
+                agentCode,
+                guest: { name: 'CRM Preview User' },
+                source: 'crm-preview'
+            });
+            uuid = convResult.id || convResult.uuid || convResult.data?.id;
+            console.log(`[AssistAI Preview] Created conversation: ${uuid}`);
+        }
+
+        // Send the user message
+        console.log(`[AssistAI Preview] Sending message to conversation: ${uuid}`);
+        await AssistAIService.sendMessage(config, uuid, message, 'CRM User');
+
+        // Wait a moment for AI to process and respond
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Fetch messages to get the response
+        const messagesResult = await AssistAIService.getMessages(config, uuid, 50);
+        const messages = messagesResult.data || [];
+
+        // Find the latest assistant response
+        const agentResponse = messages
+            .filter((m: any) => m.role === 'assistant' || m.sender === 'agent')
+            .pop();
+
+        res.json({
+            success: true,
+            conversationId: uuid,
+            userMessage: message,
+            agentResponse: agentResponse?.content || 'Procesando respuesta...',
+            messages: messages.map((m: any) => ({
+                role: m.role || (m.sender === 'user' ? 'user' : 'assistant'),
+                content: m.content,
+                createdAt: m.createdAt
+            }))
+        });
+    } catch (error: any) {
+        console.error('[AssistAI Preview] Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // GET Messages for Conversation
 router.get("/conversations/:uuid/messages", authMiddleware, async (req, res) => {
     try {
@@ -162,12 +297,78 @@ router.get("/conversations/:uuid/messages", authMiddleware, async (req, res) => 
     }
 });
 
+// GET /conversations/:uuid/export (Download conversation history as JSON)
+router.get("/conversations/:uuid/export", authMiddleware, async (req, res) => {
+    try {
+        const config = await getConfig(req);
+        const { uuid } = req.params;
+        const format = (req.query.format as string) || 'json';
+
+        // Fetch all messages
+        const result = await AssistAIService.getMessages(config, uuid, 500);
+        const messages = result.data || [];
+
+        // Look up local conversation info
+        const conversation = await prisma.conversation.findFirst({
+            where: { sessionId: uuid },
+            include: {
+                customer: { select: { id: true, name: true, email: true, phone: true } }
+            }
+        });
+
+        if (format === 'txt') {
+            // Plain text format
+            let text = `=== Conversación ${uuid} ===\n`;
+            text += `Fecha de exportación: ${new Date().toISOString()}\n`;
+            if (conversation?.customer) {
+                text += `Cliente: ${conversation.customer.name} (${conversation.customer.email || conversation.customer.phone})\n`;
+            }
+            text += `Plataforma: ${conversation?.platform || 'N/A'}\n`;
+            text += `Total mensajes: ${messages.length}\n`;
+            text += `${'='.repeat(50)}\n\n`;
+
+            messages.forEach((m: any) => {
+                const time = m.createdAt ? new Date(m.createdAt).toLocaleString('es-ES') : '';
+                const sender = m.sender || m.role || 'unknown';
+                text += `[${time}] ${sender.toUpperCase()}: ${m.content}\n\n`;
+            });
+
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="conversacion_${uuid.slice(0, 8)}.txt"`);
+            return res.send(text);
+        }
+
+        // JSON format
+        const exportData = {
+            exportDate: new Date().toISOString(),
+            conversationId: uuid,
+            platform: conversation?.platform || null,
+            customer: conversation?.customer || null,
+            totalMessages: messages.length,
+            messages: messages.map((m: any) => ({
+                sender: m.sender || m.role,
+                content: m.content,
+                createdAt: m.createdAt,
+                type: m.mediaType || 'text'
+            }))
+        };
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="conversacion_${uuid.slice(0, 8)}.json"`);
+        res.json(exportData);
+
+    } catch (error: any) {
+        console.error("GET /conversations/:uuid/export error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // POST Send Message
 router.post("/conversations/:uuid/messages", authMiddleware, async (req, res) => {
     try {
         const config = await getConfig(req);
-        const { content, senderName } = req.body;
-        const result = await AssistAIService.sendMessage(config, req.params.uuid, content, senderName);
+        const { content, senderName, isIntervention } = req.body;
+        const result = await AssistAIService.sendMessage(config, req.params.uuid, content, senderName, isIntervention);
         res.json(result);
     } catch (error: any) {
         res.status(500).json({ error: error.message });
@@ -288,12 +489,20 @@ router.post("/webhook", async (req, res) => {
     if (event === 'ORDER_CREATED') {
         try {
             console.log('[AssistAI Webhook] Processing ORDER_CREATED', payload);
-            const { cart, customer, agentCode } = payload;
+            const { cart, customer, agentCode, organizationCode } = payload;
 
             // 1. Resolve Organization
             // Ideally use agentCode or payload.organizationCode
+            let defaultOrg = null;
+            if (organizationCode) {
+                defaultOrg = await prisma.organization.findFirst({ where: { slug: organizationCode } });
+            }
+
             // Fallback to 'chronus' slug for demo/PoC
-            const defaultOrg = await prisma.organization.findFirst({ where: { slug: 'chronus' } });
+            if (!defaultOrg) {
+                defaultOrg = await prisma.organization.findFirst({ where: { slug: 'chronus' } });
+            }
+
             if (!defaultOrg) {
                 console.error('[AssistAI Webhook] Default org not found');
                 return res.status(404).json({ error: 'Default org not found' });

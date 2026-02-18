@@ -1,0 +1,421 @@
+
+> @chronusdev/crm-frontend@0.1.0 dev
+> next dev -p 3003
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3003
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1241ms
+(node:60123) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ○ Compiling / ...
+ ✓ Compiled / in 1863ms (3407 modules)
+🔗 API configured at: http://localhost:3002
+ GET / 200 in 2157ms
+ ✓ Compiled in 235ms (1693 modules)
+ GET / 200 in 44ms
+Failed to proxy http://localhost:3002/socket.io?EIO=4&transport=polling&t=w9j7gk0p AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7) {
+  code: 'ECONNREFUSED',
+  [errors]: [
+    Error: connect ECONNREFUSED ::1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '::1',
+      port: 3002
+    },
+    Error: connect ECONNREFUSED 127.0.0.1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3002
+    }
+  ]
+}
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7) {
+  code: 'ECONNREFUSED',
+  [errors]: [
+    Error: connect ECONNREFUSED ::1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '::1',
+      port: 3002
+    },
+    Error: connect ECONNREFUSED 127.0.0.1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3002
+    }
+  ]
+}
+Failed to proxy http://localhost:3002/socket.io?EIO=4&transport=polling&t=w9jjx9cv AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7) {
+  code: 'ECONNREFUSED',
+  [errors]: [
+    Error: connect ECONNREFUSED ::1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '::1',
+      port: 3002
+    },
+    Error: connect ECONNREFUSED 127.0.0.1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3002
+    }
+  ]
+}
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7) {
+  code: 'ECONNREFUSED',
+  [errors]: [
+    Error: connect ECONNREFUSED ::1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '::1',
+      port: 3002
+    },
+    Error: connect ECONNREFUSED 127.0.0.1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3002
+    }
+  ]
+}
+ ○ Compiling /_error ...
+Failed to proxy http://localhost:3002/socket.io?EIO=4&transport=polling&t=w9jm44b5 AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7) {
+  code: 'ECONNREFUSED',
+  [errors]: [
+    Error: connect ECONNREFUSED ::1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '::1',
+      port: 3002
+    },
+    Error: connect ECONNREFUSED 127.0.0.1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3002
+    }
+  ]
+}
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7) {
+  code: 'ECONNREFUSED',
+  [errors]: [
+    Error: connect ECONNREFUSED ::1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '::1',
+      port: 3002
+    },
+    Error: connect ECONNREFUSED 127.0.0.1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3002
+    }
+  ]
+}
+Failed to proxy http://localhost:3002/socket.io?EIO=4&transport=polling&t=w9jmca8v AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7) {
+  code: 'ECONNREFUSED',
+  [errors]: [
+    Error: connect ECONNREFUSED ::1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '::1',
+      port: 3002
+    },
+    Error: connect ECONNREFUSED 127.0.0.1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3002
+    }
+  ]
+}
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7) {
+  code: 'ECONNREFUSED',
+  [errors]: [
+    Error: connect ECONNREFUSED ::1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '::1',
+      port: 3002
+    },
+    Error: connect ECONNREFUSED 127.0.0.1:3002
+        at createConnectionError (node:net:1678:14)
+        at afterConnectMultiple (node:net:1708:16) {
+      errno: -61,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3002
+    }
+  ]
+}
+ ✓ Compiled /_error in 637ms (3627 modules)
+ ✓ Compiled in 681ms (3639 modules)
+ ✓ Compiled in 489ms (3639 modules)
+ ✓ Compiled in 311ms (3639 modules)
+🔗 API configured at: http://localhost:3002
+ GET / 200 in 286ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 785ms (3628 modules)
+ GET /_next/static/css/app/layout.css?v=1770262787587 404 in 838ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 798ms
+ GET /_next/static/chunks/webpack.js?v=1770262787587 404 in 835ms
+ GET /_next/static/chunks/main-app.js?v=1770262787587 404 in 798ms
+ GET /_next/static/chunks/app/layout.js 404 in 798ms
+ GET /_next/static/chunks/app/page.js 404 in 799ms
+ ⨯ Error: Cannot find module './819.js'
+Require stack:
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/webpack-runtime.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/app/_not-found/page.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/require.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/load-components.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/build/utils.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/dev/hot-middleware.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/dev/hot-reloader-webpack.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/router-server.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/start-server.js
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1421:15)
+    at /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/require-hook.js:55:36
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1059:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1064:22)
+    at Module._load (node:internal/modules/cjs/loader:1227:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1504:12)
+    at mod.require (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:152:16)
+    at __webpack_require__.f.require (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/webpack-runtime.js:198:28)
+    at /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/webpack-runtime.js:111:40
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/webpack-runtime.js:162:22)
+    at /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/app/page.js:218:719100
+    at Object.<anonymous> (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/app/page.js:218:719152)
+    at Module._compile (node:internal/modules/cjs/loader:1761:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1481:32)
+    at Module._load (node:internal/modules/cjs/loader:1300:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1504:12)
+    at mod.require (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:152:16)
+    at requirePage (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/require.js:109:84)
+    at /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/load-components.js:103:84
+    at async loadComponentsImpl (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/load-components.js:103:26)
+    at async DevServer.findPageComponentsImpl (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/next-server.js:714:36)
+    at async DevServer.findPageComponents (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/dev/next-dev-server.js:577:20)
+    at async DevServer.renderPageComponent (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/base-server.js:1910:24)
+    at async DevServer.renderToResponseImpl (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/base-server.js:1962:32)
+    at async DevServer.pipeImpl (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/next-server.js:272:17)
+    at async DevServer.handleRequestImpl (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/base-server.js:818:17)
+    at async /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/dev/next-dev-server.js:339:20
+    at async Span.traceAsyncFn (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/trace/trace.js:154:20)
+    at async DevServer.handleRequest (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/dev/next-dev-server.js:336:24)
+    at async invokeRender (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/router-server.js:179:21)
+    at async handleRequest (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/router-server.js:359:24)
+    at async requestHandlerImpl (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/router-server.js:383:13)
+    at async Server.requestListener (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/start-server.js:141:13) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/webpack-runtime.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/app/_not-found/page.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/require.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/load-components.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/build/utils.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/dev/hot-middleware.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/dev/hot-reloader-webpack.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/router-server.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/start-server.js'
+  ],
+  page: '/'
+}
+ ✓ Compiled /_error in 239ms (3630 modules)
+ ⨯ Error: Cannot find module './682.js'
+Require stack:
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/webpack-runtime.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/pages/_document.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/require.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/load-components.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/build/utils.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/dev/hot-middleware.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/dev/hot-reloader-webpack.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/router-server.js
+- /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/start-server.js
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1421:15)
+    at /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/require-hook.js:55:36
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1059:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1064:22)
+    at Module._load (node:internal/modules/cjs/loader:1227:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1504:12)
+    at mod.require (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:152:16)
+    at __webpack_require__.f.require (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/webpack-runtime.js:198:28)
+    at /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/webpack-runtime.js:111:40
+    at Array.reduce (<anonymous>)
+    at __webpack_require__.e (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/webpack-runtime.js:110:67)
+    at Array.map (<anonymous>)
+    at __webpack_require__.X (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/webpack-runtime.js:162:22)
+    at /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/pages/_document.js:1:335
+    at Object.<anonymous> (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/pages/_document.js:1:376)
+    at Module._compile (node:internal/modules/cjs/loader:1761:14)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1481:32)
+    at Module._load (node:internal/modules/cjs/loader:1300:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1504:12)
+    at mod.require (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/require-hook.js:65:28)
+    at require (node:internal/modules/helpers:152:16)
+    at requirePage (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/require.js:109:84)
+    at /Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/load-components.js:72:65
+    at async Promise.all (index 0)
+    at async loadComponentsImpl (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/load-components.js:71:33)
+    at async DevServer.findPageComponentsImpl (/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/next-server.js:714:36) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/webpack-runtime.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/server/pages/_document.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/require.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/load-components.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/build/utils.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/dev/hot-middleware.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/dev/hot-reloader-webpack.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/router-server.js',
+    '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/node_modules/next/dist/server/lib/start-server.js'
+  ]
+}
+ GET / 500 in 667ms
+[Error: ENOENT: no such file or directory, stat '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/client-development/4.pack.gz'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'stat',
+  path: '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/client-development/4.pack.gz'
+}
+ ⨯ unhandledRejection: [Error: ENOENT: no such file or directory, stat '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/client-development/4.pack.gz'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'stat',
+  path: '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/client-development/4.pack.gz'
+}
+ ⨯ unhandledRejection: [Error: ENOENT: no such file or directory, stat '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/client-development/4.pack.gz'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'stat',
+  path: '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/client-development/4.pack.gz'
+}
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, stat '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/client-development/4.pack.gz'
+[Error: ENOENT: no such file or directory, stat '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/server-development/4.pack.gz'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'stat',
+  path: '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/server-development/4.pack.gz'
+}
+ ⨯ unhandledRejection: [Error: ENOENT: no such file or directory, stat '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/server-development/4.pack.gz'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'stat',
+  path: '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/server-development/4.pack.gz'
+}
+ ⨯ unhandledRejection: [Error: ENOENT: no such file or directory, stat '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/server-development/4.pack.gz'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'stat',
+  path: '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/server-development/4.pack.gz'
+}
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, stat '/Users/eduardobitriagoe/ChronusDev-1/apps/crm-frontend/.next/cache/webpack/server-development/4.pack.gz'
+ ✓ Compiled in 575ms (3649 modules)
+🔗 API configured at: http://localhost:3002
+ GET / 200 in 547ms
+ GET / 200 in 13ms
+ GET /_next/static/css/app/layout.css?v=1770262910996 404 in 19ms
+ GET /_next/static/css/app/layout.css?v=1770262911009 404 in 37ms
+ GET /_next/static/chunks/main-app.js?v=1770262911009 404 in 68ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 68ms
+ GET /_next/static/chunks/app/page.js 404 in 69ms
+ GET / 200 in 39ms
+ GET /_next/static/css/app/layout.css?v=1770262941300 404 in 24ms
+ GET /_next/static/chunks/main-app.js?v=1770262941300 404 in 105ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 104ms
+ GET /_next/static/chunks/app/page.js 404 in 101ms
+ GET / 200 in 25ms
+ GET /_next/static/css/app/layout.css?v=1770262942741 404 in 21ms
+ GET /_next/static/chunks/main-app.js?v=1770262942741 404 in 33ms
+ GET /_next/static/chunks/app/page.js 404 in 32ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 34ms

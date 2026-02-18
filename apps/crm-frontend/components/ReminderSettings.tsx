@@ -164,211 +164,247 @@ export default function ReminderSettings() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
             {/* Header */}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-gray-900">Recordatorios Automatizados</h2>
-                    <p className="text-sm text-gray-500">Programa mensajes automáticos para cumpleaños y fechas de pago</p>
+                    <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                        🔔 Recordatorios Automatizados
+                    </h2>
+                    <p className="text-gray-500 mt-1">Programa mensajes automáticos para cumpleaños, cobros y seguimientos.</p>
                 </div>
                 <button
                     onClick={() => { resetForm(); setShowModal(true); }}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/20"
+                    className="group bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all hover:shadow-emerald-500/30 flex items-center gap-2"
                 >
-                    + Nuevo Recordatorio
+                    <span>+</span> Nuevo Recordatorio
                 </button>
             </div>
 
             {/* Placeholders info */}
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-                <p className="text-sm text-blue-800 font-medium">Variables disponibles en los mensajes:</p>
-                <div className="flex flex-wrap gap-2 mt-2">
-                    <code className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">{'{{name}}'}</code>
-                    <code className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">{'{{company}}'}</code>
-                    <code className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">{'{{email}}'}</code>
-                    <code className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">{'{{birthDate}}'}</code>
-                    <code className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">{'{{paymentDueDay}}'}</code>
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                    <span className="text-2xl">💡</span>
+                    <div>
+                        <h4 className="font-bold text-blue-900 text-sm">Personalización Dinámica</h4>
+                        <p className="text-xs text-blue-700 mt-1 max-w-lg">
+                            Usa variables para personalizar cada mensaje automáticamente con los datos del cliente.
+                        </p>
+                    </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <code className="px-2.5 py-1 bg-white border border-blue-200 text-blue-700 rounded-lg text-xs font-mono shadow-sm">{'{{name}}'}</code>
+                    <code className="px-2.5 py-1 bg-white border border-blue-200 text-blue-700 rounded-lg text-xs font-mono shadow-sm">{'{{company}}'}</code>
+                    <code className="px-2.5 py-1 bg-white border border-blue-200 text-blue-700 rounded-lg text-xs font-mono shadow-sm">{'{{birthDate}}'}</code>
+                    <code className="px-2.5 py-1 bg-white border border-blue-200 text-blue-700 rounded-lg text-xs font-mono shadow-sm">{'{{paymentDueDay}}'}</code>
                 </div>
             </div>
 
             {/* Templates List */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 {templates.length === 0 ? (
-                    <div className="p-10 text-center text-gray-400">
-                        <div className="text-4xl mb-2">🔔</div>
-                        <p>No hay recordatorios configurados</p>
-                        <p className="text-sm">Crea tu primer template de recordatorio</p>
+                    <div className="p-16 text-center">
+                        <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl shadow-inner">
+                            🔔
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">No hay recordatorios configurados</h3>
+                        <p className="text-gray-500 mb-8 max-w-sm mx-auto">Crea tu primer recordatorio automático para mantener el contacto con tus clientes sin esfuerzo.</p>
+                        <button
+                            onClick={() => { resetForm(); setShowModal(true); }}
+                            className="bg-gray-900 text-white px-6 py-2.5 rounded-xl font-medium hover:bg-black transition-colors"
+                        >
+                            Crear Primer Recordatorio
+                        </button>
                     </div>
                 ) : (
-                    <table className="w-full">
-                        <thead>
-                            <tr className="bg-gray-50 border-b border-gray-100 text-left">
-                                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Nombre</th>
-                                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Trigger</th>
-                                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Canal</th>
-                                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Días Antes</th>
-                                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Estado</th>
-                                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {templates.map(template => (
-                                <tr key={template.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4">
-                                        <p className="font-semibold text-gray-900">{template.name}</p>
-                                        <p className="text-xs text-gray-500 line-clamp-1">{template.content}</p>
-                                    </td>
-                                    <td className="px-6 py-4 text-sm">
-                                        {triggerTypeLabels[template.triggerType]}
-                                    </td>
-                                    <td className="px-6 py-4 text-sm">
-                                        {channelLabels[template.channel]}
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">
-                                        {template.daysBefore === 0 ? 'El mismo día' : `${template.daysBefore} días antes`}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <button
-                                            onClick={() => handleToggle(template)}
-                                            className={`px-3 py-1 rounded-lg text-xs font-bold ${template.isEnabled
-                                                    ? 'bg-emerald-100 text-emerald-700'
-                                                    : 'bg-gray-100 text-gray-500'
-                                                }`}
-                                        >
-                                            {template.isEnabled ? 'Activo' : 'Inactivo'}
-                                        </button>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => openEdit(template)}
-                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                                            >
-                                                Editar
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(template.id)}
-                                                className="text-red-600 hover:text-red-800 text-sm font-medium"
-                                            >
-                                                Eliminar
-                                            </button>
-                                        </div>
-                                    </td>
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead>
+                                <tr className="bg-gray-50/50 border-b border-gray-200 text-left">
+                                    <th className="px-8 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Nombre / Contenido</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Trigger</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Canal</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Programación</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Estado</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Acciones</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {templates.map(template => (
+                                    <tr key={template.id} className="group hover:bg-gray-50/50 transition-colors">
+                                        <td className="px-8 py-5">
+                                            <p className="font-bold text-gray-900 mb-1">{template.name}</p>
+                                            <p className="text-xs text-gray-500 line-clamp-1 max-w-xs">{template.content}</p>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-100 text-gray-700 text-xs font-medium border border-gray-200">
+                                                {triggerTypeLabels[template.triggerType]}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-medium border border-indigo-100">
+                                                {channelLabels[template.channel]}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-5 text-sm text-gray-600 font-medium">
+                                            {template.daysBefore === 0 ? 'El mismo día (09:00 AM)' : `${template.daysBefore} días antes`}
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <button
+                                                onClick={() => handleToggle(template)}
+                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${template.isEnabled ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                                            >
+                                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${template.isEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                            </button>
+                                        </td>
+                                        <td className="px-6 py-5 text-right">
+                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => openEdit(template)}
+                                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    title="Editar"
+                                                >
+                                                    ✎
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(template.id)}
+                                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                    title="Eliminar"
+                                                >
+                                                    🗑️
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
 
             {/* Modal */}
             {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-gray-900">
-                                {editingTemplate ? 'Editar Recordatorio' : 'Nuevo Recordatorio'}
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto scale-100 transition-transform">
+                        <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                            <h3 className="text-xl font-bold text-gray-900">
+                                {editingTemplate ? '✏️ Editar Recordatorio' : '✨ Nuevo Recordatorio'}
                             </h3>
-                            <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                            <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-lg transition-colors">✕</button>
                         </div>
 
-                        <div className="p-6 space-y-4">
+                        <div className="p-8 space-y-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                                <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Nombre del Recordatorio</label>
                                 <input
                                     type="text"
                                     value={formData.name}
                                     onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all placeholder:text-gray-300"
                                     placeholder="Ej: Felicitación de Cumpleaños"
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Trigger</label>
-                                    <select
-                                        value={formData.triggerType}
-                                        onChange={e => setFormData({ ...formData, triggerType: e.target.value as any })}
-                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none bg-white"
-                                    >
-                                        <option value="BIRTHDAY">Cumpleaños</option>
-                                        <option value="PAYMENT_DUE">Fecha de Pago</option>
-                                        {/* <option value="CUSTOM_DATE">Fecha Personalizada</option> */}
-                                    </select>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Evento Disparador</label>
+                                    <div className="relative">
+                                        <select
+                                            value={formData.triggerType}
+                                            onChange={e => setFormData({ ...formData, triggerType: e.target.value as any })}
+                                            className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm bg-white appearance-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
+                                        >
+                                            <option value="BIRTHDAY">🎂 Cumpleaños</option>
+                                            <option value="PAYMENT_DUE">💳 Fecha de Pago</option>
+                                            {/* <option value="CUSTOM_DATE">📅 Fecha Personalizada</option> */}
+                                        </select>
+                                        <div className="absolute right-3 top-3 pointer-events-none text-gray-500">▼</div>
+                                    </div>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Días Antes</label>
+                                    <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Antelación (Días)</label>
                                     <input
                                         type="number"
                                         min="0"
                                         max="30"
                                         value={formData.daysBefore}
                                         onChange={e => setFormData({ ...formData, daysBefore: parseInt(e.target.value) || 0 })}
-                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                                     />
-                                    <p className="text-xs text-gray-500 mt-1">0 = el mismo día</p>
+                                    <p className="text-[10px] text-gray-400 mt-1">0 = Enviar el mismo día del evento</p>
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Canal</label>
-                                <select
-                                    value={formData.channel}
-                                    onChange={e => setFormData({ ...formData, channel: e.target.value as any })}
-                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none bg-white"
-                                >
-                                    <option value="WHATSAPP">WhatsApp</option>
-                                    <option value="EMAIL">Email</option>
-                                    <option value="VOICE">Llamada de Voz</option>
-                                </select>
+                                <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Canal de Envío</label>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {(['WHATSAPP', 'EMAIL', 'VOICE'] as const).map(channel => (
+                                        <button
+                                            key={channel}
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, channel })}
+                                            className={`px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${formData.channel === channel
+                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 ring-1 ring-indigo-500/30'
+                                                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            {channelLabels[channel]}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
 
                             {formData.channel === 'EMAIL' && (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Asunto del Email</label>
+                                <div className="animate-fadeIn">
+                                    <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Asunto del Correo</label>
                                     <input
                                         type="text"
                                         value={formData.subject}
                                         onChange={e => setFormData({ ...formData, subject: e.target.value })}
-                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none"
                                         placeholder="Ej: ¡Feliz cumpleaños, {{name}}!"
                                     />
                                 </div>
                             )}
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Mensaje *</label>
+                                <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase tracking-wide">Contenido del Mensaje</label>
                                 <textarea
                                     value={formData.content}
                                     onChange={e => setFormData({ ...formData, content: e.target.value })}
-                                    rows={4}
-                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                                    placeholder="Hola {{name}}, ¡te deseamos un feliz cumpleaños! 🎉"
+                                    rows={5}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none resize-none"
+                                    placeholder="Hola {{name}}, ¡te deseamos un feliz cumpleaños! Esperamos que pases un día excelente. 🎉"
                                 />
+                                <p className="text-[10px] text-gray-400 mt-2 text-right">
+                                    {formData.content.length} caracteres
+                                </p>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    id="isEnabled"
-                                    checked={formData.isEnabled}
-                                    onChange={e => setFormData({ ...formData, isEnabled: e.target.checked })}
-                                    className="w-4 h-4 rounded border-gray-300"
-                                />
-                                <label htmlFor="isEnabled" className="text-sm text-gray-700">Activar inmediatamente</label>
+                            <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setFormData({ ...formData, isEnabled: !formData.isEnabled })}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${formData.isEnabled ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                                >
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.isEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                </button>
+                                <label className="text-sm font-medium text-gray-700 cursor-pointer" onClick={() => setFormData({ ...formData, isEnabled: !formData.isEnabled })}>
+                                    Activar recordatorio inmediatamente
+                                </label>
                             </div>
 
-                            <div className="flex gap-3 pt-4">
+                            <div className="flex gap-4 pt-4 border-t border-gray-100">
                                 <button
                                     onClick={() => setShowModal(false)}
-                                    className="flex-1 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50"
+                                    className="flex-1 px-6 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-700 font-medium transition-colors"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     onClick={handleSubmit}
-                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold"
+                                    className="flex-1 bg-gray-900 hover:bg-black text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-gray-200 transition-all transform hover:-translate-y-0.5"
                                 >
                                     {editingTemplate ? 'Guardar Cambios' : 'Crear Recordatorio'}
                                 </button>

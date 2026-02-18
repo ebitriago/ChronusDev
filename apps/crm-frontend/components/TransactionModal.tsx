@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { API_URL } from '../app/api';
+import { toast } from 'react-hot-toast';
 
 type TransactionType = 'INCOME' | 'EXPENSE';
 
@@ -14,6 +15,10 @@ interface TransactionModalProps {
 
 export default function TransactionModal({ isOpen, onClose, onSuccess, customers }: TransactionModalProps) {
     const [loading, setLoading] = useState(false);
+    const [existingCategories, setExistingCategories] = useState<string[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const wrapperRef = useRef<HTMLDivElement>(null);
+
     const [formData, setFormData] = useState({
         amount: '',
         type: 'INCOME' as TransactionType,
@@ -22,6 +27,35 @@ export default function TransactionModal({ isOpen, onClose, onSuccess, customers
         date: new Date().toISOString().split('T')[0],
         customerId: '',
     });
+
+    useEffect(() => {
+        if (isOpen) {
+            const token = localStorage.getItem('crm_token');
+            fetch(`${API_URL}/transactions/categories?type=${formData.type}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    const defaults = formData.type === 'INCOME'
+                        ? ["Suscripción SaaS", "Servicios Pro", "Consultoría"]
+                        : ["Infraestructura", "Nómina", "Marketing", "Oficina"];
+
+                    const combined = Array.isArray(data) ? Array.from(new Set([...defaults, ...data])) : defaults;
+                    setExistingCategories(combined);
+                })
+                .catch(console.error);
+        }
+    }, [isOpen, formData.type]);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+                setShowSuggestions(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [wrapperRef]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -41,7 +75,7 @@ export default function TransactionModal({ isOpen, onClose, onSuccess, customers
             if (res.ok) {
                 onSuccess();
                 onClose();
-                // Reset form
+                toast.success('Transacción guardada');
                 setFormData({
                     amount: '',
                     type: 'INCOME',
@@ -51,21 +85,25 @@ export default function TransactionModal({ isOpen, onClose, onSuccess, customers
                     customerId: '',
                 });
             } else {
-                alert('Error al guardar transacción');
+                toast.error('Error al guardar transacción');
             }
         } catch (error) {
             console.error(error);
-            alert('Error de conexión');
+            toast.error('Error de conexión');
         } finally {
             setLoading(false);
         }
     };
 
+    const filteredCategories = existingCategories.filter(
+        cat => cat.toLowerCase().includes(formData.category.toLowerCase())
+    );
+
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fadeIn">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-fadeIn">
                 <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                     <h3 className="text-lg font-bold text-gray-900">Nueva Transacción</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -79,17 +117,15 @@ export default function TransactionModal({ isOpen, onClose, onSuccess, customers
                     <div className="flex bg-gray-100 p-1 rounded-xl">
                         <button
                             type="button"
-                            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${formData.type === 'INCOME' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                                }`}
-                            onClick={() => setFormData({ ...formData, type: 'INCOME' })}
+                            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${formData.type === 'INCOME' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            onClick={() => setFormData({ ...formData, type: 'INCOME', category: '' })}
                         >
                             Ingreso (Income)
                         </button>
                         <button
                             type="button"
-                            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${formData.type === 'EXPENSE' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                                }`}
-                            onClick={() => setFormData({ ...formData, type: 'EXPENSE' })}
+                            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${formData.type === 'EXPENSE' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            onClick={() => setFormData({ ...formData, type: 'EXPENSE', category: '' })}
                         >
                             Gasto (Expense)
                         </button>
@@ -123,32 +159,53 @@ export default function TransactionModal({ isOpen, onClose, onSuccess, customers
                         </div>
                     </div>
 
-                    {/* Category */}
-                    <div>
+                    {/* Category (Custom Autocomplete) */}
+                    <div className="relative" ref={wrapperRef}>
                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoría</label>
-                        <select
-                            className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 bg-white"
+                        <input
+                            type="text"
+                            className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
+                            placeholder="Escribe o selecciona..."
                             required
                             value={formData.category}
-                            onChange={e => setFormData({ ...formData, category: e.target.value })}
-                        >
-                            <option value="">Seleccionar...</option>
-                            {formData.type === 'INCOME' ? (
-                                <>
-                                    <option value="Subscription">Suscripción SaaS</option>
-                                    <option value="Service">Servicios Pro</option>
-                                    <option value="OneTime">Pago Único</option>
-                                </>
-                            ) : (
-                                <>
-                                    <option value="Hosting">Infraestructura / Hosting</option>
-                                    <option value="Payroll">Nómina</option>
-                                    <option value="Marketing">Marketing & Ads</option>
-                                    <option value="Software">Licencias Software</option>
-                                    <option value="Office">Oficina</option>
-                                </>
-                            )}
-                        </select>
+                            onChange={e => {
+                                setFormData({ ...formData, category: e.target.value });
+                                setShowSuggestions(true);
+                            }}
+                            onFocus={() => setShowSuggestions(true)}
+                        />
+
+                        {showSuggestions && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {filteredCategories.length > 0 ? (
+                                    filteredCategories.map(cat => (
+                                        <button
+                                            key={cat}
+                                            type="button"
+                                            className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-gray-700"
+                                            onClick={() => {
+                                                setFormData({ ...formData, category: cat });
+                                                setShowSuggestions(false);
+                                            }}
+                                        >
+                                            {cat}
+                                        </button>
+                                    ))
+                                ) : (
+                                    formData.category && (
+                                        <button
+                                            type="button"
+                                            className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm text-emerald-600 font-medium"
+                                            onClick={() => {
+                                                setShowSuggestions(false);
+                                            }}
+                                        >
+                                            + Crear "{formData.category}"
+                                        </button>
+                                    )
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Customer (Optional for Expense) */}

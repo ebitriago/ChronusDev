@@ -1,10 +1,46 @@
-version: '3.8'
+# ==========================================================
+# DOCKER COMPOSE - PRODUCCIÓN
+# ==========================================================
+# Este archivo está configurado para el entorno de producción.
+# No incluye base de datos local - debe conectar a una BD externa.
+#
+# Dominios de producción:
+# - ChronusDev: https://chronusdev.assistai.work/
+# - ChronusCRM: https://chronuscrm.assistai.work/
+#
+# ⚠️ IMPORTANTE: docker-compose.yaml es un symlink a este archivo
+# ==========================================================
 
 services:
   # ==========================================================
   # CHRONUSDEV BACKEND (API Principal - Project Management)
   # ==========================================================
-
+  chronusdev-backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: chronusdev-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      # Base de datos externa (obligatorio configurar en .env)
+      - CHRONUSDEV_DATABASE_URL=${CHRONUSDEV_DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      # CRM Integration
+      - CRM_API_URL=https://chronuscrm.assistai.work/api
+      - CRM_SYNC_KEY=${CRM_SYNC_KEY}
+    command: sh -c "node apps/backend/dist/src/index.js"
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - chronus-network
 
   # ==========================================================
   # CHRONUSDEV FRONTEND (Next.js - Project Management UI)
@@ -14,18 +50,18 @@ services:
       context: .
       dockerfile: apps/frontend/Dockerfile
       args:
-        # Use CRM backend for unified database
-        - NEXT_PUBLIC_API_URL=http://chronuscrm-backend:3002
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
     container_name: chronusdev-frontend
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=http://chronuscrm-backend:3002
-      - NEXT_PUBLIC_CRM_APP_URL=http://localhost:3003
-      - CRM_BACKEND_INTERNAL_URL=http://chronuscrm-backend:3002
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+      - NEXT_PUBLIC_CRM_APP_URL=${NEXT_PUBLIC_CRM_APP_URL}
+      - CHRONUSDEV_BACKEND_URL=http://chronusdev-backend:3001
+      - PORT=3000 # Force port 3000 to avoid conflicting with global PORT=3001
     depends_on:
-      chronuscrm-backend:
+      chronusdev-backend:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -36,32 +72,42 @@ services:
   # ==========================================================
   chronuscrm-backend:
     build:
-      context: apps/crm
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/crm/Dockerfile
+      args:
+        # Base de datos externa (obligatorio configurar en .env)
+        - DATABASE_URL=${DATABASE_URL}
     container_name: chronuscrm-backend
     ports:
       - "3002:3002"
     environment:
       - NODE_ENV=production
       - PORT=3002
-      # Integration with ChronusDev
-      - CHRONUSDEV_URL=${CHRONUSDEV_URL:-http://chronuscrm-backend:3002}
-      - CHRONUSDEV_TOKEN=${CHRONUSDEV_TOKEN:-token-admin-123}
-      - CRM_FRONTEND_URL=${CRM_FRONTEND_URL:-http://localhost:3003}
+      - RATE_LIMIT_DISABLED=true
+      # Base de datos externa (obligatorio configurar en .env)
+      - DATABASE_URL=${DATABASE_URL}
+      # Integration with ChronusDev (URLs de producción)
+      - CHRONUSDEV_URL=https://chronusdev.assistai.work
+      - CHRONUSDEV_API_URL=https://chronusdev.assistai.work/api
+      - CHRONUSDEV_TOKEN=${CHRONUSDEV_TOKEN}
+      - CRM_SYNC_KEY=${CRM_SYNC_KEY}
+      - CRM_FRONTEND_URL=https://chronuscrm.assistai.work
       # AssistAI Integration
       - ASSISTAI_API_URL=${ASSISTAI_API_URL:-https://public.assistai.lat}
       - ASSISTAI_API_TOKEN=${ASSISTAI_API_TOKEN}
       - ASSISTAI_TENANT_DOMAIN=${ASSISTAI_TENANT_DOMAIN}
       - ASSISTAI_ORG_CODE=${ASSISTAI_ORG_CODE}
-    volumes:
-      - ./apps/crm/prisma:/app/prisma
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      # Public API URL for OAuth redirects
+      - API_PUBLIC_URL=https://chronuscrm.assistai.work/api
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:3002/health" ]
+      test: [ "CMD", "curl", "-f", "http://127.0.0.1:3002/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 40s
     networks:
       - chronus-network
 
@@ -73,20 +119,17 @@ services:
       context: .
       dockerfile: apps/crm-frontend/Dockerfile
       args:
-        # Use relative /api to go through Next.js proxy
-        - NEXT_PUBLIC_CRM_API_URL=${CHRONUSCRM_API_URL:-/api}
-        - NEXT_PUBLIC_API_URL=${CHRONUSDEV_API_URL:-http://localhost:3001}
+        - NEXT_PUBLIC_CRM_API_URL=${NEXT_PUBLIC_CRM_API_URL}
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
     container_name: chronuscrm-frontend
     ports:
       - "3003:3003"
     environment:
       - NODE_ENV=production
       - PORT=3003
-      # Internal URL for checking backend status inside container if needed
+      - NEXT_PUBLIC_CRM_API_URL=https://chronuscrm.assistai.work/api
+      - NEXT_PUBLIC_API_URL=https://chronusdev.assistai.work/api
       - CRM_BACKEND_INTERNAL_URL=http://chronuscrm-backend:3002
-      # Public URL for browser is relative
-      - NEXT_PUBLIC_CRM_API_URL=${CHRONUSCRM_API_URL:-/api}
-      - NEXT_PUBLIC_API_URL=${CHRONUSDEV_API_URL:-/api}
     depends_on:
       chronuscrm-backend:
         condition: service_healthy
@@ -95,7 +138,7 @@ services:
       - chronus-network
 
 # ==========================================================
-# NETWORK (Shared network for all services)
+# NETWORK (Sin volúmenes de BD en producción)
 # ==========================================================
 networks:
   chronus-network:

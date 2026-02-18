@@ -159,13 +159,13 @@ export default function Invoices() {
             </div>
 
             {/* Header */}
-            <div className="flex justify-between items-center">
-                <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div className="flex gap-2 overflow-x-auto pb-1 w-full sm:w-auto">
                     {['', 'DRAFT', 'SENT', 'PAID', 'OVERDUE'].map(status => (
                         <button
                             key={status}
                             onClick={() => setFilter(status)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === status
+                            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === status
                                 ? 'bg-emerald-600 text-white'
                                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                 }`}
@@ -174,72 +174,137 @@ export default function Invoices() {
                         </button>
                     ))}
                 </div>
-                <button
-                    onClick={() => setShowModal(true)}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/20"
-                >
-                    + Nueva Factura
-                </button>
+                <div className="flex gap-2 w-full sm:w-auto">
+                    <button
+                        onClick={() => {
+                            import('../app/api').then(({ downloadInvoicesCSV }) => downloadInvoicesCSV());
+                        }}
+                        className="bg-gray-800 hover:bg-gray-900 text-white px-3 py-2 rounded-xl font-bold text-sm shadow-lg"
+                    >
+                        ⬇️ CSV
+                    </button>
+                    <button
+                        onClick={() => setShowModal(true)}
+                        className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/20"
+                    >
+                        + Nueva Factura
+                    </button>
+                </div>
             </div>
 
-            {/* Table */}
+            {/* Table / Cards */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <table className="w-full">
-                    <thead>
-                        <tr className="bg-gray-50 border-b border-gray-100 text-left">
-                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Número</th>
-                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Cliente</th>
-                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-right">Monto</th>
-                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Vencimiento</th>
-                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Estado</th>
-                            <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {filteredInvoices.map(inv => (
-                            <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
-                                <td className="px-6 py-4">
-                                    <span className="font-mono font-bold text-gray-900">{inv.number}</span>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <p className="font-medium text-gray-900">{inv.customer?.name || 'N/A'}</p>
-                                    <p className="text-xs text-gray-500">{inv.customer?.email}</p>
-                                </td>
-                                <td className="px-6 py-4 text-right font-mono font-bold text-gray-900">
-                                    {inv.currency} ${inv.amount.toLocaleString()}
-                                </td>
-                                <td className="px-6 py-4 text-sm text-gray-600">
-                                    {new Date(inv.dueDate).toLocaleDateString()}
-                                </td>
-                                <td className="px-6 py-4">
-                                    <span className={`text-[10px] font-bold px-2 py-1 rounded ${statusColors[inv.status]}`}>
-                                        {inv.status}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className="flex gap-1">
-                                        {inv.status === 'DRAFT' && (
-                                            <button
-                                                onClick={() => handleUpdateStatus(inv.id, 'SENT')}
-                                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
-                                            >
-                                                Enviar
-                                            </button>
-                                        )}
-                                        {['DRAFT', 'SENT', 'OVERDUE'].includes(inv.status) && (
-                                            <button
-                                                onClick={() => handleUpdateStatus(inv.id, 'PAID')}
-                                                className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-medium hover:bg-emerald-200"
-                                            >
-                                                Marcar Pagada
-                                            </button>
-                                        )}
-                                    </div>
-                                </td>
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-gray-100 text-left">
+                                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Número</th>
+                                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Cliente</th>
+                                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase text-right">Monto</th>
+                                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Vencimiento</th>
+                                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Estado</th>
+                                <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Acciones</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {filteredInvoices.map(inv => (
+                                <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <span className="font-mono font-bold text-gray-900">{inv.number}</span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <p className="font-medium text-gray-900">{inv.customer?.name || 'N/A'}</p>
+                                        <p className="text-xs text-gray-500">{inv.customer?.email}</p>
+                                    </td>
+                                    <td className="px-6 py-4 text-right font-mono font-bold text-gray-900">
+                                        {inv.currency} ${inv.amount.toLocaleString()}
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">
+                                        {new Date(inv.dueDate).toLocaleDateString()}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded ${statusColors[inv.status]}`}>
+                                            {inv.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex gap-1">
+                                            {inv.status === 'DRAFT' && (
+                                                <button
+                                                    onClick={() => handleUpdateStatus(inv.id, 'SENT')}
+                                                    className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium hover:bg-blue-200"
+                                                >
+                                                    Enviar
+                                                </button>
+                                            )}
+                                            {['DRAFT', 'SENT', 'OVERDUE'].includes(inv.status) && (
+                                                <button
+                                                    onClick={() => handleUpdateStatus(inv.id, 'PAID')}
+                                                    className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-medium hover:bg-emerald-200"
+                                                >
+                                                    Marcar Pagada
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden divide-y divide-gray-100">
+                    {filteredInvoices.map(inv => (
+                        <div key={inv.id} className="p-4 space-y-3">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <span className="text-xs font-mono text-gray-500 block mb-0.5">{inv.number}</span>
+                                    <h4 className="font-bold text-gray-900">{inv.customer?.name || 'Cliente Desconocido'}</h4>
+                                    <p className="text-xs text-gray-500">{inv.customer?.email}</p>
+                                </div>
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded ${statusColors[inv.status]}`}>
+                                    {inv.status}
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <span className="text-xs text-gray-500 block">Vencimiento</span>
+                                    <span className="font-medium text-gray-700">{new Date(inv.dueDate).toLocaleDateString()}</span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-xs text-gray-500 block">Monto</span>
+                                    <span className="font-bold text-gray-900 text-lg">{inv.currency} ${inv.amount.toLocaleString()}</span>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2 pt-2">
+                                {inv.status === 'DRAFT' && (
+                                    <button
+                                        onClick={() => handleUpdateStatus(inv.id, 'SENT')}
+                                        className="flex-1 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-200 transition-colors"
+                                    >
+                                        Enviar Factura
+                                    </button>
+                                )}
+                                {['DRAFT', 'SENT', 'OVERDUE'].includes(inv.status) && (
+                                    <button
+                                        onClick={() => handleUpdateStatus(inv.id, 'PAID')}
+                                        className="flex-1 px-3 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-200 transition-colors"
+                                    >
+                                        Marcar Pagada
+                                    </button>
+                                )}
+                                <button className="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors">
+                                    Ver Detalle
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
                 {filteredInvoices.length === 0 && (
                     <div className="text-center py-10 text-gray-400">No hay facturas</div>
                 )}

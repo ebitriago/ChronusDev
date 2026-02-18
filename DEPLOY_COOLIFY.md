@@ -33,12 +33,12 @@ ASSISTAI_ORG_CODE=d59b32edfb28e130
 
 ### Paso 3: Configurar Dominios en Coolify
 
-| Puerto | Servicio | Dominio Sugerido |
+| Puerto | Servicio | Dominio |
 |--------|----------|------------------|
-| 3000 | ChronusDev Frontend | `app.chronusdev.com` |
-| 3001 | ChronusDev Backend | `api.chronusdev.com` |
-| 3002 | ChronusCRM Backend | `api.crm.chronusdev.com` |
-| 3003 | ChronusCRM Frontend | `crm.chronusdev.com` |
+| 3000 | ChronusDev Frontend | `chronusdev.assistai.work` |
+| 3001 | ChronusDev Backend | `chronusdev.assistai.work/api` |
+| 3002 | ChronusCRM Backend | `chronuscrm.assistai.work/api` |
+| 3003 | ChronusCRM Frontend | `chronuscrm.assistai.work` |
 
 ### Paso 4: Deploy
 
@@ -156,10 +156,10 @@ Ejemplo de configuración DNS:
 
 | Subdominio | Servicio |
 |------------|----------|
-| `app.chronusdev.com` | ChronusDev Frontend |
-| `api.chronusdev.com` | ChronusDev Backend |
-| `crm.chronusdev.com` | ChronusCRM Frontend |
-| `api.crm.chronusdev.com` | ChronusCRM Backend |
+| `chronusdev.assistai.work` | ChronusDev Frontend |
+| `chronusdev.assistai.work/api` | ChronusDev Backend |
+| `chronuscrm.assistai.work` | ChronusCRM Frontend |
+| `chronuscrm.assistai.work/api` | ChronusCRM Backend |
 
 En Coolify, para cada app:
 1. Ve a **Domains**

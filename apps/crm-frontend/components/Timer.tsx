@@ -33,7 +33,8 @@ export default function Timer() {
   }, [mounted]);
 
   useEffect(() => {
-    if (currentTimer?.status === 'RUNNING') {
+    const isRunning = currentTimer && !currentTimer.end;
+    if (isRunning) {
       const start = new Date(currentTimer.start).getTime();
       const update = () => {
         const now = Date.now();
@@ -202,8 +203,8 @@ export default function Timer() {
                   </div>
                   <div className="flex items-center gap-2 mt-1">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${task.status === 'BACKLOG'
-                        ? 'bg-gray-100 text-gray-600'
-                        : 'bg-yellow-100 text-yellow-700'
+                      ? 'bg-gray-100 text-gray-600'
+                      : 'bg-yellow-100 text-yellow-700'
                       }`}>
                       {task.status === 'BACKLOG' ? '📋 Backlog' : '🔄 En progreso'}
                     </span>
@@ -230,14 +231,14 @@ export default function Timer() {
           }`}
       >
         {/* Gradiente superior según estado */}
-        <div className={`absolute top-0 left-0 right-0 h-1 ${currentTimer?.status === 'RUNNING'
-            ? 'bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 animate-pulse'
-            : 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500'
+        <div className={`absolute top-0 left-0 right-0 h-1 ${currentTimer && !currentTimer.end
+          ? 'bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 animate-pulse'
+          : 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500'
           }`} />
 
         {isExpanded ? (
           <div className="p-6">
-            {currentTimer?.status === 'RUNNING' ? (
+            {currentTimer && !currentTimer.end ? (
               <>
                 {/* Timer activo */}
                 <div className="flex items-start justify-between mb-4">
@@ -321,7 +322,7 @@ export default function Timer() {
             onClick={() => setIsExpanded(true)}
             className="p-4 flex items-center gap-3 hover:bg-gray-50/50 transition-colors"
           >
-            {currentTimer?.status === 'RUNNING' ? (
+            {currentTimer && !currentTimer.end ? (
               <>
                 <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
                 <span className="font-mono font-bold text-gray-800 dark:text-slate-200">

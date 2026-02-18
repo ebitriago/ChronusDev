@@ -1,6 +1,7 @@
 import express from 'express';
 import { prisma } from '../db.js';
 import { authMiddleware } from '../auth.js';
+import { AssistAIService, getAssistAIConfig } from '../services/assistai.js';
 
 const router = express.Router();
 
@@ -159,6 +160,93 @@ router.post('/webhook', async (req, res) => {
                 });
 
                 console.log(`[Instagram Webhook] Saved message from ${senderId} to conversation ${conversation.id}`);
+
+                // AI Logic Integration
+                try {
+                    // 1. Find Channel Config
+                    // For Instagram, we might rely on the single connected user (igUserId) per Org.
+                    // But if we have multiple, we'd need to match recipientId.
+                    // Assuming one main Instagram channel per Org for now.
+
+                    const activeChannel = await prisma.channel.findFirst({
+                        where: {
+                            organizationId,
+                            platform: 'INSTAGRAM',
+                            enabled: true,
+                            mode: { in: ['AI_ONLY', 'HYBRID'] }
+                        }
+                    });
+
+                    if (activeChannel && (activeChannel.mode === 'AI_ONLY' || activeChannel.mode === 'HYBRID')) {
+                        // 2. Check for Human Takeover
+                        const takeover = await prisma.takeover.findUnique({
+                            where: { conversationId: conversation.id }
+                        });
+
+                        if (takeover && takeover.expiresAt > new Date()) {
+                            console.log(`[AssistAI] Skipping: Human takeover active for ${sessionId}`);
+                            continue;
+                        }
+
+                        // 3. Trigger AssistAI
+                        if (activeChannel.assistaiAgentCode) {
+                            const aiConfig = await getAssistAIConfig(organizationId!);
+                            if (aiConfig) {
+                                console.log(`[AssistAI] Triggering agent ${activeChannel.assistaiAgentCode} for ${sessionId}`);
+
+                                // Create/Ensure Conversation
+                                try {
+                                    await AssistAIService.createConversation(aiConfig, {
+                                        agentCode: activeChannel.assistaiAgentCode,
+                                        contact: {
+                                            identifier: senderId,
+                                            name: userName,
+                                            channel: 'instagram'
+                                        },
+                                        source: 'instagram'
+                                    });
+                                } catch (e) {
+                                    // Ignore
+                                }
+
+                                // Send Message
+                                const aiResponse = await AssistAIService.sendMessage(aiConfig, conversation.id, message.text || '[Media]', userName);
+
+                                // 4. Handle Response
+                                if (aiResponse && aiResponse.text) {
+                                    // Send back to Instagram
+                                    const config = await getInstagramConfig(organizationId!);
+                                    if (config) {
+                                        await fetch(`${GRAPH_API_BASE}/${config.igUserId}/messages`, {
+                                            method: 'POST',
+                                            headers: {
+                                                'Authorization': `Bearer ${config.accessToken}`,
+                                                'Content-Type': 'application/json'
+                                            },
+                                            body: JSON.stringify({
+                                                recipient: { id: senderId },
+                                                message: { text: aiResponse.text }
+                                            })
+                                        });
+
+                                        // Save AI reply
+                                        await prisma.message.create({
+                                            data: {
+                                                conversationId: conversation.id,
+                                                sender: 'AI',
+                                                content: aiResponse.text
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                        } else {
+                            console.log(`[AssistAI] No agent assigned to channel ${activeChannel.name}`);
+                        }
+                    }
+                } catch (aiError) {
+                    console.error('[AssistAI] Error trigger:', aiError);
+                }
             }
         }
     } catch (error) {

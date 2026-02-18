@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from './db.js';
+import crypto from 'crypto';
 
 // Extend Express Request to include user
 declare global {
@@ -53,17 +54,63 @@ export async function comparePassword(password: string, hash: string): Promise<b
 
 // ==================== MIDDLEWARE ====================
 
-export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
-    // Get token from header
-    const authHeader = req.headers.authorization;
+// Helper for hashing (duplicated to avoid circular deps if in util)
+const hashKey = (key: string) => {
+    return crypto.createHash('sha256').update(key).digest('hex');
+};
 
+export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
+    console.log(`[Auth] Request: ${req.method} ${req.originalUrl || req.url}`);
+    const apiKey = req.headers['x-api-key'] as string;
+
+    if (apiKey) {
+        // API Key Auth Strategy
+        try {
+            if (!apiKey.startsWith('sk_live_')) {
+                return res.status(401).json({ error: 'Formato de API Key inválido' });
+            }
+
+            const keyHash = hashKey(apiKey);
+            const storedKey = await prisma.apiKey.findFirst({
+                where: { keyHash },
+                include: { organization: true }
+            });
+
+            if (!storedKey) {
+                return res.status(401).json({ error: 'API Key inválida' });
+            }
+
+            // Update usage stats (fire and forget)
+            prisma.apiKey.update({
+                where: { id: storedKey.id },
+                data: { lastUsedAt: new Date() }
+            }).catch(err => console.error("Error update key stats", err));
+
+            // Set context
+            req.user = {
+                id: `apikey_${storedKey.id}`,
+                email: `apikey@${storedKey.organization.slug || 'chronuscrm'}.com`,
+                name: storedKey.name,
+                role: 'ADMIN', // API Keys have high privilege by default for now
+                organizationId: storedKey.organizationId
+            };
+
+            return next();
+        } catch (e) {
+            console.error("API Key Auth Error", e);
+            return res.status(500).json({ error: 'Internal Auth Error' });
+        }
+    }
+
+    // Bearer Token Strategy
+    const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'No autorizado - Token requerido' });
+        return res.status(401).json({ error: 'No autorizado - Token o API Key requerido' });
     }
 
     const token = authHeader.split(' ')[1];
     const decoded = verifyToken(token);
-    console.log("[Auth] Decoded:", decoded);
+    // console.log("[Auth] Decoded:", decoded); // Reduce noise
 
     if (!decoded) {
         return res.status(401).json({ error: 'No autorizado - Token inválido o expirado' });
@@ -73,26 +120,48 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     const userId = decoded.userId;
     const organizationId = (decoded as any).organizationId;
 
-    // JIT: Ensure user exists in local DB to prevent FK errors
+    // JIT: Ensure user exists in local DB
     try {
         const existingUser = await prisma.user.findUnique({ where: { id: userId } });
         if (!existingUser) {
-            console.log(`[Auth] JIT Provisioning user: ${decoded.email}`);
+            // console.log(`[Auth] JIT Provisioning user: ${decoded.email}`);
             await prisma.user.create({
                 data: {
                     id: userId,
                     email: decoded.email,
                     name: decoded.name,
                     role: (decoded.role as any) || 'AGENT',
-                    // Create default org membership if organizationId is present? 
-                    // Or just let it be. For integrations, we just need the User record.
                 }
             });
         }
     } catch (e) {
         console.error("[Auth] JIT Error:", e);
-        // Continue anyway, maybe it was a race condition or DB error. 
-        // If it really failed, the route handler will crash on FK, which is fine.
+    }
+
+    // NEW: Verify Organization Validity (to prevent foreign key errors with stale tokens)
+    let finalOrgId = organizationId;
+
+    // If no organizationId in token, try to get from user's membership
+    if (!finalOrgId) {
+        try {
+            const membership = await prisma.organizationMember.findFirst({
+                where: { userId },
+                include: { organization: true }
+            });
+            if (membership) {
+                finalOrgId = membership.organizationId;
+                console.log(`[Auth] Auto-selected org from membership: ${membership.organization.name}`);
+            }
+        } catch (e) {
+            console.error('[Auth] Membership lookup error:', e);
+        }
+    }
+
+    if (finalOrgId) {
+        const orgExists = await prisma.organization.findUnique({ where: { id: finalOrgId } });
+        if (!orgExists) {
+            return res.status(401).json({ error: 'Organización inválida o no existe. Por favor inicie sesión nuevamente.' });
+        }
     }
 
     req.user = {
@@ -100,7 +169,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
         email: decoded.email,
         name: decoded.name,
         role: decoded.role,
-        organizationId: organizationId
+        organizationId: finalOrgId
     };
 
     next();
@@ -197,13 +266,20 @@ export async function handleLogin(email: string, password: string) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    await prisma.session.create({
-        data: {
-            userId: user.id,
-            token,
-            expiresAt,
-        },
-    });
+    try {
+        await prisma.session.create({
+            data: {
+                userId: user.id,
+                token,
+                expiresAt,
+            },
+        });
+    } catch (e: any) {
+        // Ignore unique constraint error (P2002) if token already exists (e.g. concurrent logins with same second timestamp)
+        if (e.code !== 'P2002') {
+            console.warn("Failed to create session record:", e.message);
+        }
+    }
 
     return {
         success: true,
@@ -498,4 +574,70 @@ export async function handleAssistAICallback(code: string) {
         console.error('[AssistAI OAuth Error]', err);
         return { error: err.message || 'Error en autenticación con AssistAI' };
     }
+}
+
+// ==================== PASSWORD RECOVERY ====================
+
+import { sendEmail, emailTemplates } from './email.js';
+
+export async function handleForgotPassword(email: string) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+        // Return success even if not found to prevent enumeration
+        return { success: true, message: 'Si el correo existe, recibirás un enlace.' };
+    }
+
+    // Generate secure random token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpires = new Date(Date.now() + 3600000); // 1 hour
+
+    // Save hash of token (security best practice) or raw token (simpler for MVP)
+    // For MVP we store raw token to be simple, but let's hash it if we can.
+    // Actually, `crypto` is imported. Let's start simple with raw token for now to avoid complexity in verification.
+
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            resetToken: resetToken,
+            resetTokenExpires: resetTokenExpires
+        }
+    });
+
+    const resetLink = `${process.env.CRM_FRONTEND_URL || 'https://chronuscrm.assistai.work'}/auth/reset-password?token=${resetToken}`;
+
+    // Send Email
+    const template = emailTemplates.passwordReset(resetLink);
+    await sendEmail({
+        to: email,
+        ...template
+    });
+
+    return { success: true, message: 'Correo enviado' };
+}
+
+export async function handleResetPassword(token: string, newPassword: string) {
+    const user = await prisma.user.findUnique({
+        where: { resetToken: token }
+    });
+
+    if (!user) {
+        return { error: 'Token inválido o expirado' };
+    }
+
+    if (!user.resetTokenExpires || user.resetTokenExpires < new Date()) {
+        return { error: 'El token ha expirado' };
+    }
+
+    const hashedPassword = await hashPassword(newPassword);
+
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            password: hashedPassword,
+            resetToken: null,
+            resetTokenExpires: null
+        }
+    });
+
+    return { success: true };
 }

@@ -96,6 +96,7 @@ export const activityTypeLabels: Record<ActivityType, string> = {
     CALL: 'Llamada',
     MEETING: 'Reunión',
     NOTE: 'Nota',
+    SYSTEM: 'Sistema',
 };
 
 // Activity type icons
@@ -110,4 +111,5 @@ export const activityTypeIcons: Record<ActivityType, string> = {
     CALL: '📞',
     MEETING: '📅',
     NOTE: '📝',
+    SYSTEM: '⚙️',
 };

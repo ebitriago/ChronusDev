@@ -1,0 +1,1249 @@
+Starting deployment of chronus to assistai-server-01.
+Preparing container with helper image: ghcr.io/coollabsio/coolify-helper:1.0.12
+[CMD]: docker stop -t 30 tw8ocgsg8ck4s4s0wgkwo80o
+Error response from daemon: No such container: tw8ocgsg8ck4s4s0wgkwo80o
+[CMD]: docker run -d --network coolify --name tw8ocgsg8ck4s4s0wgkwo80o  --rm -v /root/.docker/config.json:/root/.docker/config.json:ro -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/coollabsio/coolify-helper:1.0.12
+783e1441bc9753485ab0713ee92e4ef78d6217683a82aa392655071e1ab51f65
+[CMD]: docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'GIT_SSH_COMMAND="ssh -o ConnectTimeout=30 -p 22 -o Port=22 -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git ls-remote https://x-access-token:<REDACTED>@github.com/assistai-lat/chronus.git refs/heads/main'
+92d2b84df6685bdf7055044e179e6eda84c25a90	refs/heads/main
+----------------------------------------
+Importing assistai-lat/chronus:main (commit sha 92d2b84df6685bdf7055044e179e6eda84c25a90) to /artifacts/tw8ocgsg8ck4s4s0wgkwo80o.
+[CMD]: docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'git clone --depth=1 --recurse-submodules --shallow-submodules -b 'main' 'https://x-access-token:<REDACTED>@github.com/assistai-lat/chronus.git' '/artifacts/tw8ocgsg8ck4s4s0wgkwo80o' && cd '/artifacts/tw8ocgsg8ck4s4s0wgkwo80o' && if [ -f .gitmodules ]; then git submodule sync && GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git submodule update --init --recursive --depth=1; fi && cd '/artifacts/tw8ocgsg8ck4s4s0wgkwo80o' && GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git lfs pull'
+Cloning into '/artifacts/tw8ocgsg8ck4s4s0wgkwo80o'...
+[CMD]: docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'cd /artifacts/tw8ocgsg8ck4s4s0wgkwo80o && git log -1 92d2b84df6685bdf7055044e179e6eda84c25a90 --pretty=%B'
+fix: resolve coolify build error, socket connection path, and assistai real-time updates
+[CMD]: docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'test -f /artifacts/tw8ocgsg8ck4s4s0wgkwo80o/apps/backend/Dockerfile && echo 'exists' || echo 'not found''
+exists
+[CMD]: docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'cat /artifacts/tw8ocgsg8ck4s4s0wgkwo80o/apps/backend/Dockerfile'
+# Build stage
+FROM node:20-alpine AS builder
+WORKDIR /app
+# Copiar package files
+COPY package*.json ./
+COPY apps/backend/package*.json ./apps/backend/
+# Instalar dependencias
+RUN npm ci --workspace=apps/backend
+# Copiar código fuente del backend
+COPY apps/backend ./apps/backend
+# Build TypeScript
+RUN npm run --workspace=apps/backend build
+# Production stage
+FROM node:20-alpine AS runner
+WORKDIR /app
+# Instalar runtime dependencies
+RUN apk add --no-cache wget openssl ca-certificates
+# Copiar package files
+COPY package*.json ./
+COPY apps/backend/package*.json ./apps/backend/
+# Instalar solo producción
+RUN npm ci --workspace=apps/backend --omit=dev
+# Copiar Prisma Client generado del builder
+COPY --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma/client /app/node_modules/@prisma/client
+# Copiar carpeta prisma para migraciones
+COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
+# Copiar build
+COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
+# Eliminar binarios incompatibles de Prisma (Forzar uso de OpenSSL 3.0)
+RUN rm -f /app/node_modules/.prisma/client/*openssl-1.1.x*
+ENV NODE_ENV=production
+ENV PORT=3001
+EXPOSE 3001
+CMD ["node", "apps/backend/dist/index.js"]
+Added 76 ARG declarations to Dockerfile for service chronusdev-backend (multi-stage build, added to 2 stages).
+[CMD]: docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'test -f /artifacts/tw8ocgsg8ck4s4s0wgkwo80o/apps/frontend/Dockerfile && echo 'exists' || echo 'not found''
+exists
+[CMD]: docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'cat /artifacts/tw8ocgsg8ck4s4s0wgkwo80o/apps/frontend/Dockerfile'
+# Build stage
+FROM node:20-alpine AS builder
+WORKDIR /app
+# Copiar package files
+COPY package*.json ./
+COPY apps/frontend/package*.json ./apps/frontend/
+# Instalar dependencias
+RUN npm ci --workspace=apps/frontend
+# Copiar código fuente
+COPY apps/frontend ./apps/frontend
+# Variables de build
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+# Build Next.js
+RUN npm run --workspace=apps/frontend build
+# Production stage
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3000
+# Crear usuario no-root
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+# Copiar archivos necesarios
+COPY --from=builder /app/apps/frontend/public ./apps/frontend/public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/frontend/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/frontend/.next/static ./apps/frontend/.next/static
+USER nextjs
+EXPOSE 3000
+CMD ["node", "apps/frontend/server.js"]
+Added 76 ARG declarations to Dockerfile for service chronusdev-frontend (multi-stage build, added to 2 stages).
+[CMD]: docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'test -f /artifacts/tw8ocgsg8ck4s4s0wgkwo80o/apps/crm/Dockerfile && echo 'exists' || echo 'not found''
+exists
+[CMD]: docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'cat /artifacts/tw8ocgsg8ck4s4s0wgkwo80o/apps/crm/Dockerfile'
+# Build Stage
+FROM node:20-bookworm-slim AS builder
+# Install build dependencies for native modules
+RUN apt-get update && apt-get install -y openssl python3 make g++
+WORKDIR /app
+COPY package*.json ./
+COPY prisma ./prisma/
+RUN npm ci
+COPY . .
+ARG DATABASE_URL
+RUN npx prisma generate
+RUN npm run build
+# Production Stage
+FROM node:20-bookworm-slim
+WORKDIR /app
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./
+# Copy public assets if any
+COPY --from=builder /app/public ./public
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y openssl curl ca-certificates
+# Copy entrypoint script
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
+EXPOSE 3002
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["node", "dist/index.js"]
+Added 76 ARG declarations to Dockerfile for service chronuscrm-backend (multi-stage build, added to 2 stages).
+[CMD]: docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'test -f /artifacts/tw8ocgsg8ck4s4s0wgkwo80o/apps/crm-frontend/Dockerfile && echo 'exists' || echo 'not found''
+exists
+[CMD]: docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'cat /artifacts/tw8ocgsg8ck4s4s0wgkwo80o/apps/crm-frontend/Dockerfile'
+# Build stage
+FROM node:20-alpine AS builder
+WORKDIR /app
+# Copy package files
+COPY apps/crm-frontend/package*.json ./
+# Install ALL dependencies (including dev for TypeScript and Next.js build)
+RUN npm ci
+# Copy source code
+COPY apps/crm-frontend ./
+# Variables de build
+ARG NEXT_PUBLIC_CRM_API_URL
+ENV NEXT_PUBLIC_CRM_API_URL=${NEXT_PUBLIC_CRM_API_URL}
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+# Build Next.js
+RUN npm run build
+# Production stage
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3003
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+# Copy necessary files from builder
+# In standalone mode, .next/standalone contains: server.js, .next/, public/, node_modules/
+# The .next directory inside standalone already has everything needed
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+# Copy static files to ensure they're accessible (standalone includes them but we copy explicitly)
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+USER nextjs
+EXPOSE 3003
+CMD ["node", "server.js"]
+Added 76 ARG declarations to Dockerfile for service chronuscrm-frontend (multi-stage build, added to 2 stages).
+Pulling & building required images.
+Creating build-time .env file in /artifacts (outside Docker context).
+Adding build arguments to Docker Compose build command.
+[CMD]: docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'COOLIFY_BRANCH=main COOLIFY_RESOURCE_UUID=awoc4ggoows4ooskwgcs4w44  docker compose --env-file /artifacts/build-time.env --project-name awoc4ggoows4ooskwgcs4w44 --project-directory /artifacts/tw8ocgsg8ck4s4s0wgkwo80o -f /artifacts/tw8ocgsg8ck4s4s0wgkwo80o/docker-compose.yml build --pull --build-arg COOLIFY_URL --build-arg COOLIFY_FQDN --build-arg CHRONUSDEV_URL --build-arg CRM_FRONTEND_URL --build-arg DATABASE_URL --build-arg CRM_BACKEND_INTERNAL_URL --build-arg CHRONUSDEV_DATABASE_URL --build-arg GOOGLE_CLIENT_ID --build-arg GOOGLE_CLIENT_SECRET --build-arg JWT_SECRET --build-arg NEXT_PUBLIC_API_URL --build-arg API_PUBLIC_URL --build-arg CHRONUSDEV_API_URL --build-arg CHRONUSDEV_TOKEN --build-arg ASSISTAI_API_URL --build-arg ASSISTAI_TENANT_DOMAIN --build-arg ASSISTAI_ORG_CODE --build-arg SERVICE_URL_CHRONUSDEV_BACKEND --build-arg NEXT_PUBLIC_CRM_URL --build-arg SERVICE_FQDN_CHRONUSDEV_BACKEND --build-arg SERVICE_URL_CHRONUSDEV_FRONTEND --build-arg SERVICE_FQDN_CHRONUSDEV_FRONTEND --build-arg SERVICE_URL_CHRONUSCRM_BACKEND --build-arg SERVICE_FQDN_CHRONUSCRM_BACKEND --build-arg SERVICE_URL_CHRONUSCRM_FRONTEND --build-arg SERVICE_FQDN_CHRONUSCRM_FRONTEND --build-arg ASSISTAI_API_TOKEN --build-arg PORT --build-arg CHRONUSDEV_FRONTEND_URL --build-arg CRM_PUBLIC_URL --build-arg GOOGLE_REDIRECT_URI --build-arg NEXT_PUBLIC_CRM_API_URL --build-arg NEXT_PUBLIC_CHRONUS_APP_URL --build-arg CHRONUSDEV_BACKEND_URL --build-arg NEXT_PUBLIC_CRM_APP_URL --build-arg CRM_SYNC_KEY --build-arg CHRONUSCRM_API_URL --build-arg CHRONUSDEV_FRONTEND_API_URL --build-arg COOLIFY_BUILD_SECRETS_HASH=b32889914b1a615ee6e6b2942936754d68f226765f44c6681b680072da4c0543'
+#1 [internal] load local bake definitions
+#1 reading from stdin 14.69kB done
+#1 DONE 0.0s
+#2 [chronusdev-backend internal] load build definition from Dockerfile
+#2 transferring dockerfile: 3.26kB done
+#2 DONE 0.1s
+#3 [chronuscrm-frontend internal] load build definition from Dockerfile
+#3 transferring dockerfile: 3.14kB 0.0s done
+#3 DONE 0.1s
+#4 [chronusdev-frontend internal] load build definition from Dockerfile
+#4 transferring dockerfile: 2.96kB done
+#4 DONE 0.2s
+#5 [chronuscrm-backend internal] load build definition from Dockerfile
+#5 transferring dockerfile: 2.88kB done
+#5 DONE 0.2s
+#6 [chronusdev-frontend internal] load metadata for docker.io/library/node:20-alpine
+#6 ...
+#7 [chronuscrm-backend internal] load metadata for docker.io/library/node:20-bookworm-slim
+#7 DONE 0.4s
+#8 [chronuscrm-backend internal] load .dockerignore
+#8 transferring context: 75B done
+#8 DONE 0.0s
+#6 [chronusdev-backend internal] load metadata for docker.io/library/node:20-alpine
+#6 DONE 0.4s
+#9 [chronusdev-backend internal] load .dockerignore
+#9 transferring context: 119B done
+#9 DONE 0.1s
+#10 [chronuscrm-frontend builder 1/7] FROM docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132750ec8
+#10 resolve docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132750ec8 0.0s done
+#10 sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132750ec8 7.67kB / 7.67kB done
+#10 sha256:c3324aa3efea082c8d294a93b97ba82adc5498a202bd48802f5a8af152e7dd9e 1.72kB / 1.72kB done
+#10 sha256:458b0b7c1c6027b37124839bf527a5c54936ab27a9c9643051a3d801c4560a6c 6.52kB / 6.52kB done
+#10 sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132750ec8 7.67kB / 7.67kB done
+#10 sha256:c3324aa3efea082c8d294a93b97ba82adc5498a202bd48802f5a8af152e7dd9e 1.72kB / 1.72kB done
+#10 sha256:458b0b7c1c6027b37124839bf527a5c54936ab27a9c9643051a3d801c4560a6c 6.52kB / 6.52kB done
+#10 ...
+#11 [chronuscrm-backend builder 1/9] FROM docker.io/library/node:20-bookworm-slim@sha256:c6585df72c34172bebd8d36abed961e231d7d3b5cee2e01294c4495e8a03f687
+#11 resolve docker.io/library/node:20-bookworm-slim@sha256:c6585df72c34172bebd8d36abed961e231d7d3b5cee2e01294c4495e8a03f687 0.0s done
+#11 sha256:c6585df72c34172bebd8d36abed961e231d7d3b5cee2e01294c4495e8a03f687 6.49kB / 6.49kB done
+#11 sha256:721fb2bf28abf97fe5e59dd2660a9b30edeb746f0952c261500ef08030e1385a 1.93kB / 1.93kB done
+#11 sha256:1096d6b5560fa2f1e252681cbe7da839860715b80bb08867931ddb8c2d410945 6.88kB / 6.88kB done
+#11 DONE 0.3s
+#12 [chronusdev-frontend internal] load build context
+#12 transferring context: 1.27MB 0.1s done
+#12 DONE 0.3s
+#13 [chronusdev-backend internal] load build context
+#13 transferring context: 3.21MB 0.1s done
+#13 DONE 0.4s
+#14 [chronuscrm-frontend internal] load build context
+#14 transferring context: 2.61MB 0.1s done
+#14 DONE 0.5s
+#15 [chronuscrm-backend internal] load build context
+#15 transferring context: 19.75MB 0.4s done
+#15 DONE 0.6s
+#10 [chronusdev-frontend builder 1/7] FROM docker.io/library/node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132750ec8
+#10 DONE 0.5s
+#16 [chronuscrm-backend stage-1  2/11] WORKDIR /app
+#16 DONE 0.3s
+#17 [chronuscrm-frontend builder 2/7] WORKDIR /app
+#17 DONE 0.1s
+#18 [chronusdev-frontend builder 3/7] COPY package*.json ./
+#18 DONE 0.4s
+#19 [chronusdev-backend builder 3/7] COPY package*.json ./
+#19 CACHED
+#20 [chronuscrm-frontend builder 3/6] COPY apps/crm-frontend/package*.json ./
+#20 DONE 0.4s
+#21 [chronusdev-frontend builder 4/7] COPY apps/frontend/package*.json ./apps/frontend/
+#21 DONE 0.2s
+#22 [chronuscrm-frontend builder 4/6] RUN npm ci
+#22 ...
+#23 [chronusdev-backend builder 4/7] COPY apps/backend/package*.json ./apps/backend/
+#23 DONE 0.2s
+#24 [chronusdev-backend builder 5/7] RUN npm ci --workspace=apps/backend
+#24 ...
+#25 [chronusdev-frontend runner 3/7] RUN addgroup --system --gid 1001 nodejs
+#25 DONE 0.9s
+#26 [chronuscrm-frontend runner 3/6] RUN addgroup --system --gid 1001 nodejs
+#26 DONE 1.0s
+#27 [chronusdev-frontend runner 4/7] RUN adduser --system --uid 1001 nextjs
+#27 ...
+#28 [chronusdev-backend runner  3/11] RUN apk add --no-cache wget openssl ca-certificates
+#28 1.260 (1/6) Installing ca-certificates (20251003-r0)
+#28 1.320 (2/6) Installing openssl (3.5.5-r0)
+#28 1.339 (3/6) Installing libunistring (1.4.1-r0)
+#28 1.369 (4/6) Installing libidn2 (2.3.8-r0)
+#28 1.377 (5/6) Installing pcre2 (10.47-r0)
+#28 1.392 (6/6) Installing wget (1.25.0-r2)
+#28 1.406 Executing busybox-1.37.0-r30.trigger
+#28 1.426 Executing ca-certificates-20251003-r0.trigger
+#28 1.549 OK: 15.1 MiB in 24 packages
+#28 DONE 1.7s
+#29 [chronusdev-backend runner  4/11] COPY package*.json ./
+#29 DONE 0.2s
+#30 [chronuscrm-backend builder 2/9] RUN apt-get update && apt-get install -y openssl python3 make g++
+#30 0.779 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+#30 0.791 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+#30 0.791 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [48.0 kB]
+#30 1.082 Get:4 http://deb.debian.org/debian bookworm/main amd64 Packages [8792 kB]
+#30 1.293 Get:5 http://deb.debian.org/debian bookworm-updates/main amd64 Packages [6924 B]
+#30 1.509 Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 Packages [295 kB]
+#30 ...
+#27 [chronusdev-frontend runner 4/7] RUN adduser --system --uid 1001 nextjs
+#27 DONE 1.1s
+#31 [chronuscrm-frontend runner 4/6] RUN adduser --system --uid 1001 nextjs
+#31 DONE 1.1s
+#32 [chronusdev-backend runner  5/11] COPY apps/backend/package*.json ./apps/backend/
+#32 DONE 0.4s
+#33 [chronusdev-backend runner  6/11] RUN npm ci --workspace=apps/backend --omit=dev
+#33 ...
+#30 [chronuscrm-backend builder 2/9] RUN apt-get update && apt-get install -y openssl python3 make g++
+#30 3.047 Fetched 9348 kB in 2s (4084 kB/s)
+#30 3.047 Reading package lists...
+#30 4.628 Reading package lists...
+#30 5.727 Building dependency tree...
+#30 6.018 Reading state information...
+#30 6.525 The following additional packages will be installed:
+#30 6.525   binutils binutils-common binutils-x86-64-linux-gnu ca-certificates cpp
+#30 6.526   cpp-12 fontconfig-config fonts-dejavu-core g++-12 gcc gcc-12 krb5-locales
+#30 6.526   libabsl20220623 libaom3 libasan8 libatomic1 libavif15 libbinutils libbrotli1
+#30 6.526   libbsd0 libc-dev-bin libc-devtools libc6-dev libcc1-0 libcrypt-dev
+#30 6.526   libctf-nobfd0 libctf0 libdav1d6 libde265-0 libdeflate0 libexpat1
+#30 6.526   libfontconfig1 libfreetype6 libgav1-1 libgcc-12-dev libgd3 libgomp1 libgpm2
+#30 6.526   libgprofng0 libgssapi-krb5-2 libheif1 libisl23 libitm1 libjansson4 libjbig0
+#30 6.526   libjpeg62-turbo libk5crypto3 libkeyutils1 libkrb5-3 libkrb5support0 liblerc4
+#30 6.527   liblsan0 libmpc3 libmpfr6 libncursesw6 libnsl-dev libnsl2 libnuma1
+#30 6.527   libpng16-16 libpython3-stdlib libpython3.11-minimal libpython3.11-stdlib
+#30 6.527   libquadmath0 librav1e0 libreadline8 libsqlite3-0 libssl3 libstdc++-12-dev
+#30 6.527   libsvtav1enc1 libtiff6 libtirpc-common libtirpc-dev libtirpc3 libtsan2
+#30 6.527   libubsan1 libwebp7 libx11-6 libx11-data libx265-199 libxau6 libxcb1
+#30 6.527   libxdmcp6 libxpm4 libyuv0 linux-libc-dev manpages manpages-dev media-types
+#30 6.528   python3-minimal python3.11 python3.11-minimal readline-common rpcsvc-proto
+#30 6.528 Suggested packages:
+#30 6.528   binutils-doc cpp-doc gcc-12-locales cpp-12-doc g++-multilib g++-12-multilib
+#30 6.528   gcc-12-doc gcc-multilib autoconf automake libtool flex bison gdb gcc-doc
+#30 6.528   gcc-12-multilib glibc-doc libgd-tools gpm krb5-doc krb5-user
+#30 6.528   libstdc++-12-doc make-doc man-browser python3-doc python3-tk python3-venv
+#30 6.528   python3.11-venv python3.11-doc binfmt-support readline-doc
+#30 7.204 The following NEW packages will be installed:
+#30 7.204   binutils binutils-common binutils-x86-64-linux-gnu ca-certificates cpp
+#30 7.204   cpp-12 fontconfig-config fonts-dejavu-core g++ g++-12 gcc gcc-12
+#30 7.204   krb5-locales libabsl20220623 libaom3 libasan8 libatomic1 libavif15
+#30 7.204   libbinutils libbrotli1 libbsd0 libc-dev-bin libc-devtools libc6-dev libcc1-0
+#30 7.204   libcrypt-dev libctf-nobfd0 libctf0 libdav1d6 libde265-0 libdeflate0
+#30 7.204   libexpat1 libfontconfig1 libfreetype6 libgav1-1 libgcc-12-dev libgd3
+#30 7.204   libgomp1 libgpm2 libgprofng0 libgssapi-krb5-2 libheif1 libisl23 libitm1
+#30 7.204   libjansson4 libjbig0 libjpeg62-turbo libk5crypto3 libkeyutils1 libkrb5-3
+#30 7.204   libkrb5support0 liblerc4 liblsan0 libmpc3 libmpfr6 libncursesw6 libnsl-dev
+#30 7.204   libnsl2 libnuma1 libpng16-16 libpython3-stdlib libpython3.11-minimal
+#30 7.204   libpython3.11-stdlib libquadmath0 librav1e0 libreadline8 libsqlite3-0
+#30 7.204   libssl3 libstdc++-12-dev libsvtav1enc1 libtiff6 libtirpc-common libtirpc-dev
+#30 7.204   libtirpc3 libtsan2 libubsan1 libwebp7 libx11-6 libx11-data libx265-199
+#30 7.204   libxau6 libxcb1 libxdmcp6 libxpm4 libyuv0 linux-libc-dev make manpages
+#30 7.204   manpages-dev media-types openssl python3 python3-minimal python3.11
+#30 7.204   python3.11-minimal readline-common rpcsvc-proto
+#30 7.255 0 upgraded, 97 newly installed, 0 to remove and 0 not upgraded.
+#30 7.255 Need to get 91.3 MB of archives.
+#30 7.255 After this operation, 354 MB of additional disk space will be used.
+#30 7.255 Get:1 http://deb.debian.org/debian-security bookworm-security/main amd64 libssl3 amd64 3.0.18-1~deb12u2 [2030 kB]
+#30 7.272 Get:2 http://deb.debian.org/debian bookworm/main amd64 libpython3.11-minimal amd64 3.11.2-6+deb12u6 [817 kB]
+#30 7.285 Get:3 http://deb.debian.org/debian bookworm/main amd64 libexpat1 amd64 2.5.0-1+deb12u2 [99.9 kB]
+#30 7.285 Get:4 http://deb.debian.org/debian bookworm/main amd64 python3.11-minimal amd64 3.11.2-6+deb12u6 [2064 kB]
+#30 7.305 Get:5 http://deb.debian.org/debian bookworm/main amd64 python3-minimal amd64 3.11.2-1+b1 [26.3 kB]
+#30 7.305 Get:6 http://deb.debian.org/debian bookworm/main amd64 media-types all 10.0.0 [26.1 kB]
+#30 7.308 Get:7 http://deb.debian.org/debian bookworm/main amd64 libncursesw6 amd64 6.4-4 [134 kB]
+#30 7.309 Get:8 http://deb.debian.org/debian bookworm/main amd64 libkrb5support0 amd64 1.20.1-2+deb12u4 [33.2 kB]
+#30 7.310 Get:9 http://deb.debian.org/debian bookworm/main amd64 libk5crypto3 amd64 1.20.1-2+deb12u4 [79.8 kB]
+#30 7.312 Get:10 http://deb.debian.org/debian bookworm/main amd64 libkeyutils1 amd64 1.6.3-2 [8808 B]
+#30 7.312 Get:11 http://deb.debian.org/debian bookworm/main amd64 libkrb5-3 amd64 1.20.1-2+deb12u4 [334 kB]
+#30 7.316 Get:12 http://deb.debian.org/debian bookworm/main amd64 libgssapi-krb5-2 amd64 1.20.1-2+deb12u4 [135 kB]
+#30 7.321 Get:13 http://deb.debian.org/debian bookworm/main amd64 libtirpc-common all 1.3.3+ds-1 [14.0 kB]
+#30 7.321 Get:14 http://deb.debian.org/debian bookworm/main amd64 libtirpc3 amd64 1.3.3+ds-1 [85.2 kB]
+#30 7.321 Get:15 http://deb.debian.org/debian bookworm/main amd64 libnsl2 amd64 1.3.0-2 [39.5 kB]
+#30 7.323 Get:16 http://deb.debian.org/debian bookworm/main amd64 readline-common all 8.2-1.3 [69.0 kB]
+#30 7.327 Get:17 http://deb.debian.org/debian bookworm/main amd64 libreadline8 amd64 8.2-1.3 [166 kB]
+#30 7.332 Get:18 http://deb.debian.org/debian bookworm/main amd64 libsqlite3-0 amd64 3.40.1-2+deb12u2 [839 kB]
+#30 7.414 Get:19 http://deb.debian.org/debian bookworm/main amd64 libpython3.11-stdlib amd64 3.11.2-6+deb12u6 [1798 kB]
+#30 7.677 Get:20 http://deb.debian.org/debian bookworm/main amd64 python3.11 amd64 3.11.2-6+deb12u6 [573 kB]
+#30 7.732 Get:21 http://deb.debian.org/debian bookworm/main amd64 libpython3-stdlib amd64 3.11.2-1+b1 [9312 B]
+#30 7.735 Get:22 http://deb.debian.org/debian bookworm/main amd64 python3 amd64 3.11.2-1+b1 [26.3 kB]
+#30 7.736 Get:23 http://deb.debian.org/debian-security bookworm-security/main amd64 openssl amd64 3.0.18-1~deb12u2 [1433 kB]
+#30 7.815 Get:24 http://deb.debian.org/debian bookworm/main amd64 ca-certificates all 20230311+deb12u1 [155 kB]
+#30 7.815 Get:25 http://deb.debian.org/debian bookworm/main amd64 krb5-locales all 1.20.1-2+deb12u4 [63.4 kB]
+#30 7.815 Get:26 http://deb.debian.org/debian bookworm/main amd64 manpages all 6.03-2 [1332 kB]
+#30 7.926 Get:27 http://deb.debian.org/debian bookworm/main amd64 binutils-common amd64 2.40-2 [2487 kB]
+#30 8.011 Get:28 http://deb.debian.org/debian bookworm/main amd64 libbinutils amd64 2.40-2 [572 kB]
+#30 8.023 Get:29 http://deb.debian.org/debian bookworm/main amd64 libctf-nobfd0 amd64 2.40-2 [153 kB]
+#30 8.030 Get:30 http://deb.debian.org/debian bookworm/main amd64 libctf0 amd64 2.40-2 [89.8 kB]
+#30 8.031 Get:31 http://deb.debian.org/debian bookworm/main amd64 libgprofng0 amd64 2.40-2 [812 kB]
+#30 8.046 Get:32 http://deb.debian.org/debian bookworm/main amd64 libjansson4 amd64 2.14-2 [40.8 kB]
+#30 8.049 Get:33 http://deb.debian.org/debian bookworm/main amd64 binutils-x86-64-linux-gnu amd64 2.40-2 [2246 kB]
+#30 8.082 Get:34 http://deb.debian.org/debian bookworm/main amd64 binutils amd64 2.40-2 [65.0 kB]
+#30 8.084 Get:35 http://deb.debian.org/debian bookworm/main amd64 libisl23 amd64 0.25-1.1 [683 kB]
+#30 8.097 Get:36 http://deb.debian.org/debian bookworm/main amd64 libmpfr6 amd64 4.2.0-1 [701 kB]
+#30 8.109 Get:37 http://deb.debian.org/debian bookworm/main amd64 libmpc3 amd64 1.3.1-1 [51.5 kB]
+#30 8.110 Get:38 http://deb.debian.org/debian bookworm/main amd64 cpp-12 amd64 12.2.0-14+deb12u1 [9768 kB]
+#30 8.210 Get:39 http://deb.debian.org/debian bookworm/main amd64 cpp amd64 4:12.2.0-3 [6836 B]
+#30 8.212 Get:40 http://deb.debian.org/debian bookworm/main amd64 fonts-dejavu-core all 2.37-6 [1068 kB]
+#30 8.218 Get:41 http://deb.debian.org/debian bookworm/main amd64 fontconfig-config amd64 2.14.1-4 [315 kB]
+#30 8.220 Get:42 http://deb.debian.org/debian bookworm/main amd64 libcc1-0 amd64 12.2.0-14+deb12u1 [41.7 kB]
+#30 8.225 Get:43 http://deb.debian.org/debian bookworm/main amd64 libgomp1 amd64 12.2.0-14+deb12u1 [116 kB]
+#30 8.226 Get:44 http://deb.debian.org/debian bookworm/main amd64 libitm1 amd64 12.2.0-14+deb12u1 [26.1 kB]
+#30 8.227 Get:45 http://deb.debian.org/debian bookworm/main amd64 libatomic1 amd64 12.2.0-14+deb12u1 [9376 B]
+#30 8.228 Get:46 http://deb.debian.org/debian bookworm/main amd64 libasan8 amd64 12.2.0-14+deb12u1 [2193 kB]
+#30 8.245 Get:47 http://deb.debian.org/debian bookworm/main amd64 liblsan0 amd64 12.2.0-14+deb12u1 [969 kB]
+#30 8.282 Get:48 http://deb.debian.org/debian bookworm/main amd64 libtsan2 amd64 12.2.0-14+deb12u1 [2197 kB]
+#30 8.316 Get:49 http://deb.debian.org/debian bookworm/main amd64 libubsan1 amd64 12.2.0-14+deb12u1 [883 kB]
+#30 8.327 Get:50 http://deb.debian.org/debian bookworm/main amd64 libquadmath0 amd64 12.2.0-14+deb12u1 [145 kB]
+#30 8.328 Get:51 http://deb.debian.org/debian bookworm/main amd64 libgcc-12-dev amd64 12.2.0-14+deb12u1 [2437 kB]
+#30 8.344 Get:52 http://deb.debian.org/debian bookworm/main amd64 gcc-12 amd64 12.2.0-14+deb12u1 [19.3 MB]
+#30 8.607 Get:53 http://deb.debian.org/debian bookworm/main amd64 gcc amd64 4:12.2.0-3 [5216 B]
+#30 8.607 Get:54 http://deb.debian.org/debian bookworm/main amd64 libc-dev-bin amd64 2.36-9+deb12u13 [47.4 kB]
+#30 8.607 Get:55 http://deb.debian.org/debian-security bookworm-security/main amd64 linux-libc-dev amd64 6.1.162-1 [2237 kB]
+#30 8.620 Get:56 http://deb.debian.org/debian bookworm/main amd64 libcrypt-dev amd64 1:4.4.33-2 [118 kB]
+#30 8.629 Get:57 http://deb.debian.org/debian bookworm/main amd64 libtirpc-dev amd64 1.3.3+ds-1 [191 kB]
+#30 8.629 Get:58 http://deb.debian.org/debian bookworm/main amd64 libnsl-dev amd64 1.3.0-2 [66.4 kB]
+#30 8.630 Get:59 http://deb.debian.org/debian bookworm/main amd64 rpcsvc-proto amd64 1.4.3-1 [63.3 kB]
+#30 8.630 Get:60 http://deb.debian.org/debian bookworm/main amd64 libc6-dev amd64 2.36-9+deb12u13 [1904 kB]
+#30 8.647 Get:61 http://deb.debian.org/debian bookworm/main amd64 libstdc++-12-dev amd64 12.2.0-14+deb12u1 [2047 kB]
+#30 8.668 Get:62 http://deb.debian.org/debian bookworm/main amd64 g++-12 amd64 12.2.0-14+deb12u1 [10.7 MB]
+#30 8.771 Get:63 http://deb.debian.org/debian bookworm/main amd64 g++ amd64 4:12.2.0-3 [1356 B]
+#30 8.771 Get:64 http://deb.debian.org/debian bookworm/main amd64 libabsl20220623 amd64 20220623.1-1+deb12u2 [391 kB]
+#30 8.774 Get:65 http://deb.debian.org/debian bookworm/main amd64 libaom3 amd64 3.6.0-1+deb12u2 [1850 kB]
+#30 8.799 Get:66 http://deb.debian.org/debian bookworm/main amd64 libdav1d6 amd64 1.0.0-2+deb12u1 [513 kB]
+#30 8.806 Get:67 http://deb.debian.org/debian bookworm/main amd64 libgav1-1 amd64 0.18.0-1+b1 [332 kB]
+#30 8.811 Get:68 http://deb.debian.org/debian bookworm/main amd64 librav1e0 amd64 0.5.1-6 [763 kB]
+#30 8.820 Get:69 http://deb.debian.org/debian bookworm/main amd64 libsvtav1enc1 amd64 1.4.1+dfsg-1 [2121 kB]
+#30 8.832 Get:70 http://deb.debian.org/debian bookworm/main amd64 libjpeg62-turbo amd64 1:2.1.5-2 [166 kB]
+#30 8.838 Get:71 http://deb.debian.org/debian bookworm/main amd64 libyuv0 amd64 0.0~git20230123.b2528b0-1 [168 kB]
+#30 8.842 Get:72 http://deb.debian.org/debian bookworm/main amd64 libavif15 amd64 0.11.1-1+deb12u1 [94.4 kB]
+#30 8.850 Get:73 http://deb.debian.org/debian bookworm/main amd64 libbrotli1 amd64 1.0.9-2+b6 [275 kB]
+#30 8.855 Get:74 http://deb.debian.org/debian bookworm/main amd64 libbsd0 amd64 0.11.7-2 [117 kB]
+#30 8.857 Get:75 http://deb.debian.org/debian bookworm/main amd64 libpng16-16 amd64 1.6.39-2+deb12u1 [276 kB]
+#30 8.863 Get:76 http://deb.debian.org/debian bookworm/main amd64 libfreetype6 amd64 2.12.1+dfsg-5+deb12u4 [398 kB]
+#30 8.866 Get:77 http://deb.debian.org/debian bookworm/main amd64 libfontconfig1 amd64 2.14.1-4 [386 kB]
+#30 8.870 Get:78 http://deb.debian.org/debian bookworm/main amd64 libde265-0 amd64 1.0.11-1+deb12u2 [185 kB]
+#30 8.873 Get:79 http://deb.debian.org/debian bookworm/main amd64 libnuma1 amd64 2.0.16-1 [21.0 kB]
+#30 8.875 Get:80 http://deb.debian.org/debian bookworm/main amd64 libx265-199 amd64 3.5-2+b1 [1150 kB]
+#30 8.886 Get:81 http://deb.debian.org/debian bookworm/main amd64 libheif1 amd64 1.15.1-1+deb12u1 [215 kB]
+#30 8.892 Get:82 http://deb.debian.org/debian bookworm/main amd64 libdeflate0 amd64 1.14-1 [61.4 kB]
+#30 8.893 Get:83 http://deb.debian.org/debian bookworm/main amd64 libjbig0 amd64 2.1-6.1 [31.7 kB]
+#30 8.895 Get:84 http://deb.debian.org/debian bookworm/main amd64 liblerc4 amd64 4.0.0+ds-2 [170 kB]
+#30 8.899 Get:85 http://deb.debian.org/debian bookworm/main amd64 libwebp7 amd64 1.2.4-0.2+deb12u1 [286 kB]
+#30 8.904 Get:86 http://deb.debian.org/debian bookworm/main amd64 libtiff6 amd64 4.5.0-6+deb12u3 [316 kB]
+#30 8.905 Get:87 http://deb.debian.org/debian bookworm/main amd64 libxau6 amd64 1:1.0.9-1 [19.7 kB]
+#30 8.907 Get:88 http://deb.debian.org/debian bookworm/main amd64 libxdmcp6 amd64 1:1.1.2-3 [26.3 kB]
+#30 8.907 Get:89 http://deb.debian.org/debian bookworm/main amd64 libxcb1 amd64 1.15-1 [144 kB]
+#30 8.909 Get:90 http://deb.debian.org/debian bookworm/main amd64 libx11-data all 2:1.8.4-2+deb12u2 [292 kB]
+#30 8.912 Get:91 http://deb.debian.org/debian bookworm/main amd64 libx11-6 amd64 2:1.8.4-2+deb12u2 [760 kB]
+#30 8.924 Get:92 http://deb.debian.org/debian bookworm/main amd64 libxpm4 amd64 1:3.5.12-1.1+deb12u1 [48.6 kB]
+#30 8.926 Get:93 http://deb.debian.org/debian bookworm/main amd64 libgd3 amd64 2.3.3-9 [124 kB]
+#30 8.930 Get:94 http://deb.debian.org/debian bookworm/main amd64 libc-devtools amd64 2.36-9+deb12u13 [55.0 kB]
+#30 8.931 Get:95 http://deb.debian.org/debian bookworm/main amd64 libgpm2 amd64 1.20.7-10+b1 [14.2 kB]
+#30 8.935 Get:96 http://deb.debian.org/debian bookworm/main amd64 make amd64 4.3-4.1 [396 kB]
+#30 8.939 Get:97 http://deb.debian.org/debian bookworm/main amd64 manpages-dev all 6.03-2 [2030 kB]
+#30 9.491 debconf: delaying package configuration, since apt-utils is not installed
+#30 9.606 Fetched 91.3 MB in 2s (52.7 MB/s)
+#30 9.735 Selecting previously unselected package libssl3:amd64.
+#30 9.739 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6096 files and directories currently installed.)
+#30 9.785 Preparing to unpack .../libssl3_3.0.18-1~deb12u2_amd64.deb ...
+#30 9.809 Unpacking libssl3:amd64 (3.0.18-1~deb12u2) ...
+#30 10.24 Selecting previously unselected package libpython3.11-minimal:amd64.
+#30 10.24 Preparing to unpack .../libpython3.11-minimal_3.11.2-6+deb12u6_amd64.deb ...
+#30 10.25 Unpacking libpython3.11-minimal:amd64 (3.11.2-6+deb12u6) ...
+#30 10.69 Selecting previously unselected package libexpat1:amd64.
+#30 ...
+#34 [chronusdev-frontend builder 5/7] RUN npm ci --workspace=apps/frontend
+#34 ...
+#24 [chronusdev-backend builder 5/7] RUN npm ci --workspace=apps/backend
+#24 10.21 npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+#24 10.78 npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+#24 11.02 npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+#24 11.95 npm warn deprecated glob@7.1.6: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting <REDACTED>
+#24 12.40 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+#24 13.66 npm warn deprecated jpeg-exif@1.1.4: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+#24 14.19 npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting <REDACTED>
+#24 ...
+#30 [chronuscrm-backend builder 2/9] RUN apt-get update && apt-get install -y openssl python3 make g++
+#30 10.70 Preparing to unpack .../libexpat1_2.5.0-1+deb12u2_amd64.deb ...
+#30 10.71 Unpacking libexpat1:amd64 (2.5.0-1+deb12u2) ...
+#30 10.87 Selecting previously unselected package python3.11-minimal.
+#30 10.87 Preparing to unpack .../python3.11-minimal_3.11.2-6+deb12u6_amd64.deb ...
+#30 10.90 Unpacking python3.11-minimal (3.11.2-6+deb12u6) ...
+#30 11.43 Setting up libssl3:amd64 (3.0.18-1~deb12u2) ...
+#30 11.48 Setting up libpython3.11-minimal:amd64 (3.11.2-6+deb12u6) ...
+#30 11.53 Setting up libexpat1:amd64 (2.5.0-1+deb12u2) ...
+#30 11.56 Setting up python3.11-minimal (3.11.2-6+deb12u6) ...
+#30 12.90 Selecting previously unselected package python3-minimal.
+#30 12.90 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6424 files and directories currently installed.)
+#30 12.92 Preparing to unpack .../00-python3-minimal_3.11.2-1+b1_amd64.deb ...
+#30 12.92 Unpacking python3-minimal (3.11.2-1+b1) ...
+#30 13.09 Selecting previously unselected package media-types.
+#30 13.10 Preparing to unpack .../01-media-types_10.0.0_all.deb ...
+#30 13.12 Unpacking media-types (10.0.0) ...
+#30 13.37 Selecting previously unselected package libncursesw6:amd64.
+#30 13.37 Preparing to unpack .../02-libncursesw6_6.4-4_amd64.deb ...
+#30 13.43 Unpacking libncursesw6:amd64 (6.4-4) ...
+#30 13.61 Selecting previously unselected package libkrb5support0:amd64.
+#30 13.62 Preparing to unpack .../03-libkrb5support0_1.20.1-2+deb12u4_amd64.deb ...
+#30 13.67 Unpacking libkrb5support0:amd64 (1.20.1-2+deb12u4) ...
+#30 13.95 Selecting previously unselected package libk5crypto3:amd64.
+#30 13.95 Preparing to unpack .../04-libk5crypto3_1.20.1-2+deb12u4_amd64.deb ...
+#30 14.00 Unpacking libk5crypto3:amd64 (1.20.1-2+deb12u4) ...
+#30 14.33 Selecting previously unselected package libkeyutils1:amd64.
+#30 14.33 Preparing to unpack .../05-libkeyutils1_1.6.3-2_amd64.deb ...
+#30 14.34 Unpacking libkeyutils1:amd64 (1.6.3-2) ...
+#30 14.47 Selecting previously unselected package libkrb5-3:amd64.
+#30 14.48 Preparing to unpack .../06-libkrb5-3_1.20.1-2+deb12u4_amd64.deb ...
+#30 14.58 Unpacking libkrb5-3:amd64 (1.20.1-2+deb12u4) ...
+#30 14.88 Selecting previously unselected package libgssapi-krb5-2:amd64.
+#30 14.89 Preparing to unpack .../07-libgssapi-krb5-2_1.20.1-2+deb12u4_amd64.deb ...
+#30 14.93 Unpacking libgssapi-krb5-2:amd64 (1.20.1-2+deb12u4) ...
+#30 15.14 Selecting previously unselected package libtirpc-common.
+#30 15.14 Preparing to unpack .../08-libtirpc-common_1.3.3+ds-1_all.deb ...
+#30 15.16 Unpacking libtirpc-common (1.3.3+ds-1) ...
+#30 15.30 Selecting previously unselected package libtirpc3:amd64.
+#30 15.31 Preparing to unpack .../09-libtirpc3_1.3.3+ds-1_amd64.deb ...
+#30 15.33 Unpacking libtirpc3:amd64 (1.3.3+ds-1) ...
+#30 15.52 Selecting previously unselected package libnsl2:amd64.
+#30 15.52 Preparing to unpack .../10-libnsl2_1.3.0-2_amd64.deb ...
+#30 15.56 Unpacking libnsl2:amd64 (1.3.0-2) ...
+#30 15.80 Selecting previously unselected package readline-common.
+#30 15.80 Preparing to unpack .../11-readline-common_8.2-1.3_all.deb ...
+#30 15.83 Unpacking readline-common (8.2-1.3) ...
+#30 16.02 Selecting previously unselected package libreadline8:amd64.
+#30 16.03 Preparing to unpack .../12-libreadline8_8.2-1.3_amd64.deb ...
+#30 16.07 Unpacking libreadline8:amd64 (8.2-1.3) ...
+#30 16.26 Selecting previously unselected package libsqlite3-0:amd64.
+#30 16.27 Preparing to unpack .../13-libsqlite3-0_3.40.1-2+deb12u2_amd64.deb ...
+#30 16.30 Unpacking libsqlite3-0:amd64 (3.40.1-2+deb12u2) ...
+#30 16.58 Selecting previously unselected package libpython3.11-stdlib:amd64.
+#30 16.58 Preparing to unpack .../14-libpython3.11-stdlib_3.11.2-6+deb12u6_amd64.deb ...
+#30 16.61 Unpacking libpython3.11-stdlib:amd64 (3.11.2-6+deb12u6) ...
+#30 17.15 Selecting previously unselected package python3.11.
+#30 17.15 Preparing to unpack .../15-python3.11_3.11.2-6+deb12u6_amd64.deb ...
+#30 17.18 Unpacking python3.11 (3.11.2-6+deb12u6) ...
+#30 17.38 Selecting previously unselected package libpython3-stdlib:amd64.
+#30 17.38 Preparing to unpack .../16-libpython3-stdlib_3.11.2-1+b1_amd64.deb ...
+#30 17.39 Unpacking libpython3-stdlib:amd64 (3.11.2-1+b1) ...
+#30 17.55 Setting up python3-minimal (3.11.2-1+b1) ...
+#30 18.12 Selecting previously unselected package python3.
+#30 18.12 (Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 6932 files and directories currently installed.)
+#30 18.16 Preparing to unpack .../00-python3_3.11.2-1+b1_amd64.deb ...
+#30 18.18 Unpacking python3 (3.11.2-1+b1) ...
+#30 18.30 Selecting previously unselected package openssl.
+#30 18.31 Preparing to unpack .../01-openssl_3.0.18-1~deb12u2_amd64.deb ...
+#30 18.31 Unpacking openssl (3.0.18-1~deb12u2) ...
+#30 18.71 Selecting previously unselected package ca-certificates.
+#30 18.71 Preparing to unpack .../02-ca-certificates_20230311+deb12u1_all.deb ...
+#30 18.72 Unpacking ca-certificates (20230311+deb12u1) ...
+#30 18.96 Selecting previously unselected package krb5-locales.
+#30 18.96 Preparing to unpack .../03-krb5-locales_1.20.1-2+deb12u4_all.deb ...
+#30 18.97 Unpacking krb5-locales (1.20.1-2+deb12u4) ...
+#30 19.07 Selecting previously unselected package manpages.
+#30 19.07 Preparing to unpack .../04-manpages_6.03-2_all.deb ...
+#30 19.08 Unpacking manpages (6.03-2) ...
+#30 19.30 Selecting previously unselected package binutils-common:amd64.
+#30 19.30 Preparing to unpack .../05-binutils-common_2.40-2_amd64.deb ...
+#30 19.31 Unpacking binutils-common:amd64 (2.40-2) ...
+#30 19.87 Selecting previously unselected package libbinutils:amd64.
+#30 19.87 Preparing to unpack .../06-libbinutils_2.40-2_amd64.deb ...
+#30 19.87 Unpacking libbinutils:amd64 (2.40-2) ...
+#30 20.15 Selecting previously unselected package libctf-nobfd0:amd64.
+#30 20.16 Preparing to unpack .../07-libctf-nobfd0_2.40-2_amd64.deb ...
+#30 20.17 Unpacking libctf-nobfd0:amd64 (2.40-2) ...
+#30 20.31 Selecting previously unselected package libctf0:amd64.
+#30 20.31 Preparing to unpack .../08-libctf0_2.40-2_amd64.deb ...
+#30 20.32 Unpacking libctf0:amd64 (2.40-2) ...
+#30 20.50 Selecting previously unselected package libgprofng0:amd64.
+#30 20.51 Preparing to unpack .../09-libgprofng0_2.40-2_amd64.deb ...
+#30 20.52 Unpacking libgprofng0:amd64 (2.40-2) ...
+#30 20.82 Selecting previously unselected package libjansson4:amd64.
+#30 20.82 Preparing to unpack .../10-libjansson4_2.14-2_amd64.deb ...
+#30 20.83 Unpacking libjansson4:amd64 (2.14-2) ...
+#30 20.92 Selecting previously unselected package binutils-x86-64-linux-gnu.
+#30 20.92 Preparing to unpack .../11-binutils-x86-64-linux-gnu_2.40-2_amd64.deb ...
+#30 20.93 Unpacking binutils-x86-64-linux-gnu (2.40-2) ...
+#30 ...
+#33 [chronusdev-backend runner  6/11] RUN npm ci --workspace=apps/backend --omit=dev
+#33 9.037 npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+#33 9.270 npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+#33 9.423 npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+#33 10.33 npm warn deprecated glob@7.1.6: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting <REDACTED>
+#33 10.73 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+#33 11.70 npm warn deprecated jpeg-exif@1.1.4: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+#33 12.23 npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting <REDACTED>
+#33 ...
+#30 [chronuscrm-backend builder 2/9] RUN apt-get update && apt-get install -y openssl python3 make g++
+#30 21.62 Selecting previously unselected package binutils.
+#30 21.62 Preparing to unpack .../12-binutils_2.40-2_amd64.deb ...
+#30 21.63 Unpacking binutils (2.40-2) ...
+#30 21.76 Selecting previously unselected package libisl23:amd64.
+#30 21.76 Preparing to unpack .../13-libisl23_0.25-1.1_amd64.deb ...
+#30 21.77 Unpacking libisl23:amd64 (0.25-1.1) ...
+#30 22.02 Selecting previously unselected package libmpfr6:amd64.
+#30 22.02 Preparing to unpack .../14-libmpfr6_4.2.0-1_amd64.deb ...
+#30 22.04 Unpacking libmpfr6:amd64 (4.2.0-1) ...
+#30 22.27 Selecting previously unselected package libmpc3:amd64.
+#30 22.27 Preparing to unpack .../15-libmpc3_1.3.1-1_amd64.deb ...
+#30 22.28 Unpacking libmpc3:amd64 (1.3.1-1) ...
+#30 22.54 Selecting previously unselected package cpp-12.
+#30 22.54 Preparing to unpack .../16-cpp-12_12.2.0-14+deb12u1_amd64.deb ...
+#30 22.55 Unpacking cpp-12 (12.2.0-14+deb12u1) ...
+#30 23.84 Selecting previously unselected package cpp.
+#30 23.85 Preparing to unpack .../17-cpp_4%3a12.2.0-3_amd64.deb ...
+#30 23.88 Unpacking cpp (4:12.2.0-3) ...
+#30 23.96 Selecting previously unselected package fonts-dejavu-core.
+#30 23.97 Preparing to unpack .../18-fonts-dejavu-core_2.37-6_all.deb ...
+#30 23.97 Unpacking fonts-dejavu-core (2.37-6) ...
+#30 24.18 Selecting previously unselected package fontconfig-config.
+#30 24.18 Preparing to unpack .../19-fontconfig-config_2.14.1-4_amd64.deb ...
+#30 24.53 Unpacking fontconfig-config (2.14.1-4) ...
+#30 24.69 Selecting previously unselected package libcc1-0:amd64.
+#30 24.69 Preparing to unpack .../20-libcc1-0_12.2.0-14+deb12u1_amd64.deb ...
+#30 24.70 Unpacking libcc1-0:amd64 (12.2.0-14+deb12u1) ...
+#30 24.80 Selecting previously unselected package libgomp1:amd64.
+#30 24.80 Preparing to unpack .../21-libgomp1_12.2.0-14+deb12u1_amd64.deb ...
+#30 24.81 Unpacking libgomp1:amd64 (12.2.0-14+deb12u1) ...
+#30 24.92 Selecting previously unselected package libitm1:amd64.
+#30 24.92 Preparing to unpack .../22-libitm1_12.2.0-14+deb12u1_amd64.deb ...
+#30 24.92 Unpacking libitm1:amd64 (12.2.0-14+deb12u1) ...
+#30 25.02 Selecting previously unselected package libatomic1:amd64.
+#30 25.02 Preparing to unpack .../23-libatomic1_12.2.0-14+deb12u1_amd64.deb ...
+#30 25.02 Unpacking libatomic1:amd64 (12.2.0-14+deb12u1) ...
+#30 25.19 Selecting previously unselected package libasan8:amd64.
+#30 25.20 Preparing to unpack .../24-libasan8_12.2.0-14+deb12u1_amd64.deb ...
+#30 25.21 Unpacking libasan8:amd64 (12.2.0-14+deb12u1) ...
+#30 25.64 Selecting previously unselected package liblsan0:amd64.
+#30 25.64 Preparing to unpack .../25-liblsan0_12.2.0-14+deb12u1_amd64.deb ...
+#30 25.65 Unpacking liblsan0:amd64 (12.2.0-14+deb12u1) ...
+#30 25.99 Selecting previously unselected package libtsan2:amd64.
+#30 25.99 Preparing to unpack .../26-libtsan2_12.2.0-14+deb12u1_amd64.deb ...
+#30 26.00 Unpacking libtsan2:amd64 (12.2.0-14+deb12u1) ...
+#30 26.62 Selecting previously unselected package libubsan1:amd64.
+#30 26.62 Preparing to unpack .../27-libubsan1_12.2.0-14+deb12u1_amd64.deb ...
+#30 26.63 Unpacking libubsan1:amd64 (12.2.0-14+deb12u1) ...
+#30 26.86 Selecting previously unselected package libquadmath0:amd64.
+#30 26.87 Preparing to unpack .../28-libquadmath0_12.2.0-14+deb12u1_amd64.deb ...
+#30 26.87 Unpacking libquadmath0:amd64 (12.2.0-14+deb12u1) ...
+#30 27.03 Selecting previously unselected package libgcc-12-dev:amd64.
+#30 27.03 Preparing to unpack .../29-libgcc-12-dev_12.2.0-14+deb12u1_amd64.deb ...
+#30 27.04 Unpacking libgcc-12-dev:amd64 (12.2.0-14+deb12u1) ...
+#30 27.45 Selecting previously unselected package gcc-12.
+#30 27.45 Preparing to unpack .../30-gcc-12_12.2.0-14+deb12u1_amd64.deb ...
+#30 27.47 Unpacking gcc-12 (12.2.0-14+deb12u1) ...
+#30 29.69 Selecting previously unselected package gcc.
+#30 29.69 Preparing to unpack .../31-gcc_4%3a12.2.0-3_amd64.deb ...
+#30 29.70 Unpacking gcc (4:12.2.0-3) ...
+#30 29.79 Selecting previously unselected package libc-dev-bin.
+#30 29.79 Preparing to unpack .../32-libc-dev-bin_2.36-9+deb12u13_amd64.deb ...
+#30 29.79 Unpacking libc-dev-bin (2.36-9+deb12u13) ...
+#30 29.86 Selecting previously unselected package linux-libc-dev:amd64.
+#30 29.87 Preparing to unpack .../33-linux-libc-dev_6.1.162-1_amd64.deb ...
+#30 29.87 Unpacking linux-libc-dev:amd64 (6.1.162-1) ...
+#30 30.41 Selecting previously unselected package libcrypt-dev:amd64.
+#30 30.41 Preparing to unpack .../34-libcrypt-dev_1%3a4.4.33-2_amd64.deb ...
+#30 30.45 Unpacking libcrypt-dev:amd64 (1:4.4.33-2) ...
+#30 30.56 Selecting previously unselected package libtirpc-dev:amd64.
+#30 30.56 Preparing to unpack .../35-libtirpc-dev_1.3.3+ds-1_amd64.deb ...
+#30 30.57 Unpacking libtirpc-dev:amd64 (1.3.3+ds-1) ...
+#30 30.71 Selecting previously unselected package libnsl-dev:amd64.
+#30 30.71 Preparing to unpack .../36-libnsl-dev_1.3.0-2_amd64.deb ...
+#30 30.72 Unpacking libnsl-dev:amd64 (1.3.0-2) ...
+#30 30.84 Selecting previously unselected package rpcsvc-proto.
+#30 30.85 Preparing to unpack .../37-rpcsvc-proto_1.4.3-1_amd64.deb ...
+#30 30.85 Unpacking rpcsvc-proto (1.4.3-1) ...
+#30 30.98 Selecting previously unselected package libc6-dev:amd64.
+#30 30.98 Preparing to unpack .../38-libc6-dev_2.36-9+deb12u13_amd64.deb ...
+#30 30.99 Unpacking libc6-dev:amd64 (2.36-9+deb12u13) ...
+#30 31.60 Selecting previously unselected package libstdc++-12-dev:amd64.
+#30 31.60 Preparing to unpack .../39-libstdc++-12-dev_12.2.0-14+deb12u1_amd64.deb ...
+#30 31.66 Unpacking libstdc++-12-dev:amd64 (12.2.0-14+deb12u1) ...
+#30 32.39 Selecting previously unselected package g++-12.
+#30 32.40 Preparing to unpack .../40-g++-12_12.2.0-14+deb12u1_amd64.deb ...
+#30 32.41 Unpacking g++-12 (12.2.0-14+deb12u1) ...
+#30 33.85 Selecting previously unselected package g++.
+#30 33.86 Preparing to unpack .../41-g++_4%3a12.2.0-3_amd64.deb ...
+#30 33.86 Unpacking g++ (4:12.2.0-3) ...
+#30 33.92 Selecting previously unselected package libabsl20220623:amd64.
+#30 33.92 Preparing to unpack .../42-libabsl20220623_20220623.1-1+deb12u2_amd64.deb ...
+#30 33.93 Unpacking libabsl20220623:amd64 (20220623.1-1+deb12u2) ...
+#30 34.22 Selecting previously unselected package libaom3:amd64.
+#30 34.22 Preparing to unpack .../43-libaom3_3.6.0-1+deb12u2_amd64.deb ...
+#30 34.23 Unpacking libaom3:amd64 (3.6.0-1+deb12u2) ...
+#30 34.61 Selecting previously unselected package libdav1d6:amd64.
+#30 34.61 Preparing to unpack .../44-libdav1d6_1.0.0-2+deb12u1_amd64.deb ...
+#30 34.62 Unpacking libdav1d6:amd64 (1.0.0-2+deb12u1) ...
+#30 34.77 Selecting previously unselected package libgav1-1:amd64.
+#30 34.77 Preparing to unpack .../45-libgav1-1_0.18.0-1+b1_amd64.deb ...
+#30 34.78 Unpacking libgav1-1:amd64 (0.18.0-1+b1) ...
+#30 35.04 Selecting previously unselected package librav1e0:amd64.
+#30 35.05 Preparing to unpack .../46-librav1e0_0.5.1-6_amd64.deb ...
+#30 35.05 Unpacking librav1e0:amd64 (0.5.1-6) ...
+#30 35.39 Selecting previously unselected package libsvtav1enc1:amd64.
+#30 35.40 Preparing to unpack .../47-libsvtav1enc1_1.4.1+dfsg-1_amd64.deb ...
+#30 35.41 Unpacking libsvtav1enc1:amd64 (1.4.1+dfsg-1) ...
+#30 35.93 Selecting previously unselected package libjpeg62-turbo:amd64.
+#30 35.93 Preparing to unpack .../48-libjpeg62-turbo_1%3a2.1.5-2_amd64.deb ...
+#30 35.94 Unpacking libjpeg62-turbo:amd64 (1:2.1.5-2) ...
+#30 36.06 Selecting previously unselected package libyuv0:amd64.
+#30 36.06 Preparing to unpack .../49-libyuv0_0.0~git20230123.b2528b0-1_amd64.deb ...
+#30 36.07 Unpacking libyuv0:amd64 (0.0~git20230123.b2528b0-1) ...
+#30 36.19 Selecting previously unselected package libavif15:amd64.
+#30 36.20 Preparing to unpack .../50-libavif15_0.11.1-1+deb12u1_amd64.deb ...
+#30 36.21 Unpacking libavif15:amd64 (0.11.1-1+deb12u1) ...
+#30 36.33 Selecting previously unselected package libbrotli1:amd64.
+#30 36.33 Preparing to unpack .../51-libbrotli1_1.0.9-2+b6_amd64.deb ...
+#30 36.34 Unpacking libbrotli1:amd64 (1.0.9-2+b6) ...
+#30 36.51 Selecting previously unselected package libbsd0:amd64.
+#30 36.51 Preparing to unpack .../52-libbsd0_0.11.7-2_amd64.deb ...
+#30 36.52 Unpacking libbsd0:amd64 (0.11.7-2) ...
+#30 36.73 Selecting previously unselected package libpng16-16:amd64.
+#30 36.74 Preparing to unpack .../53-libpng16-16_1.6.39-2+deb12u1_amd64.deb ...
+#30 36.74 Unpacking libpng16-16:amd64 (1.6.39-2+deb12u1) ...
+#30 36.85 Selecting previously unselected package libfreetype6:amd64.
+#30 36.86 Preparing to unpack .../54-libfreetype6_2.12.1+dfsg-5+deb12u4_amd64.deb ...
+#30 36.87 Unpacking libfreetype6:amd64 (2.12.1+dfsg-5+deb12u4) ...
+#30 37.06 Selecting previously unselected package libfontconfig1:amd64.
+#30 37.06 Preparing to unpack .../55-libfontconfig1_2.14.1-4_amd64.deb ...
+#30 37.07 Unpacking libfontconfig1:amd64 (2.14.1-4) ...
+#30 37.21 Selecting previously unselected package libde265-0:amd64.
+#30 37.21 Preparing to unpack .../56-libde265-0_1.0.11-1+deb12u2_amd64.deb ...
+#30 37.22 Unpacking libde265-0:amd64 (1.0.11-1+deb12u2) ...
+#30 37.38 Selecting previously unselected package libnuma1:amd64.
+#30 37.39 Preparing to unpack .../57-libnuma1_2.0.16-1_amd64.deb ...
+#30 37.39 Unpacking libnuma1:amd64 (2.0.16-1) ...
+#30 37.51 Selecting previously unselected package libx265-199:amd64.
+#30 37.52 Preparing to unpack .../58-libx265-199_3.5-2+b1_amd64.deb ...
+#30 37.53 Unpacking libx265-199:amd64 (3.5-2+b1) ...
+#30 38.15 Selecting previously unselected package libheif1:amd64.
+#30 38.15 Preparing to unpack .../59-libheif1_1.15.1-1+deb12u1_amd64.deb ...
+#30 38.16 Unpacking libheif1:amd64 (1.15.1-1+deb12u1) ...
+#30 38.30 Selecting previously unselected package libdeflate0:amd64.
+#30 38.31 Preparing to unpack .../60-libdeflate0_1.14-1_amd64.deb ...
+#30 38.37 Unpacking libdeflate0:amd64 (1.14-1) ...
+#30 38.48 Selecting previously unselected package libjbig0:amd64.
+#30 38.48 Preparing to unpack .../61-libjbig0_2.1-6.1_amd64.deb ...
+#30 38.49 Unpacking libjbig0:amd64 (2.1-6.1) ...
+#30 38.60 Selecting previously unselected package liblerc4:amd64.
+#30 38.60 Preparing to unpack .../62-liblerc4_4.0.0+ds-2_amd64.deb ...
+#30 38.61 Unpacking liblerc4:amd64 (4.0.0+ds-2) ...
+#30 38.73 Selecting previously unselected package libwebp7:amd64.
+#30 38.74 Preparing to unpack .../63-libwebp7_1.2.4-0.2+deb12u1_amd64.deb ...
+#30 38.74 Unpacking libwebp7:amd64 (1.2.4-0.2+deb12u1) ...
+#30 38.87 Selecting previously unselected package libtiff6:amd64.
+#30 38.88 Preparing to unpack .../64-libtiff6_4.5.0-6+deb12u3_amd64.deb ...
+#30 38.88 Unpacking libtiff6:amd64 (4.5.0-6+deb12u3) ...
+#30 39.01 Selecting previously unselected package libxau6:amd64.
+#30 39.02 Preparing to unpack .../65-libxau6_1%3a1.0.9-1_amd64.deb ...
+#30 39.03 Unpacking libxau6:amd64 (1:1.0.9-1) ...
+#30 39.25 Selecting previously unselected package libxdmcp6:amd64.
+#30 39.26 Preparing to unpack .../66-libxdmcp6_1%3a1.1.2-3_amd64.deb ...
+#30 39.26 Unpacking libxdmcp6:amd64 (1:1.1.2-3) ...
+#30 39.36 Selecting previously unselected package libxcb1:amd64.
+#30 39.37 Preparing to unpack .../67-libxcb1_1.15-1_amd64.deb ...
+#30 39.37 Unpacking libxcb1:amd64 (1.15-1) ...
+#30 39.48 Selecting previously unselected package libx11-data.
+#30 39.48 Preparing to unpack .../68-libx11-data_2%3a1.8.4-2+deb12u2_all.deb ...
+#30 39.49 Unpacking libx11-data (2:1.8.4-2+deb12u2) ...
+#30 39.77 Selecting previously unselected package libx11-6:amd64.
+#30 39.77 Preparing to unpack .../69-libx11-6_2%3a1.8.4-2+deb12u2_amd64.deb ...
+#30 39.83 Unpacking libx11-6:amd64 (2:1.8.4-2+deb12u2) ...
+#30 40.11 Selecting previously unselected package libxpm4:amd64.
+#30 40.12 Preparing to unpack .../70-libxpm4_1%3a3.5.12-1.1+deb12u1_amd64.deb ...
+#30 40.13 Unpacking libxpm4:amd64 (1:3.5.12-1.1+deb12u1) ...
+#30 40.24 Selecting previously unselected package libgd3:amd64.
+#30 40.25 Preparing to unpack .../71-libgd3_2.3.3-9_amd64.deb ...
+#30 40.25 Unpacking libgd3:amd64 (2.3.3-9) ...
+#30 40.35 Selecting previously unselected package libc-devtools.
+#30 40.35 Preparing to unpack .../72-libc-devtools_2.36-9+deb12u13_amd64.deb ...
+#30 40.36 Unpacking libc-devtools (2.36-9+deb12u13) ...
+#30 40.43 Selecting previously unselected package libgpm2:amd64.
+#30 40.44 Preparing to unpack .../73-libgpm2_1.20.7-10+b1_amd64.deb ...
+#30 40.45 Unpacking libgpm2:amd64 (1.20.7-10+b1) ...
+#30 40.53 Selecting previously unselected package make.
+#30 40.54 Preparing to unpack .../74-make_4.3-4.1_amd64.deb ...
+#30 40.54 Unpacking make (4.3-4.1) ...
+#30 40.73 Selecting previously unselected package manpages-dev.
+#30 40.73 Preparing to unpack .../75-manpages-dev_6.03-2_all.deb ...
+#30 40.74 Unpacking manpages-dev (6.03-2) ...
+#30 41.27 Setting up media-types (10.0.0) ...
+#30 41.31 Setting up libaom3:amd64 (3.6.0-1+deb12u2) ...
+#30 41.33 Setting up libabsl20220623:amd64 (20220623.1-1+deb12u2) ...
+#30 41.37 Setting up libxau6:amd64 (1:1.0.9-1) ...
+#30 41.38 Setting up libkeyutils1:amd64 (1.6.3-2) ...
+#30 ...
+#33 [chronusdev-backend runner  6/11] RUN npm ci --workspace=apps/backend --omit=dev
+#33 38.99
+#33 38.99 added 273 packages, and audited 275 packages in 38s
+#33 38.99
+#33 38.99 47 packages are looking for funding
+#33 38.99   run `npm fund` for details
+#33 38.99
+#33 38.99 1 high severity vulnerability
+#33 38.99
+#33 38.99 To address all issues, run:
+#33 38.99   npm audit fix
+#33 38.99
+#33 38.99 Run `npm audit` for details.
+#33 38.99 npm notice
+#33 38.99 npm notice New major version of npm available! 10.8.2 -> 11.9.0
+#33 38.99 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.9.0
+#33 38.99 npm notice To update run: npm install -g npm@11.9.0
+#33 38.99 npm notice
+#33 ...
+#24 [chronusdev-backend builder 5/7] RUN npm ci --workspace=apps/backend
+#24 40.87
+#24 40.87 added 285 packages, and audited 287 packages in 40s
+#24 40.87
+#24 40.87 49 packages are looking for funding
+#24 40.87   run `npm fund` for details
+#24 40.88
+#24 40.88 1 high severity vulnerability
+#24 40.88
+#24 40.88 To address all issues, run:
+#24 40.88   npm audit fix
+#24 40.88
+#24 40.88 Run `npm audit` for details.
+#24 40.88 npm notice
+#24 40.88 npm notice New major version of npm available! 10.8.2 -> 11.9.0
+#24 40.88 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.9.0
+#24 40.88 npm notice To update run: npm install -g npm@11.9.0
+#24 40.88 npm notice
+#24 DONE 41.3s
+#33 [chronusdev-backend runner  6/11] RUN npm ci --workspace=apps/backend --omit=dev
+#33 DONE 39.6s
+#30 [chronuscrm-backend builder 2/9] RUN apt-get update && apt-get install -y openssl python3 make g++
+#30 41.40 Setting up libgpm2:amd64 (1.20.7-10+b1) ...
+#30 41.42 Setting up liblerc4:amd64 (4.0.0+ds-2) ...
+#30 41.46 Setting up manpages (6.03-2) ...
+#30 41.47 Setting up libtirpc-common (1.3.3+ds-1) ...
+#30 41.49 Setting up libbrotli1:amd64 (1.0.9-2+b6) ...
+#30 41.51 Setting up libsqlite3-0:amd64 (3.40.1-2+deb12u2) ...
+#30 41.53 Setting up binutils-common:amd64 (2.40-2) ...
+#30 41.59 Setting up libdeflate0:amd64 (1.14-1) ...
+#30 41.70 Setting up linux-libc-dev:amd64 (6.1.162-1) ...
+#30 41.73 Setting up libctf-nobfd0:amd64 (2.40-2) ...
+#30 41.83 Setting up krb5-locales (1.20.1-2+deb12u4) ...
+#30 41.90 Setting up libsvtav1enc1:amd64 (1.4.1+dfsg-1) ...
+#30 41.93 Setting up libgomp1:amd64 (12.2.0-14+deb12u1) ...
+#30 41.94 Setting up libjbig0:amd64 (2.1-6.1) ...
+#30 41.95 Setting up librav1e0:amd64 (0.5.1-6) ...
+#30 41.96 Setting up libjansson4:amd64 (2.14-2) ...
+#30 41.98 Setting up libkrb5support0:amd64 (1.20.1-2+deb12u4) ...
+#30 42.00 Setting up rpcsvc-proto (1.4.3-1) ...
+#30 42.02 Setting up libjpeg62-turbo:amd64 (1:2.1.5-2) ...
+#30 42.03 Setting up libx11-data (2:1.8.4-2+deb12u2) ...
+#30 42.04 Setting up make (4.3-4.1) ...
+#30 42.06 Setting up libmpfr6:amd64 (4.2.0-1) ...
+#30 42.07 Setting up libquadmath0:amd64 (12.2.0-14+deb12u1) ...
+#30 42.09 Setting up libpng16-16:amd64 (1.6.39-2+deb12u1) ...
+#30 42.10 Setting up libmpc3:amd64 (1.3.1-1) ...
+#30 42.16 Setting up libatomic1:amd64 (12.2.0-14+deb12u1) ...
+#30 ...
+#35 [chronusdev-backend builder 6/7] COPY apps/backend ./apps/backend
+#35 DONE 0.3s
+#30 [chronuscrm-backend builder 2/9] RUN apt-get update && apt-get install -y openssl python3 make g++
+#30 42.19 Setting up fonts-dejavu-core (2.37-6) ...
+#30 42.27 Setting up libgav1-1:amd64 (0.18.0-1+b1) ...
+#30 42.28 Setting up libncursesw6:amd64 (6.4-4) ...
+#30 42.30 Setting up libk5crypto3:amd64 (1.20.1-2+deb12u4) ...
+#30 42.31 Setting up libdav1d6:amd64 (1.0.0-2+deb12u1) ...
+#30 42.32 Setting up libwebp7:amd64 (1.2.4-0.2+deb12u1) ...
+#30 42.34 Setting up libubsan1:amd64 (12.2.0-14+deb12u1) ...
+#30 42.36 Setting up libnuma1:amd64 (2.0.16-1) ...
+#30 42.38 Setting up libcrypt-dev:amd64 (1:4.4.33-2) ...
+#30 42.41 Setting up libtiff6:amd64 (4.5.0-6+deb12u3) ...
+#30 42.42 Setting up libasan8:amd64 (12.2.0-14+deb12u1) ...
+#30 42.43 Setting up libkrb5-3:amd64 (1.20.1-2+deb12u4) ...
+#30 42.44 Setting up libtsan2:amd64 (12.2.0-14+deb12u1) ...
+#30 42.45 Setting up libbinutils:amd64 (2.40-2) ...
+#30 42.47 Setting up libisl23:amd64 (0.25-1.1) ...
+#30 42.47 Setting up libde265-0:amd64 (1.0.11-1+deb12u2) ...
+#30 42.48 Setting up libc-dev-bin (2.36-9+deb12u13) ...
+#30 42.49 Setting up openssl (3.0.18-1~deb12u2) ...
+#30 42.51 Setting up libbsd0:amd64 (0.11.7-2) ...
+#30 42.52 Setting up libyuv0:amd64 (0.0~git20230123.b2528b0-1) ...
+#30 42.54 Setting up readline-common (8.2-1.3) ...
+#30 42.56 Setting up libcc1-0:amd64 (12.2.0-14+deb12u1) ...
+#30 42.57 Setting up liblsan0:amd64 (12.2.0-14+deb12u1) ...
+#30 42.58 Setting up libitm1:amd64 (12.2.0-14+deb12u1) ...
+#30 42.60 Setting up libctf0:amd64 (2.40-2) ...
+#30 42.61 Setting up manpages-dev (6.03-2) ...
+#30 42.62 Setting up libxdmcp6:amd64 (1:1.1.2-3) ...
+#30 42.63 Setting up cpp-12 (12.2.0-14+deb12u1) ...
+#30 42.65 Setting up libxcb1:amd64 (1.15-1) ...
+#30 42.66 Setting up libavif15:amd64 (0.11.1-1+deb12u1) ...
+#30 42.67 Setting up fontconfig-config (2.14.1-4) ...
+#30 42.88 debconf: unable to initialize frontend: Dialog
+#30 42.88 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#30 42.88 debconf: falling back to frontend: Readline
+#30 42.89 debconf: unable to initialize frontend: Readline
+#30 42.89 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#30 42.89 debconf: falling back to frontend: Teletype
+#30 43.31 Setting up libreadline8:amd64 (8.2-1.3) ...
+#30 43.33 Setting up ca-certificates (20230311+deb12u1) ...
+#30 43.51 debconf: unable to initialize frontend: Dialog
+#30 43.51 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#30 43.51 debconf: falling back to frontend: Readline
+#30 43.51 debconf: unable to initialize frontend: Readline
+#30 43.51 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#30 43.51 debconf: falling back to frontend: Teletype
+#30 44.86 Updating certificates in /etc/ssl/certs...
+#30 46.53 142 added, 0 removed; done.
+#30 46.59 Setting up libgprofng0:amd64 (2.40-2) ...
+#30 46.60 Setting up libfreetype6:amd64 (2.12.1+dfsg-5+deb12u4) ...
+#30 46.61 Setting up libgcc-12-dev:amd64 (12.2.0-14+deb12u1) ...
+#30 46.62 Setting up libgssapi-krb5-2:amd64 (1.20.1-2+deb12u4) ...
+#30 46.64 Setting up libx265-199:amd64 (3.5-2+b1) ...
+#30 46.65 Setting up cpp (4:12.2.0-3) ...
+#30 46.68 Setting up libx11-6:amd64 (2:1.8.4-2+deb12u2) ...
+#30 46.69 Setting up libfontconfig1:amd64 (2.14.1-4) ...
+#30 46.70 Setting up binutils-x86-64-linux-gnu (2.40-2) ...
+#30 46.71 Setting up libtirpc3:amd64 (1.3.3+ds-1) ...
+#30 46.72 Setting up libxpm4:amd64 (1:3.5.12-1.1+deb12u1) ...
+#30 46.73 Setting up libheif1:amd64 (1.15.1-1+deb12u1) ...
+#30 46.74 Setting up binutils (2.40-2) ...
+#30 46.75 Setting up libtirpc-dev:amd64 (1.3.3+ds-1) ...
+#30 46.79 Setting up gcc-12 (12.2.0-14+deb12u1) ...
+#30 46.81 Setting up libgd3:amd64 (2.3.3-9) ...
+#30 46.82 Setting up libnsl2:amd64 (1.3.0-2) ...
+#30 46.84 Setting up libc-devtools (2.36-9+deb12u13) ...
+#30 46.85 Setting up libpython3.11-stdlib:amd64 (3.11.2-6+deb12u6) ...
+#30 46.85 Setting up gcc (4:12.2.0-3) ...
+#30 46.89 Setting up libnsl-dev:amd64 (1.3.0-2) ...
+#30 46.90 Setting up libc6-dev:amd64 (2.36-9+deb12u13) ...
+#30 46.90 Setting up libpython3-stdlib:amd64 (3.11.2-1+b1) ...
+#30 46.91 Setting up python3.11 (3.11.2-6+deb12u6) ...
+#30 ...
+#34 [chronusdev-frontend builder 5/7] RUN npm ci --workspace=apps/frontend
+#34 46.42
+#34 46.42 added 201 packages, and audited 203 packages in 45s
+#34 46.42
+#34 46.42 28 packages are looking for funding
+#34 46.42   run `npm fund` for details
+#34 46.52
+#34 46.52 2 high severity vulnerabilities
+#34 46.52
+#34 46.52 To address all issues possible (including breaking changes), run:
+#34 46.52   npm audit fix --force
+#34 46.52
+#34 46.52 Some issues need review, and may require choosing
+#34 46.52 a different dependency.
+#34 46.52
+#34 46.52 Run `npm audit` for details.
+#34 46.54 npm notice
+#34 46.54 npm notice New major version of npm available! 10.8.2 -> 11.9.0
+#34 46.54 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.9.0
+#34 46.54 npm notice To update run: npm install -g npm@11.9.0
+#34 46.54 npm notice
+#34 DONE 47.3s
+#36 [chronusdev-backend builder 7/7] RUN npm run --workspace=apps/backend build
+#36 0.881
+#36 0.881 > @chronusdev/backend@0.1.0 build
+#36 0.881 > prisma generate && tsc -p tsconfig.json
+#36 0.881
+#36 1.808 prisma:warn Prisma failed to detect the libssl/openssl version to use, and may not work as expected. Defaulting to "openssl-1.1.x".
+#36 1.808 Please manually install OpenSSL and try installing Prisma again.
+#36 2.082 Prisma schema loaded from prisma/schema.prisma
+#36 2.232 prisma:warn Prisma failed to detect the libssl/openssl version to use, and may not work as expected. Defaulting to "openssl-1.1.x".
+#36 2.232 Please manually install OpenSSL and try installing Prisma again.
+#36 ...
+#37 [chronusdev-frontend builder 6/7] COPY apps/frontend ./apps/frontend
+#37 DONE 0.1s
+#38 [chronusdev-frontend builder 7/7] RUN npm run --workspace=apps/frontend build
+#38 0.635
+#38 0.635 > chronusdev-frontend@0.1.0 build
+#38 0.635 > next build
+#38 0.635
+#38 ...
+#30 [chronuscrm-backend builder 2/9] RUN apt-get update && apt-get install -y openssl python3 make g++
+#30 48.29 Setting up libstdc++-12-dev:amd64 (12.2.0-14+deb12u1) ...
+#30 48.30 Setting up python3 (3.11.2-1+b1) ...
+#30 48.33 running python rtupdate hooks for python3.11...
+#30 48.33 running python post-rtupdate hooks for python3.11...
+#30 48.52 Setting up g++-12 (12.2.0-14+deb12u1) ...
+#30 48.53 Setting up g++ (4:12.2.0-3) ...
+#30 48.54 update-alternatives: using /usr/bin/g++ to provide /usr/bin/c++ (c++) in auto mode
+#30 48.55 Processing triggers for libc-bin (2.36-9+deb12u13) ...
+#30 48.64 Processing triggers for ca-certificates (20230311+deb12u1) ...
+#30 48.65 Updating certificates in /etc/ssl/certs...
+#30 49.76 0 added, 0 removed; done.
+#30 49.76 Running hooks in /etc/ca-certificates/update.d...
+#30 49.76 done.
+#30 DONE 50.0s
+#39 [chronuscrm-backend builder 3/9] WORKDIR /app
+#39 DONE 0.1s
+#38 [chronusdev-frontend builder 7/7] RUN npm run --workspace=apps/frontend build
+#38 2.126 Attention: Next.js now collects completely anonymous telemetry regarding usage.
+#38 2.126 This information is used to shape Next.js' roadmap and prioritize features.
+#38 2.126 You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+#38 2.126 https://nextjs.org/telemetry
+#38 2.126
+#38 ...
+#40 [chronuscrm-backend builder 4/9] COPY package*.json ./
+#40 DONE 0.1s
+#41 [chronuscrm-backend builder 5/9] COPY prisma ./prisma/
+#41 DONE 0.1s
+#38 [chronusdev-frontend builder 7/7] RUN npm run --workspace=apps/frontend build
+#38 2.279   ▲ Next.js 14.2.35
+#38 2.279
+#38 2.504    Creating an optimized production build ...
+#38 ...
+#22 [chronuscrm-frontend builder 4/6] RUN npm ci
+#22 51.25
+#22 51.25 added 327 packages, and audited 328 packages in 50s
+#22 51.25
+#22 51.25 46 packages are looking for funding
+#22 51.25   run `npm fund` for details
+#22 51.31
+#22 51.31 3 vulnerabilities (1 moderate, 2 high)
+#22 51.31
+#22 51.31 To address issues that do not require attention, run:
+#22 51.31   npm audit fix
+#22 51.31
+#22 51.31 To address all issues possible (including breaking changes), run:
+#22 51.31   npm audit fix --force
+#22 51.31
+#22 51.31 Some issues need review, and may require choosing
+#22 51.31 a different dependency.
+#22 51.31
+#22 51.31 Run `npm audit` for details.
+#22 51.32 npm notice
+#22 51.32 npm notice New major version of npm available! 10.8.2 -> 11.9.0
+#22 51.32 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.9.0
+#22 51.32 npm notice To update run: npm install -g npm@11.9.0
+#22 51.32 npm notice
+#22 DONE 51.8s
+#42 [chronuscrm-frontend builder 5/6] COPY apps/crm-frontend ./
+#42 DONE 0.2s
+#43 [chronuscrm-backend builder 6/9] RUN npm ci
+#43 ...
+#44 [chronuscrm-frontend builder 6/6] RUN npm run build
+#44 0.767
+#44 0.767 > @chronusdev/crm-frontend@0.1.0 build
+#44 0.767 > next build
+#44 0.767
+#44 2.504 Attention: Next.js now collects completely anonymous telemetry regarding usage.
+#44 2.506 This information is used to shape Next.js' roadmap and prioritize features.
+#44 2.506 You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+#44 2.507 https://nextjs.org/telemetry
+#44 2.507
+#44 2.645   ▲ Next.js 14.2.35
+#44 2.645
+#44 2.825    Creating an optimized production build ...
+#44 ...
+#36 [chronusdev-backend builder 7/7] RUN npm run --workspace=apps/backend build
+#36 6.302
+#36 6.302 ✔ Generated Prisma Client (v5.19.1) to ./../../node_modules/@prisma/client in 1.20s
+#36 6.302
+#36 6.302 Start by importing your Prisma Client (See: http://pris.ly/d/importing-client)
+#36 6.302
+#36 6.302 Tip: Easily identify and fix slow SQL queries in your app. Optimize helps you enhance your visibility: https://pris.ly/--optimize
+#36 6.302
+#36 ...
+#43 [chronuscrm-backend builder 6/9] RUN npm ci
+#43 8.342 npm warn deprecated scmp@2.1.0: Just use Node.js's crypto.timingSafeEqual()
+#43 10.00 npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+#43 10.00 npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+#43 11.12 npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+#43 14.17 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+#43 16.42 npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+#43 16.49 npm warn deprecated glob@7.1.6: Glob versions prior to v9 are no longer supported
+#43 17.65 npm warn deprecated jpeg-exif@1.1.4: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+#43 ...
+#36 [chronusdev-backend builder 7/7] RUN npm run --workspace=apps/backend build
+#36 DONE 44.8s
+#38 [chronusdev-frontend builder 7/7] RUN npm run --workspace=apps/frontend build
+#38 ...
+#45 [chronusdev-backend runner  7/11] COPY --from=builder /app/node_modules/.prisma /app/node_modules/.prisma
+#45 DONE 0.5s
+#38 [chronusdev-frontend builder 7/7] RUN npm run --workspace=apps/frontend build
+#38 ...
+#46 [chronusdev-backend runner  8/11] COPY --from=builder /app/node_modules/@prisma/client /app/node_modules/@prisma/client
+#46 DONE 0.1s
+#47 [chronusdev-backend runner  9/11] COPY --from=builder /app/apps/backend/prisma ./apps/backend/prisma
+#47 DONE 0.1s
+#43 [chronuscrm-backend builder 6/9] RUN npm ci
+#43 ...
+#48 [chronusdev-backend runner 10/11] COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
+#48 DONE 0.4s
+#38 [chronusdev-frontend builder 7/7] RUN npm run --workspace=apps/frontend build
+#38 ...
+#49 [chronusdev-backend runner 11/11] RUN rm -f /app/node_modules/.prisma/client/*openssl-1.1.x*
+#49 DONE 0.5s
+#38 [chronusdev-frontend builder 7/7] RUN npm run --workspace=apps/frontend build
+#38 ...
+#50 [chronusdev-backend] exporting to image
+#50 exporting layers
+#50 ...
+#43 [chronuscrm-backend builder 6/9] RUN npm ci
+#43 43.49
+#43 43.49 added 677 packages, and audited 678 packages in 43s
+#43 43.49
+#43 43.49 84 packages are looking for funding
+#43 43.49   run `npm fund` for details
+#43 43.64
+#43 43.64 20 high severity vulnerabilities
+#43 43.64
+#43 43.64 To address all issues, run:
+#43 43.64   npm audit fix
+#43 43.64
+#43 43.64 Run `npm audit` for details.
+#43 43.64 npm notice
+#43 43.64 npm notice New major version of npm available! 10.8.2 -> 11.9.0
+#43 43.64 npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.9.0
+#43 43.64 npm notice To update run: npm install -g npm@11.9.0
+#43 43.64 npm notice
+#43 DONE 43.9s
+#51 [chronuscrm-backend builder 7/9] COPY . .
+#51 DONE 0.3s
+#50 [chronusdev-backend] exporting to image
+#50 ...
+#52 [chronuscrm-backend builder 8/9] RUN npx prisma generate
+#52 2.122 Prisma schema loaded from prisma/schema.prisma
+#52 4.973
+#52 4.973 ✔ Generated Prisma Client (v5.19.1) to ./node_modules/@prisma/client in 1.35s
+#52 4.973
+#52 4.973 Start by importing your Prisma Client (See: http://pris.ly/d/importing-client)
+#52 4.973
+#52 4.973 Tip: Want to react to database changes in your app as they happen? Discover how with Pulse: https://pris.ly/tip-1-pulse
+#52 4.973
+#52 DONE 5.5s
+#44 [chronuscrm-frontend builder 6/6] RUN npm run build
+#44 ...
+#53 [chronuscrm-backend builder 9/9] RUN npm run build
+#53 0.529
+#53 0.529 > @chronusdev/crm@0.1.0 build
+#53 0.529 > tsc -p tsconfig.json
+#53 0.529
+#53 ...
+#50 [chronusdev-backend] exporting to image
+#50 exporting layers 14.4s done
+#50 writing image sha256:6ffbd640d07919c41dcc0a21f9f059950c15da4a441dffb7ac9f6ba29a2e8c6d done
+#50 naming to docker.io/library/awoc4ggoows4ooskwgcs4w44_chronusdev-backend:92d2b84df6685bdf7055044e179e6eda84c25a90 done
+#50 DONE 14.4s
+#54 [chronusdev-backend] resolving provenance for metadata file
+#54 DONE 0.2s
+#38 [chronusdev-frontend builder 7/7] RUN npm run --workspace=apps/frontend build
+#38 84.07  ✓ Compiled successfully
+#38 84.07    Linting and checking validity of types ...
+#38 ...
+#53 [chronuscrm-backend builder 9/9] RUN npm run build
+#53 DONE 37.0s
+#38 [chronusdev-frontend builder 7/7] RUN npm run --workspace=apps/frontend build
+#38 ...
+#44 [chronuscrm-frontend builder 6/6] RUN npm run build
+#44 85.77  ✓ Compiled successfully
+#44 85.77    Linting and checking validity of types ...
+#44 ...
+#55 [chronuscrm-backend stage-1  3/11] COPY --from=builder /app/package*.json ./
+#55 DONE 1.0s
+#38 [chronusdev-frontend builder 7/7] RUN npm run --workspace=apps/frontend build
+#38 101.8 Failed to compile.
+#38 101.8
+#38 101.8 ./components/Kanban.tsx:654:21
+#38 101.8 Type error: Type 'string | { id: string; name: string; avatar?: string | undefined; }' is not assignable to type 'string | number | readonly string[] | undefined'.
+#38 101.8   Type '{ id: string; name: string; avatar?: string | undefined; }' is not assignable to type 'string | number | readonly string[] | undefined'.
+#38 101.8
+#38 101.8   652 |                   </div>
+#38 101.8   653 |                   <select
+#38 101.8 > 654 |                     value={selectedTask.assignedTo || ''}
+#38 101.8       |                     ^
+#38 101.8   655 |                     onChange={async (e) => {
+#38 101.8   656 |                       const newAssignee = e.target.value || undefined;
+#38 101.8   657 |                       try {
+#38 101.9 Next.js build worker exited with code: 1 and signal: null
+#38 101.9 npm error Lifecycle script `build` failed with error:
+#38 101.9 npm error code 1
+#38 101.9 npm error path /app/apps/frontend
+#38 101.9 npm error workspace chronusdev-frontend@0.1.0
+#38 101.9 npm error location /app/apps/frontend
+#38 101.9 npm error command failed
+#38 101.9 npm error command sh -c next build
+#38 ERROR: process "/bin/sh -c npm run --workspace=apps/frontend build" did not complete successfully: exit code: 1
+#44 [chronuscrm-frontend builder 6/6] RUN npm run build
+#44 CANCELED
+------
+> [chronusdev-frontend builder 7/7] RUN npm run --workspace=apps/frontend build:
+101.8   656 |                       const newAssignee = e.target.value || undefined;
+101.8   657 |                       try {
+101.9 Next.js build worker exited with code: 1 and signal: null
+101.9 npm error Lifecycle script `build` failed with error:
+101.9 npm error code 1
+101.9 npm error path /app/apps/frontend
+101.9 npm error workspace chronusdev-frontend@0.1.0
+101.9 npm error location /app/apps/frontend
+101.9 npm error command failed
+101.9 npm error command sh -c next build
+------
+Dockerfile:59
+--------------------
+57 |
+58 |     # Build Next.js
+59 | >>> RUN npm run --workspace=apps/frontend build
+60 |
+61 |     # Production stage
+--------------------
+target chronusdev-frontend: failed to solve: process "/bin/sh -c npm run --workspace=apps/frontend build" did not complete successfully: exit code: 1
+exit status 1
+========================================
+Deployment failed: Command execution failed (exit code 1): docker exec tw8ocgsg8ck4s4s0wgkwo80o bash -c 'COOLIFY_BRANCH=main COOLIFY_RESOURCE_UUID=awoc4ggoows4ooskwgcs4w44  docker compose --env-file /artifacts/build-time.env --project-name awoc4ggoows4ooskwgcs4w44 --project-directory /artifacts/tw8ocgsg8ck4s4s0wgkwo80o -f /artifacts/tw8ocgsg8ck4s4s0wgkwo80o/docker-compose.yml build --pull --build-arg COOLIFY_URL --build-arg COOLIFY_FQDN --build-arg CHRONUSDEV_URL --build-arg CRM_FRONTEND_URL --build-arg DATABASE_URL --build-arg CRM_BACKEND_INTERNAL_URL --build-arg CHRONUSDEV_DATABASE_URL --build-arg GOOGLE_CLIENT_ID --build-arg GOOGLE_CLIENT_SECRET --build-arg JWT_SECRET --build-arg NEXT_PUBLIC_API_URL --build-arg API_PUBLIC_URL --build-arg CHRONUSDEV_API_URL --build-arg CHRONUSDEV_TOKEN --build-arg ASSISTAI_API_URL --build-arg ASSISTAI_TENANT_DOMAIN --build-arg ASSISTAI_ORG_CODE --build-arg SERVICE_URL_CHRONUSDEV_BACKEND --build-arg NEXT_PUBLIC_CRM_URL --build-arg SERVICE_FQDN_CHRONUSDEV_BACKEND --build-arg SERVICE_URL_CHRONUSDEV_FRONTEND --build-arg SERVICE_FQDN_CHRONUSDEV_FRONTEND --build-arg SERVICE_URL_CHRONUSCRM_BACKEND --build-arg SERVICE_FQDN_CHRONUSCRM_BACKEND --build-arg SERVICE_URL_CHRONUSCRM_FRONTEND --build-arg SERVICE_FQDN_CHRONUSCRM_FRONTEND --build-arg ASSISTAI_API_TOKEN --build-arg PORT --build-arg CHRONUSDEV_FRONTEND_URL --build-arg CRM_PUBLIC_URL --build-arg GOOGLE_REDIRECT_URI --build-arg NEXT_PUBLIC_CRM_API_URL --build-arg NEXT_PUBLIC_CHRONUS_APP_URL --build-arg CHRONUSDEV_BACKEND_URL --build-arg NEXT_PUBLIC_CRM_APP_URL --build-arg CRM_SYNC_KEY --build-arg CHRONUSCRM_API_URL --build-arg CHRONUSDEV_FRONTEND_API_URL --build-arg COOLIFY_BUILD_SECRETS_HASH=b32889914b1a615ee6e6b2942936754d68f226765f44c6681b680072da4c0543'
+Error: Dockerfile:59
+--------------------
+57 |
+58 |     # Build Next.js
+59 | >>> RUN npm run --workspace=apps/frontend build
+60 |
+61 |     # Production stage
+--------------------
+target chronusdev-frontend: failed to solve: process "/bin/sh -c npm run --workspace=apps/frontend build" did not complete successfully: exit code: 1
+exit status 1
+Error type: RuntimeException
+Error code: 0
+Location: /var/www/html/app/Traits/ExecuteRemoteCommand.php:243
+Stack trace (first 5 lines):
+#0 /var/www/html/app/Traits/ExecuteRemoteCommand.php(104): App\Jobs\ApplicationDeploymentJob->executeCommandWithProcess()
+#1 /var/www/html/vendor/laravel/framework/src/Illuminate/Collections/Traits/EnumeratesValues.php(271): App\Jobs\ApplicationDeploymentJob->{closure:App\Traits\ExecuteRemoteCommand::execute_remote_command():71}()
+#2 /var/www/html/app/Traits/ExecuteRemoteCommand.php(71): Illuminate\Support\Collection->each()
+#3 /var/www/html/app/Jobs/ApplicationDeploymentJob.php(730): App\Jobs\ApplicationDeploymentJob->execute_remote_command()
+#4 /var/www/html/app/Jobs/ApplicationDeploymentJob.php(467): App\Jobs\ApplicationDeploymentJob->deploy_docker_compose_buildpack()
+========================================
+Gracefully shutting down build container: tw8ocgsg8ck4s4s0wgkwo80o
+[CMD]: docker stop -t 30 tw8ocgsg8ck4s4s0wgkwo80o
+tw8ocgsg8ck4s4s0wgkwo80o

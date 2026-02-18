@@ -222,4 +222,59 @@ router.delete('/orders/:id', authMiddleware, async (req: any, res) => {
     }
 });
 
+// Convert Order to Invoice
+router.post('/orders/:id/convert', authMiddleware, async (req: any, res) => {
+    try {
+        const { id } = req.params;
+        const organizationId = req.user?.organizationId;
+
+        // 1. Fetch Order
+        const order = await prisma.assistantShoppingCart.findUnique({
+            where: { id, organizationId },
+            include: { items: { include: { product: true } }, customer: true }
+        });
+
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        if (!order.customerId) return res.status(400).json({ error: 'Order has no customer attached' });
+
+        // 2. Create Invoice
+        // Generate a simple unique number for now (can be improved)
+        const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
+
+        const invoice = await prisma.invoice.create({
+            data: {
+                organizationId,
+                customerId: order.customerId,
+                number: invoiceNumber,
+                status: 'DRAFT',
+                issueDate: new Date(),
+                dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Net 30
+                amount: order.total,
+                subtotal: order.total,
+                balance: order.total,
+                items: {
+                    create: order.items.map(item => ({
+                        description: item.product.name,
+                        quantity: item.quantity,
+                        unitPrice: item.unitPrice,
+                        total: item.total
+                    }))
+                }
+            },
+            include: { items: true }
+        });
+
+        // 3. Mark order as COMPLETED (optional, but good workflow)
+        await prisma.assistantShoppingCart.update({
+            where: { id },
+            data: { status: 'COMPLETED' }
+        });
+
+        res.json({ success: true, invoiceId: invoice.id, invoice });
+    } catch (e: any) {
+        console.error('Convert Error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 export default router;

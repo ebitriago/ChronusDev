@@ -160,7 +160,7 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                     </button>
 
                     {/* Toggle Mode */}
-                    <p className="mt-6 text-center text-sm text-slate-400">
+                    <div className="mt-6 text-center text-sm text-slate-400">
                         {mode === 'login' ? (
                             <>
                                 ¿No tienes cuenta?{' '}
@@ -182,7 +182,7 @@ export default function AuthPage({ onLogin }: AuthPageProps) {
                                 </button>
                             </>
                         )}
-                    </p>
+                    </div>
                 </div>
 
                 {/* Demo credentials */}

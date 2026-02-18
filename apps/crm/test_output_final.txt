@@ -1,0 +1,927 @@
+
+> @chronusdev/crm@0.1.0 test
+> NODE_OPTIONS=--experimental-vm-modules jest --no-cache
+
+(node:40413) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL src/services/__tests__/assistai.test.ts
+  ● Console
+
+    console.log
+      🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+
+      at src/db.ts:12:9
+
+  ● AssistAIService › should sync conversations correctly
+
+    TypeError: prisma.conversation.upsert.mockResolvedValue is not a function
+
+      68 |
+      69 |         // Mock Prisma Response
+    > 70 |         (prisma.conversation.upsert as jest.Mock).mockResolvedValue({ id: 'local-conv-1' });
+         |                                                   ^
+      71 |
+      72 |         const result = await AssistAIService.syncRecentConversations(mockConfig, 'org-1', 5);
+      73 |
+
+      at Object.<anonymous> (src/services/__tests__/assistai.test.ts:70:51)
+
+  ● AssistAIService › should send message successfully
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: StringContaining "/conversation/uuid-1/messages", ObjectContaining {"body": StringContaining "Admin User", "method": "POST"}
+    Received: "https://api.assistai.lat/api/v1/conversations/uuid-1/messages", {"body": "{\"content\":\"Hello from Human\",\"senderMetadata\":{\"id\":0,\"email\":\"system@chronus.com\",\"firstname\":\"Admin User\",\"lastname\":\"Bot\",\"role\":\"assistant\"},\"intervention\":false}", "headers": {"Authorization": "Bearer test-token", "Content-Type": "application/json", "x-organization-code": "test-org", "x-tenant-domain": "test-domain"}, "method": "POST"}
+
+    Number of calls: 1
+
+      93 |         const result = await AssistAIService.sendMessage(mockConfig, 'uuid-1', 'Hello from Human', 'Admin User');
+      94 |
+    > 95 |         expect(global.fetch).toHaveBeenCalledWith(
+         |                              ^
+      96 |             expect.stringContaining('/conversation/uuid-1/messages'),
+      97 |             expect.objectContaining({
+      98 |                 method: 'POST',
+
+      at Object.<anonymous> (src/services/__tests__/assistai.test.ts:95:30)
+
+
+  ●  Cannot log after tests are done. Did you forget to wait for something async in your test?
+    Attempted to log "✅ [DB] Successfully connected to PostgreSQL".
+
+      24 | // Test connection
+      25 | prisma.$connect()
+    > 26 |     .then(() => console.log('✅ [DB] Successfully connected to PostgreSQL'))
+         |                         ^
+      27 |     .catch((e: any) => console.error('❌ [DB] Connection failed:', e));
+      28 |
+      29 | if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+      at console.log (node_modules/@jest/console/build/index.js:147:10)
+      at src/db.ts:26:25
+
+(node:40416) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL src/jobs/__tests__/assistai-sync.test.ts
+  ● Console
+
+    console.log
+      🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+
+      at src/db.ts:12:9
+
+  ● AssistAI Sync Job › should schedule cron job and sync for active organizations
+
+    TypeError: prisma.organization.findMany.mockResolvedValue is not a function
+
+      38 |         // Mock Data
+      39 |         const mockOrgs = [{ id: 'org-1', status: 'ACTIVE' }, { id: 'org-2', status: 'ACTIVE' }];
+    > 40 |         (prisma.organization.findMany as jest.Mock).mockResolvedValue(mockOrgs);
+         |                                                     ^
+      41 |         (getAssistAIConfig as jest.Mock).mockResolvedValue({ some: 'config' });
+      42 |         (AssistAIService.syncRecentConversations as jest.Mock).mockResolvedValue({ syncedCount: 5 });
+      43 |
+
+      at Object.<anonymous> (src/jobs/__tests__/assistai-sync.test.ts:40:53)
+
+  ● AssistAI Sync Job › should handle no active organizations gracefully
+
+    TypeError: prisma.organization.findMany.mockResolvedValue is not a function
+
+      63 |
+      64 |     it('should handle no active organizations gracefully', async () => {
+    > 65 |         (prisma.organization.findMany as jest.Mock).mockResolvedValue([]);
+         |                                                     ^
+      66 |
+      67 |         startAssistAISyncJob();
+      68 |
+
+      at Object.<anonymous> (src/jobs/__tests__/assistai-sync.test.ts:65:53)
+
+
+  ●  Cannot log after tests are done. Did you forget to wait for something async in your test?
+    Attempted to log "✅ [DB] Successfully connected to PostgreSQL".
+
+      24 | // Test connection
+      25 | prisma.$connect()
+    > 26 |     .then(() => console.log('✅ [DB] Successfully connected to PostgreSQL'))
+         |                         ^
+      27 |     .catch((e: any) => console.error('❌ [DB] Connection failed:', e));
+      28 |
+      29 | if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+      at console.log (node_modules/@jest/console/build/index.js:147:10)
+      at src/db.ts:26:25
+
+(node:40417) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40418) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40412) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40419) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40415) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40411) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40414) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS tests/smtp.test.ts
+  ● Console
+
+    console.log
+      🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+
+      at src/db.ts:12:9
+
+    console.log
+      [Job] Starting AssistAI Sync Job (Every 1 minute)...
+
+      at startAssistAISyncJob (src/jobs/assistai-sync.ts:15:13)
+
+    console.log
+      [Scheduler] Initialized. Polling for scheduled interactions every minute...
+
+      at initScheduler (src/scheduler.ts:9:13)
+
+    console.log
+      [ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+
+      at initReminderScheduler (src/reminderScheduler.ts:10:13)
+
+    console.log
+      ✅ [DB] Successfully connected to PostgreSQL
+
+      at src/db.ts:26:25
+
+    console.log
+      prisma:error 
+      Invalid `prisma.session.create()` invocation in
+      /Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/auth.ts:270:30
+      
+        267 expiresAt.setDate(expiresAt.getDate() + 7);
+        268 
+        269 try {
+      → 270     await prisma.session.create(
+      Unique constraint failed on the fields: (`token`)
+
+      at Object.rc (node_modules/@prisma/client/runtime/library.js:21:432)
+
+    console.log
+      [Auth] Request: POST /settings/smtp
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: GET /settings/smtp
+
+      at authMiddleware (src/auth.ts:63:13)
+
+PASS tests/auth.test.ts
+  ● Console
+
+    console.log
+      🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+
+      at src/db.ts:12:9
+
+    console.log
+      [Job] Starting AssistAI Sync Job (Every 1 minute)...
+
+      at startAssistAISyncJob (src/jobs/assistai-sync.ts:15:13)
+
+    console.log
+      [Scheduler] Initialized. Polling for scheduled interactions every minute...
+
+      at initScheduler (src/scheduler.ts:9:13)
+
+    console.log
+      [ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+
+      at initReminderScheduler (src/reminderScheduler.ts:10:13)
+
+    console.log
+      ✅ [DB] Successfully connected to PostgreSQL
+
+      at src/db.ts:26:25
+
+    console.log
+      prisma:error 
+      Invalid `prisma.session.create()` invocation in
+      /Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/auth.ts:270:30
+      
+        267 expiresAt.setDate(expiresAt.getDate() + 7);
+        268 
+        269 try {
+      → 270     await prisma.session.create(
+      Unique constraint failed on the fields: (`token`)
+
+      at Object.rc (node_modules/@prisma/client/runtime/library.js:21:432)
+
+    console.log
+      [Auth] Request: GET /customers
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: GET /customers
+
+      at authMiddleware (src/auth.ts:63:13)
+
+PASS tests/proposals.test.ts
+  ● Console
+
+    console.log
+      🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+
+      at src/db.ts:12:9
+
+    console.log
+      [Job] Starting AssistAI Sync Job (Every 1 minute)...
+
+      at startAssistAISyncJob (src/jobs/assistai-sync.ts:15:13)
+
+    console.log
+      [Scheduler] Initialized. Polling for scheduled interactions every minute...
+
+      at initScheduler (src/scheduler.ts:9:13)
+
+    console.log
+      [ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+
+      at initReminderScheduler (src/reminderScheduler.ts:10:13)
+
+    console.log
+      ✅ [DB] Successfully connected to PostgreSQL
+
+      at src/db.ts:26:25
+
+    console.log
+      prisma:error 
+      Invalid `prisma.session.create()` invocation in
+      /Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/auth.ts:270:30
+      
+        267 expiresAt.setDate(expiresAt.getDate() + 7);
+        268 
+        269 try {
+      → 270     await prisma.session.create(
+      Unique constraint failed on the fields: (`token`)
+
+      at Object.rc (node_modules/@prisma/client/runtime/library.js:21:432)
+
+    console.log
+      [Auth] Request: POST /leads
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Automations] Checking rules for Lead cmlffuexc0003141hjyh0ns5q -> NEW
+
+      at checkLeadAutomations (src/automations.ts:4:13)
+
+    console.log
+      [Auth] Request: POST /invoices
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Automations] Stage 'NEW' not found for org cml307egh000301pd2qvjtaga
+
+      at checkLeadAutomations (src/automations.ts:30:21)
+
+    console.log
+      [Auth] Request: POST /invoices/cmlffuey10005141he514g7le/convert
+
+      at authMiddleware (src/auth.ts:63:13)
+
+PASS tests/erp-orders.test.ts
+  ● Console
+
+    console.log
+      🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+
+      at src/db.ts:12:9
+
+    console.log
+      [Job] Starting AssistAI Sync Job (Every 1 minute)...
+
+      at startAssistAISyncJob (src/jobs/assistai-sync.ts:15:13)
+
+    console.log
+      [Scheduler] Initialized. Polling for scheduled interactions every minute...
+
+      at initScheduler (src/scheduler.ts:9:13)
+
+    console.log
+      [ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+
+      at initReminderScheduler (src/reminderScheduler.ts:10:13)
+
+    console.log
+      ✅ [DB] Successfully connected to PostgreSQL
+
+      at src/db.ts:26:25
+
+    console.log
+      prisma:error 
+      Invalid `prisma.session.create()` invocation in
+      /Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/auth.ts:270:30
+      
+        267 expiresAt.setDate(expiresAt.getDate() + 7);
+        268 
+        269 try {
+      → 270     await prisma.session.create(
+      Unique constraint failed on the fields: (`token`)
+
+      at Object.rc (node_modules/@prisma/client/runtime/library.js:21:432)
+
+    console.log
+      [Auth] Request: GET /erp/orders
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: GET /erp/orders
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: GET /erp/orders
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: GET /erp/orders/cml7e5dqw0003kj0wu0ms82rk
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: GET /erp/orders
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: PUT /erp/orders/cml7e5dqw0003kj0wu0ms82rk
+
+      at authMiddleware (src/auth.ts:63:13)
+
+PASS tests/reports_csv.test.ts
+  ● Console
+
+    console.log
+      🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+
+      at src/db.ts:12:9
+
+    console.log
+      [Job] Starting AssistAI Sync Job (Every 1 minute)...
+
+      at startAssistAISyncJob (src/jobs/assistai-sync.ts:15:13)
+
+    console.log
+      [Scheduler] Initialized. Polling for scheduled interactions every minute...
+
+      at initScheduler (src/scheduler.ts:9:13)
+
+    console.log
+      [ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+
+      at initReminderScheduler (src/reminderScheduler.ts:10:13)
+
+    console.log
+      ✅ [DB] Successfully connected to PostgreSQL
+
+      at src/db.ts:26:25
+
+    console.log
+      prisma:error 
+      Invalid `prisma.session.create()` invocation in
+      /Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/auth.ts:270:30
+      
+        267 expiresAt.setDate(expiresAt.getDate() + 7);
+        268 
+        269 try {
+      → 270     await prisma.session.create(
+      Unique constraint failed on the fields: (`token`)
+
+      at Object.rc (node_modules/@prisma/client/runtime/library.js:21:432)
+
+    console.log
+      [Auth] Request: GET /reports/export/invoices-csv
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: GET /reports/export/transactions-csv
+
+      at authMiddleware (src/auth.ts:63:13)
+
+PASS tests/erp-products.test.ts
+  ● Console
+
+    console.log
+      🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+
+      at src/db.ts:12:9
+
+    console.log
+      [Job] Starting AssistAI Sync Job (Every 1 minute)...
+
+      at startAssistAISyncJob (src/jobs/assistai-sync.ts:15:13)
+
+    console.log
+      [Scheduler] Initialized. Polling for scheduled interactions every minute...
+
+      at initScheduler (src/scheduler.ts:9:13)
+
+    console.log
+      [ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+
+      at initReminderScheduler (src/reminderScheduler.ts:10:13)
+
+    console.log
+      ✅ [DB] Successfully connected to PostgreSQL
+
+      at src/db.ts:26:25
+
+    console.log
+      prisma:error 
+      Invalid `prisma.session.create()` invocation in
+      /Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/auth.ts:270:30
+      
+        267 expiresAt.setDate(expiresAt.getDate() + 7);
+        268 
+        269 try {
+      → 270     await prisma.session.create(
+      Unique constraint failed on the fields: (`token`)
+
+      at Object.rc (node_modules/@prisma/client/runtime/library.js:21:432)
+
+    console.log
+      [Auth] Request: GET /erp/products
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: GET /erp/products
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: POST /erp/products
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: PUT /erp/products/cmlffueyx0003uy0yjjoyrekx
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: PUT /erp/products/cmlffueyx0003uy0yjjoyrekx
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: DELETE /erp/products/cmlffueyx0003uy0yjjoyrekx
+
+      at authMiddleware (src/auth.ts:63:13)
+
+FAIL tests/webhook.test.ts
+  ● Console
+
+    console.log
+      🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+
+      at src/db.ts:12:9
+
+    console.log
+      [Job] Starting AssistAI Sync Job (Every 1 minute)...
+
+      at startAssistAISyncJob (src/jobs/assistai-sync.ts:15:13)
+
+    console.log
+      [Scheduler] Initialized. Polling for scheduled interactions every minute...
+
+      at initScheduler (src/scheduler.ts:9:13)
+
+    console.log
+      [ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+
+      at initReminderScheduler (src/reminderScheduler.ts:10:13)
+
+    console.log
+      ✅ [DB] Successfully connected to PostgreSQL
+
+      at src/db.ts:26:25
+
+    console.log
+      prisma:error 
+      Invalid `prisma.session.create()` invocation in
+      /Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/auth.ts:270:30
+      
+        267 expiresAt.setDate(expiresAt.getDate() + 7);
+        268 
+        269 try {
+      → 270     await prisma.session.create(
+      Unique constraint failed on the fields: (`token`)
+
+      at Object.rc (node_modules/@prisma/client/runtime/library.js:21:432)
+
+    console.log
+      [AssistAI Webhook] ORDER_CREATED {
+        agentCode: 'TEST_AGENT',
+        customer: { name: 'Webhook Test Customer', phone: '5559999999' },
+        cart: { total: 199.99, items: [ [Object] ] }
+      }
+
+      at src/routes/assistai.ts:351:13
+
+    console.log
+      [AssistAI Webhook] Processing ORDER_CREATED {
+        agentCode: 'TEST_AGENT',
+        customer: { name: 'Webhook Test Customer', phone: '5559999999' },
+        cart: { total: 199.99, items: [ [Object] ] }
+      }
+
+      at src/routes/assistai.ts:360:21
+
+    console.log
+      [AssistAI Webhook] Auto-creating missing product: WEBHOOK-TEST-SKU-1770657645062
+
+      at src/routes/assistai.ts:409:29
+
+    console.log
+      ✅ Created Order from AssistAI Webhook: cmlffuext0005o3xumzno7auv
+
+      at src/routes/assistai.ts:443:21
+
+    console.log
+      [AssistAI Webhook] ORDER_CREATED {
+        agentCode: 'TEST_AGENT',
+        customer: { name: 'Auto Create Test', phone: '5551111111' },
+        cart: { total: 99.99, items: [ [Object] ] }
+      }
+
+      at src/routes/assistai.ts:351:13
+
+    console.log
+      [AssistAI Webhook] Processing ORDER_CREATED {
+        agentCode: 'TEST_AGENT',
+        customer: { name: 'Auto Create Test', phone: '5551111111' },
+        cart: { total: 99.99, items: [ [Object] ] }
+      }
+
+      at src/routes/assistai.ts:360:21
+
+    console.log
+      [AssistAI Webhook] Auto-creating missing product: AUTO-CREATE-1770657645101
+
+      at src/routes/assistai.ts:409:29
+
+    console.log
+      ✅ Created Order from AssistAI Webhook: cmlffueyi000bo3xugllvuhav
+
+      at src/routes/assistai.ts:443:21
+
+    console.log
+      [Auth] Request: GET /erp/products
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [AssistAI Webhook] ORDER_CREATED {
+        agentCode: 'TEST_AGENT',
+        customer: { name: 'New Customer From Webhook', phone: '5550005138' },
+        cart: { total: 50, items: [ [Object] ] }
+      }
+
+      at src/routes/assistai.ts:351:13
+
+    console.log
+      [AssistAI Webhook] Processing ORDER_CREATED {
+        agentCode: 'TEST_AGENT',
+        customer: { name: 'New Customer From Webhook', phone: '5550005138' },
+        cart: { total: 50, items: [ [Object] ] }
+      }
+
+      at src/routes/assistai.ts:360:21
+
+    console.log
+      ✅ Created Order from AssistAI Webhook: cmlffuezk000ho3xugvncvlh3
+
+      at src/routes/assistai.ts:443:21
+
+    console.log
+      [Auth] Request: GET /customers
+
+      at authMiddleware (src/auth.ts:63:13)
+
+  ● AssistAI Webhook API › POST /assistai/webhook › should auto-create product if SKU not found
+
+    expect(received).toBeDefined()
+
+    Received: undefined
+
+      77 |             const autoProduct = productsRes.body.find((p: any) => p.sku === uniqueSku);
+      78 |
+    > 79 |             expect(autoProduct).toBeDefined();
+         |                                 ^
+      80 |             expect(autoProduct.name).toBe('Auto Created Product by Webhook');
+      81 |         });
+      82 |
+
+      at Object.<anonymous> (tests/webhook.test.ts:79:33)
+
+  ● AssistAI Webhook API › POST /assistai/webhook › should create new customer if phone not found
+
+    expect(received).toBeDefined()
+
+    Received: undefined
+
+      112 |             const newCustomer = customersRes.body.find((c: any) => c.phone === uniquePhone);
+      113 |
+    > 114 |             expect(newCustomer).toBeDefined();
+          |                                 ^
+      115 |             expect(newCustomer.name).toBe('New Customer From Webhook');
+      116 |         });
+      117 |
+
+      at Object.<anonymous> (tests/webhook.test.ts:114:33)
+
+PASS tests/tickets.test.ts
+  ● Console
+
+    console.log
+      🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+
+      at src/db.ts:12:9
+
+    console.log
+      [Job] Starting AssistAI Sync Job (Every 1 minute)...
+
+      at startAssistAISyncJob (src/jobs/assistai-sync.ts:15:13)
+
+    console.log
+      [Scheduler] Initialized. Polling for scheduled interactions every minute...
+
+      at initScheduler (src/scheduler.ts:9:13)
+
+    console.log
+      [ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+
+      at initReminderScheduler (src/reminderScheduler.ts:10:13)
+
+    console.log
+      ✅ [DB] Successfully connected to PostgreSQL
+
+      at src/db.ts:26:25
+
+    console.log
+      prisma:error 
+      Invalid `prisma.session.create()` invocation in
+      /Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/auth.ts:270:30
+      
+        267 expiresAt.setDate(expiresAt.getDate() + 7);
+        268 
+        269 try {
+      → 270     await prisma.session.create(
+      Unique constraint failed on the fields: (`token`)
+
+      at Object.rc (node_modules/@prisma/client/runtime/library.js:21:432)
+
+    console.log
+      [Auth] Request: GET /customers
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: GET /tickets
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: GET /tickets
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: POST /tickets
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: PUT /tickets/cmlffuf040003fed8rcfg9wlj
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: PUT /tickets/cmlffuf040003fed8rcfg9wlj
+
+      at authMiddleware (src/auth.ts:63:13)
+
+PASS tests/customers.test.ts
+  ● Console
+
+    console.log
+      🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+
+      at src/db.ts:12:9
+
+    console.log
+      [Job] Starting AssistAI Sync Job (Every 1 minute)...
+
+      at startAssistAISyncJob (src/jobs/assistai-sync.ts:15:13)
+
+    console.log
+      [Scheduler] Initialized. Polling for scheduled interactions every minute...
+
+      at initScheduler (src/scheduler.ts:9:13)
+
+    console.log
+      [ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+
+      at initReminderScheduler (src/reminderScheduler.ts:10:13)
+
+    console.log
+      ✅ [DB] Successfully connected to PostgreSQL
+
+      at src/db.ts:26:25
+
+    console.log
+      prisma:error 
+      Invalid `prisma.session.create()` invocation in
+      /Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/auth.ts:270:30
+      
+        267 expiresAt.setDate(expiresAt.getDate() + 7);
+        268 
+        269 try {
+      → 270     await prisma.session.create(
+      Unique constraint failed on the fields: (`token`)
+
+      at Object.rc (node_modules/@prisma/client/runtime/library.js:21:432)
+
+    console.log
+      [Auth] Request: GET /customers
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: GET /customers
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: POST /customers
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Sync] Syncing customer cmlffuez30003ypgq17boc2z8 to ChronusDev via webhook
+
+      at syncCustomerToChronusDev (src/services/chronusdev-sync.ts:35:13)
+
+    console.log
+      [Auth] Request: POST /customers
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: PUT /customers/cmlffuez30003ypgq17boc2z8
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: PUT /customers/cmlffuez30003ypgq17boc2z8
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.error
+      [Sync] Error syncing customer cmlffuez30003ypgq17boc2z8: Error: Failed to sync client to ChronusDev: {"error":"\nInvalid `prisma.client.create()` invocation in\n/Users/eduardobitriagoe/ChronusDev-1/apps/backend/src/services/crm-sync.ts:53:40\n\n  50     return updated;\n  51 }\n  52 \n→ 53 const client = await prisma.client.create(\nForeign key constraint failed on the field: `Client_organizationId_fkey (index)`"}
+          at syncCustomerToChronusDev (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/services/chronusdev-sync.ts:59:19)
+          at processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+      72 |         return { clientId };
+      73 |     } catch (error) {
+    > 74 |         console.error(`[Sync] Error syncing customer ${customer.id}:`, error);
+         |                 ^
+      75 |         throw error;
+      76 |     }
+      77 | }
+
+      at syncCustomerToChronusDev (src/services/chronusdev-sync.ts:74:17)
+
+    console.error
+      [Sync] Error syncing customer to ChronusDev: Error: Failed to sync client to ChronusDev: {"error":"\nInvalid `prisma.client.create()` invocation in\n/Users/eduardobitriagoe/ChronusDev-1/apps/backend/src/services/crm-sync.ts:53:40\n\n  50     return updated;\n  51 }\n  52 \n→ 53 const client = await prisma.client.create(\nForeign key constraint failed on the field: `Client_organizationId_fkey (index)`"}
+          at syncCustomerToChronusDev (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/services/chronusdev-sync.ts:59:19)
+          at processTicksAndRejections (node:internal/process/task_queues:103:5)
+
+      255 |         // Sync to ChronusDev
+      256 |         syncCustomerToChronusDev(customer as any, organizationId).catch(err =>
+    > 257 |             console.error('[Sync] Error syncing customer to ChronusDev:', err)
+          |                     ^
+      258 |         );
+      259 |
+      260 |         res.status(201).json(customer);
+
+      at src/routes/customers.ts:257:21
+
+    console.log
+      [Auth] Request: DELETE /customers/cmlffuez30003ypgq17boc2z8
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      [Auth] Request: DELETE /customers/non-existent-id-12345
+
+      at authMiddleware (src/auth.ts:63:13)
+
+    console.log
+      prisma:error 
+      Invalid `prisma.customer.delete()` invocation in
+      /Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/routes/customers.ts:373:37
+      
+        370 const organizationId = req.user?.organizationId;
+        371 const { id } = req.params;
+        372 
+      → 373 await prisma.customer.delete(
+      An operation failed because it depends on one or more records that were required but not found. Record to delete does not exist.
+
+      at Object.rc (node_modules/@prisma/client/runtime/library.js:21:432)
+
+    console.error
+      DELETE /customers/:id error: PrismaClientKnownRequestError: 
+      Invalid `prisma.customer.delete()` invocation in
+      /Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/routes/customers.ts:373:37
+      
+        370 const organizationId = req.user?.organizationId;
+        371 const { id } = req.params;
+        372 
+      → 373 await prisma.customer.delete(
+      An operation failed because it depends on one or more records that were required but not found. Record to delete does not exist.
+          at Ln.handleRequestError (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/node_modules/@prisma/client/runtime/library.js:121:7753)
+          at Ln.handleAndLogRequestError (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/node_modules/@prisma/client/runtime/library.js:121:7061)
+          at Ln.request (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/node_modules/@prisma/client/runtime/library.js:121:6745)
+          at l (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/node_modules/@prisma/client/runtime/library.js:130:9633)
+          at /Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/routes/customers.ts:373:9 {
+        code: 'P2025',
+        clientVersion: '5.19.1',
+        meta: { modelName: 'Customer', cause: 'Record to delete does not exist.' }
+      }
+
+      377 |         res.json({ success: true });
+      378 |     } catch (e: any) {
+    > 379 |         console.error("DELETE /customers/:id error:", e);
+          |                 ^
+      380 |         res.status(500).json({ error: e.message });
+      381 |     }
+      382 | });
+
+      at src/routes/customers.ts:379:17
+
+PASS tests/health.test.ts
+  ● Console
+
+    console.log
+      🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+
+      at src/db.ts:12:9
+
+    console.log
+      [Job] Starting AssistAI Sync Job (Every 1 minute)...
+
+      at startAssistAISyncJob (src/jobs/assistai-sync.ts:15:13)
+
+    console.log
+      [Scheduler] Initialized. Polling for scheduled interactions every minute...
+
+      at initScheduler (src/scheduler.ts:9:13)
+
+    console.log
+      [ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+
+      at initReminderScheduler (src/reminderScheduler.ts:10:13)
+
+
+  ●  Cannot log after tests are done. Did you forget to wait for something async in your test?
+    Attempted to log "✅ [DB] Successfully connected to PostgreSQL".
+
+      24 | // Test connection
+      25 | prisma.$connect()
+    > 26 |     .then(() => console.log('✅ [DB] Successfully connected to PostgreSQL'))
+         |                         ^
+      27 |     .catch((e: any) => console.error('❌ [DB] Connection failed:', e));
+      28 |
+      29 | if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+      at console.log (node_modules/@jest/console/build/index.js:147:10)
+      at src/db.ts:26:25
+
+A worker process has failed to exit gracefully and has been force exited. This is likely caused by tests leaking due to improper teardown. Try running with --detectOpenHandles to find leaks. Active timers can also cause this, ensure that .unref() was called on them.
+
+Test Suites: 3 failed, 9 passed, 12 total
+Tests:       6 failed, 36 passed, 42 total
+Snapshots:   0 total
+Time:        5.581 s
+Ran all test suites.

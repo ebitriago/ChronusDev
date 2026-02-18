@@ -1,8 +1,14 @@
-'use client';
-
 import { useState, useEffect } from 'react';
 import { useToast } from './Toast';
 import { API_URL } from '../app/api';
+// Minimal JWT decode function (no external lib for now to avoid install)
+const parseJwt = (token: string) => {
+    try {
+        return JSON.parse(atob(token.split('.')[1]));
+    } catch (e) {
+        return null;
+    }
+};
 
 // Declare ElevenLabs custom element for TypeScript
 declare global {
@@ -73,7 +79,7 @@ const QRDisplay = ({ url }: { url: string }) => {
     );
 };
 
-export default function Integrations() {
+export default function Integrations({ onNavigate }: { onNavigate?: (tab: any) => void }) {
     const [integrations, setIntegrations] = useState<Record<string, IntegrationConfig>>({});
     const [loading, setLoading] = useState(false);
     const [editingProvider, setEditingProvider] = useState<string | null>(null);
@@ -195,15 +201,50 @@ export default function Integrations() {
                 })
             });
 
-            const data = await res.json();
             if (res.ok) {
-                showToast(`Agente válido: ${data.agentName}`, 'success');
+                const data = await res.json();
+                showToast(`✅ Agente válido: ${data.name || 'Agent'}`, 'success');
             } else {
-                showToast(`Error: ${data.error}`, 'error');
+                const error = await res.json().catch(() => ({ error: 'Invalid agent' }));
+                showToast(`❌ ${error.error || 'Error validando agente'}`, 'error');
             }
         } catch (err) {
+            showToast('Error de conexión', 'error');
+        }
+    };
+
+    const handleTestAssistAI = async () => {
+        if (!formData.apiToken || !formData.tenantDomain || !formData.organizationCode) {
+            showToast('Completa todos los campos de AssistAI', 'error');
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('crm_token');
+            const response = await fetch(`${API_URL}/integrations/test-assistai`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    apiToken: formData.apiToken,
+                    tenantDomain: formData.tenantDomain,
+                    organizationCode: formData.organizationCode
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                showToast(`✅ ${data.message}`, 'success');
+            } else {
+                showToast(`❌ ${data.error || 'Error de conexión'}`, 'error');
+                console.error(data);
+            }
+        } catch (err: any) {
+            showToast(`❌ Error: ${err.message}`, 'error');
             console.error(err);
-            showToast('Error de validación', 'error');
         }
     };
 
@@ -212,38 +253,34 @@ export default function Integrations() {
             <h3 className="text-lg font-bold text-gray-900 mb-2">Integraciones</h3>
             <p className="text-sm text-gray-500 mb-6">Conecta tus herramientas favoritas para potenciar tu CRM.</p>
 
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Google Calendar / Meet */}
-                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
+                <div className="group bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all hover:border-blue-200">
+                    <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-xl flex items-center justify-center p-2 shadow-sm group-hover:scale-105 transition-transform">
                             <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google Calendar" className="w-full h-full object-contain" />
                         </div>
-                        <div>
-                            <h4 className="font-bold text-gray-900">Google Calendar & Meet</h4>
-                            <p className="text-xs text-gray-500 mb-1">Sincroniza eventos y crea videollamadas</p>
-                            {integrations['GOOGLE']?.connected ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Conectado
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
-                                    No conectado
-                                </span>
-                            )}
+                        <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${integrations['GOOGLE']?.connected
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-gray-50 text-gray-500 border-gray-100'
+                            }`}>
+                            {integrations['GOOGLE']?.connected ? 'Conectado' : 'Desconectado'}
                         </div>
                     </div>
-                    <div className="flex gap-2">
+                    <h4 className="font-bold text-gray-900 mb-1">Google Calendar</h4>
+                    <p className="text-xs text-gray-500 mb-6 h-8 line-clamp-2">Sincroniza eventos, disponibilidad y crea videollamadas de Meet.</p>
+
+                    <div className="flex gap-2 mt-auto">
                         <button
                             onClick={() => handleEdit('GOOGLE')}
-                            className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                            className="flex-1 px-3 py-2 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
                         >
                             Configurar
                         </button>
                         <button
                             onClick={() => handleConnect('GOOGLE')}
                             disabled={!integrations['GOOGLE']}
-                            className="px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex-1 px-3 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm disabled:opacity-50 disabled:shadow-none"
                         >
                             Conectar
                         </button>
@@ -251,224 +288,172 @@ export default function Integrations() {
                 </div>
 
                 {/* Gmail SMTP */}
-                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
+                <div className="group bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all hover:border-red-200">
+                    <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-xl flex items-center justify-center p-2 shadow-sm group-hover:scale-105 transition-transform">
                             <img src="https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg" alt="Gmail" className="w-full h-full object-contain" />
                         </div>
-                        <div>
-                            <h4 className="font-bold text-gray-900">Gmail SMTP</h4>
-                            <p className="text-xs text-gray-500 mb-1">Envía correos transaccionales desde tu cuenta</p>
-                            {integrations['GMAIL']?.isEnabled ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Activo
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
-                                    Inactivo
-                                </span>
-                            )}
+                        <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${integrations['GMAIL']?.isEnabled
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-gray-50 text-gray-500 border-gray-100'
+                            }`}>
+                            {integrations['GMAIL']?.isEnabled ? 'Activo' : 'Inactivo'}
                         </div>
                     </div>
+                    <h4 className="font-bold text-gray-900 mb-1">Gmail SMTP</h4>
+                    <p className="text-xs text-gray-500 mb-6 h-8 line-clamp-2">Envío de correos transaccionales y notificaciones desde tu cuenta.</p>
+
                     <button
                         onClick={() => handleEdit('GMAIL')}
-                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                        className="w-full px-3 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
                     >
-                        Configurar
+                        Configurar Credenciales
                     </button>
                 </div>
 
-                {/* AssistAI Integration */}
-                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
+                {/* AssistAI */}
+                <div className="group bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all hover:border-purple-200">
+                    <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
                             <span className="text-2xl">🤖</span>
                         </div>
-                        <div>
-                            <h4 className="font-bold text-gray-900">AssistAI</h4>
-                            <p className="text-xs text-gray-500 mb-1">Conecta tus agentes de IA</p>
-                            {integrations['ASSISTAI']?.isEnabled ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Conectado
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
-                                    No conectado
-                                </span>
-                            )}
+                        <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${integrations['ASSISTAI']?.isEnabled
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-gray-50 text-gray-500 border-gray-100'
+                            }`}>
+                            {integrations['ASSISTAI']?.isEnabled ? 'Conectado' : 'Desconectado'}
                         </div>
                     </div>
+                    <h4 className="font-bold text-gray-900 mb-1">AssistAI Base</h4>
+                    <p className="text-xs text-gray-500 mb-6 h-8 line-clamp-2">Conexión base para la gestión de agentes de inteligencia artificial.</p>
+
                     <button
                         onClick={() => handleEdit('ASSISTAI')}
-                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                        className="w-full px-3 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
                     >
-                        Configurar
+                        Configurar API
                     </button>
                 </div>
 
-                {/* OpenAI Integration */}
-                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
-                            <span className="text-2xl">🤖</span>
+                {/* OpenAI */}
+                <div className="group bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all hover:border-green-200">
+                    <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 bg-green-600 rounded-xl flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
+                            <span className="text-2xl">🧠</span>
                         </div>
-                        <div>
-                            <h4 className="font-bold text-gray-900">OpenAI (ChatGPT)</h4>
-                            <p className="text-xs text-gray-500 mb-1">GPT-4, GPT-3.5 para agentes de IA</p>
-                            {integrations['OPENAI']?.isEnabled ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Configurado
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
-                                    No configurado
-                                </span>
-                            )}
+                        <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${integrations['OPENAI']?.isEnabled
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-gray-50 text-gray-500 border-gray-100'
+                            }`}>
+                            {integrations['OPENAI']?.isEnabled ? 'Listo' : 'Sin Configurar'}
                         </div>
                     </div>
+                    <h4 className="font-bold text-gray-900 mb-1">OpenAI (ChatGPT)</h4>
+                    <p className="text-xs text-gray-500 mb-6 h-8 line-clamp-2">Potencia tus agentes con los modelos GPT-4 y GPT-3.5 Turbo.</p>
+
                     <button
                         onClick={() => handleEdit('OPENAI')}
-                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                        className="w-full px-3 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
                     >
-                        Configurar
+                        Configurar API Key
                     </button>
                 </div>
 
-                {/* Google Gemini Integration */}
-                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
+                {/* Google Gemini */}
+                <div className="group bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all hover:border-blue-200">
+                    <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
                             <span className="text-2xl">✨</span>
                         </div>
-                        <div>
-                            <h4 className="font-bold text-gray-900">Google Gemini</h4>
-                            <p className="text-xs text-gray-500 mb-1">Gemini Pro para agentes de IA</p>
-                            {integrations['GEMINI']?.isEnabled ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Configurado
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
-                                    No configurado
-                                </span>
-                            )}
+                        <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${integrations['GEMINI']?.isEnabled
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-gray-50 text-gray-500 border-gray-100'
+                            }`}>
+                            {integrations['GEMINI']?.isEnabled ? 'Listo' : 'Sin Configurar'}
                         </div>
                     </div>
+                    <h4 className="font-bold text-gray-900 mb-1">Google Gemini</h4>
+                    <p className="text-xs text-gray-500 mb-6 h-8 line-clamp-2">Modelos de lenguaje de última generación de Google.</p>
+
                     <button
                         onClick={() => handleEdit('GEMINI')}
-                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                        className="w-full px-3 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
                     >
-                        Configurar
+                        Configurar API Key
                     </button>
                 </div>
 
-                {/* ElevenLabs Integration */}
-                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
+                {/* ElevenLabs */}
+                <div className="group bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all hover:border-orange-200">
+                    <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-amber-600 rounded-xl flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
                             <span className="text-2xl">🗣️</span>
                         </div>
-                        <div>
-                            <h4 className="font-bold text-gray-900">ElevenLabs Voice</h4>
-                            <p className="text-xs text-gray-500 mb-1">Agentes de voz con IA (Telefonía Integrada)</p>
-                            {integrations['ELEVENLABS']?.isEnabled ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Conectado
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
-                                    No conectado
-                                </span>
-                            )}
+                        <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${integrations['ELEVENLABS']?.isEnabled
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-gray-50 text-gray-500 border-gray-100'
+                            }`}>
+                            {integrations['ELEVENLABS']?.isEnabled ? 'Conectado' : 'Desconectado'}
                         </div>
                     </div>
+                    <h4 className="font-bold text-gray-900 mb-1">ElevenLabs Voice</h4>
+                    <p className="text-xs text-gray-500 mb-6 h-8 line-clamp-2">Síntesis de voz realista y agentes de voz telefónicos.</p>
+
+                    <div className="flex gap-2 mt-auto">
+                        <button
+                            onClick={() => handleEdit('ELEVENLABS')}
+                            className="w-full px-3 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
+                        >
+                            Configurar Agente
+                        </button>
+                    </div>
+                </div>
+
+                {/* WhatsApp WhatsMeow */}
+                <div className="group bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all hover:border-green-200">
+                    <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
+                            <svg className="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                            </svg>
+                        </div>
+                        <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${integrations['WHATSMEOW']?.isEnabled
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-gray-50 text-gray-500 border-gray-100'
+                            }`}>
+                            {integrations['WHATSMEOW']?.isEnabled ? 'Conectado' : 'Desconectado'}
+                        </div>
+                    </div>
+                    <h4 className="font-bold text-gray-900 mb-1">WhatsApp</h4>
+                    <p className="text-xs text-gray-500 mb-6 h-8 line-clamp-2">Conecta tu número de WhatsApp vía WhatsMeow para enviar y recibir mensajes.</p>
+
                     <button
-                        onClick={() => handleEdit('ELEVENLABS')}
-                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                        onClick={() => onNavigate ? onNavigate('whatsapp') : handleEdit('WHATSMEOW')}
+                        className="w-full px-3 py-2 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors shadow-sm"
                     >
-                        Configurar
+                        Configurar WhatsApp
                     </button>
                 </div>
 
-                {/* WhatsMeow WhatsApp */}
-                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
-                            <span className="text-2xl">💬</span>
+                {/* Instagram */}
+                <div className="group bg-white rounded-xl border border-gray-200 p-6 shadow-sm hover:shadow-md transition-all hover:border-pink-200">
+                    <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 via-pink-500 to-yellow-500 rounded-xl flex items-center justify-center p-2 shadow-sm group-hover:scale-105 transition-transform">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Instagram_icon.png" alt="Instagram" className="w-full h-full object-contain mix-blend-screen invert" />
                         </div>
-                        <div>
-                            <h4 className="font-bold text-gray-900">WhatsApp (WhatsMeow)</h4>
-                            <p className="text-xs text-gray-500 mb-1">Envía mensajes directos por WhatsApp</p>
-                            {integrations['WHATSMEOW']?.isEnabled ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Conectado
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
-                                    No configurado
-                                </span>
-                            )}
+                        <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${integrations['INSTAGRAM']?.isEnabled
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-gray-50 text-gray-500 border-gray-100'
+                            }`}>
+                            {integrations['INSTAGRAM']?.isEnabled ? 'Conectado' : 'Desconectado'}
                         </div>
                     </div>
-                    <button
-                        onClick={() => handleEdit('WHATSMEOW')}
-                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
-                    >
-                        Configurar
-                    </button>
-                </div>
+                    <h4 className="font-bold text-gray-900 mb-1">Instagram DM</h4>
+                    <p className="text-xs text-gray-500 mb-6 h-8 line-clamp-2">Automatización y gestión de mensajes directos de Instagram.</p>
 
-                {/* Meta WhatsApp Business API */}
-                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" className="w-full h-full object-contain" />
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-gray-900">WhatsApp Business API (Meta)</h4>
-                            <p className="text-xs text-gray-500 mb-1">API oficial de Meta/Facebook para empresas</p>
-                            {integrations['META']?.isEnabled ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Conectado
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
-                                    No configurado
-                                </span>
-                            )}
-                        </div>
-                    </div>
-                    <button
-                        onClick={() => handleEdit('META')}
-                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
-                    >
-                        Configurar
-                    </button>
-                </div>
-
-                {/* Instagram Messaging API */}
-                <div className="border border-gray-200 rounded-xl p-5 flex items-center justify-between hover:border-emerald-200 transition-colors">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white border border-gray-100 rounded-lg flex items-center justify-center p-2 shadow-sm">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Instagram_icon.png" alt="Instagram" className="w-full h-full object-contain" />
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-gray-900">Instagram DM</h4>
-                            <p className="text-xs text-gray-500 mb-1">Recibe y responde mensajes de Instagram</p>
-                            {integrations['INSTAGRAM']?.isEnabled ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
-                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Conectado
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium">
-                                    No configurado
-                                </span>
-                            )}
-                        </div>
-                    </div>
                     <button
                         onClick={() => handleEdit('INSTAGRAM')}
-                        className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                        className="w-full px-3 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors"
                     >
                         Configurar
                     </button>
@@ -673,10 +658,25 @@ export default function Integrations() {
                                         <input
                                             type="password"
                                             value={formData.apiToken || ''}
-                                            onChange={e => setFormData({ ...formData, apiToken: e.target.value })}
+                                            onChange={e => {
+                                                const token = e.target.value;
+                                                const newData = { ...formData, apiToken: token };
+
+                                                // Try to auto-fill from JWT claim
+                                                const decoded = parseJwt(token);
+                                                if (decoded) {
+                                                    if (decoded.tenantDomain) newData.tenantDomain = decoded.tenantDomain;
+                                                    if (decoded.orgCode) newData.organizationCode = decoded.orgCode;
+                                                    if (decoded.organizationCode) newData.organizationCode = decoded.organizationCode;
+                                                }
+                                                setFormData(newData);
+                                            }}
                                             className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500/20 outline-none"
                                             placeholder="JWT Token"
                                         />
+                                    </div>
+                                    <div className="bg-blue-50 text-blue-800 text-xs p-2 rounded mb-2">
+                                        💡 Truco: Pega tu token y trataremos de rellenar el resto automáticamente.
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Tenant Domain</label>
@@ -698,6 +698,13 @@ export default function Integrations() {
                                             placeholder="e.g. d59b32edfb28e130"
                                         />
                                     </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleTestAssistAI}
+                                        className="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        🔌 Probar Integración
+                                    </button>
                                 </>
                             )}
 
@@ -761,78 +768,7 @@ export default function Integrations() {
                                 </>
                             )}
 
-                            {editingProvider === 'WHATSMEOW' && (
-                                <>
-                                    <div className="bg-green-50 text-green-800 text-xs p-3 rounded-lg mb-4">
-                                        💬 Conecta tu número de WhatsApp escaneando el código QR.
-                                        <br />Se creará automáticamente un agente para tu cuenta.
-                                    </div>
-
-                                    {integrations['WHATSMEOW']?.credentials?.agentCode ? (
-                                        <>
-                                            <div className="text-sm text-gray-600 mb-2">
-                                                <strong>Agent Code:</strong> {integrations['WHATSMEOW'].credentials.agentCode}
-                                            </div>
-                                            <div className="bg-gray-50 rounded-xl p-4 text-center">
-                                                <p className="text-sm text-gray-600 mb-2">Escanea el código QR con WhatsApp:</p>
-                                                <QRDisplay
-                                                    url={`${API_URL}/whatsapp/providers/${integrations['WHATSMEOW'].id}/qr`}
-                                                />
-                                                <p className="text-xs text-gray-500 mt-2">El QR se actualiza automáticamente</p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={async () => {
-                                                    try {
-                                                        const res = await fetch(`${API_URL}/whatsmeow/status`, {
-                                                            headers: { 'Authorization': `Bearer ${localStorage.getItem('crm_token')}` }
-                                                        });
-                                                        const data = await res.json();
-                                                        if (data.connected) {
-                                                            showToast('✅ WhatsApp conectado correctamente', 'success');
-                                                        } else {
-                                                            showToast('⏳ Aún no conectado. Escanea el QR.', 'info');
-                                                        }
-                                                    } catch (err) {
-                                                        showToast('Error verificando estado', 'error');
-                                                    }
-                                                }}
-                                                className="mt-3 w-full text-sm text-blue-600 hover:text-blue-800 font-medium"
-                                            >
-                                                Verificar Conexión
-                                            </button>
-                                        </>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            onClick={async () => {
-                                                try {
-                                                    const res = await fetch(`${API_URL}/whatsmeow/agents`, {
-                                                        method: 'POST',
-                                                        headers: {
-                                                            'Content-Type': 'application/json',
-                                                            'Authorization': `Bearer ${localStorage.getItem('crm_token')}`
-                                                        },
-                                                        body: JSON.stringify({})
-                                                    });
-                                                    if (res.ok) {
-                                                        showToast('Agente WhatsMeow creado. Recarga para ver el QR.', 'success');
-                                                        fetchIntegrations();
-                                                    } else {
-                                                        const data = await res.json();
-                                                        showToast(`Error: ${data.error}`, 'error');
-                                                    }
-                                                } catch (err) {
-                                                    showToast('Error creando agente', 'error');
-                                                }
-                                            }}
-                                            className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-bold transition-colors"
-                                        >
-                                            Crear Agente WhatsApp
-                                        </button>
-                                    )}
-                                </>
-                            )}
+                            {/* WHATSMEOW config is handled by WhatsAppConfig component via Settings > WhatsApp tab */}
 
                             {editingProvider === 'META' && (
                                 <>

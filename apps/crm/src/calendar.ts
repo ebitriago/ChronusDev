@@ -60,14 +60,22 @@ export async function getOAuth2Client(tokens?: any) {
 
 // Get an authenticated Calendar API client for a specific user
 async function getCalendarClient(userId: string): Promise<calendar_v3.Calendar> {
-    const integration = await prisma.integration.findUnique({
-        where: {
-            userId_provider: {
-                userId,
-                provider: 'GOOGLE'
+    let integration;
+    try {
+        integration = await prisma.integration.findUnique({
+            where: {
+                userId_provider: {
+                    userId,
+                    provider: 'GOOGLE'
+                }
             }
-        }
-    });
+        });
+    } catch (e) {
+        // Validation error often means userId is missing or schema mismatch.
+        // Treat as not connected.
+        // console.warn("Prisma findUnique failed in getCalendarClient:", e);
+        integration = null;
+    }
 
     if (!integration || !integration.metadata) {
         throw new Error("Google Calendar no conectado");
@@ -172,7 +180,13 @@ export interface CalendarEvent {
 }
 
 // Create a calendar event
-export async function createEvent(userId: string, event: CalendarEvent): Promise<{ success: boolean; eventId?: string; htmlLink?: string; meetLink?: string; error?: string }> {
+// HYBRID: Create event in Google (if connected) and always in DB (Activity)
+export async function createEvent(userId: string, event: CalendarEvent, organizationId?: string): Promise<{ success: boolean; eventId?: string; htmlLink?: string; meetLink?: string; error?: string }> {
+    let googleEvent: any = null;
+    let googleError: string | null = null;
+    let googleEventId: string | undefined;
+
+    // 1. Try Google Sync
     try {
         const calendar = await getCalendarClient(userId);
 
@@ -180,12 +194,8 @@ export async function createEvent(userId: string, event: CalendarEvent): Promise
             summary: event.summary,
             description: event.description,
             location: event.location,
-            start: {
-                dateTime: event.start.toISOString(),
-            },
-            end: {
-                dateTime: event.end.toISOString(),
-            },
+            start: { dateTime: event.start.toISOString() },
+            end: { dateTime: event.end.toISOString() },
             attendees: event.attendees?.map(email => ({ email })),
             reminders: {
                 useDefault: false,
@@ -211,27 +221,82 @@ export async function createEvent(userId: string, event: CalendarEvent): Promise
             conferenceDataVersion: event.addMeet ? 1 : 0,
         });
 
-        const meetLink = response.data.conferenceData?.entryPoints?.find(
-            (ep: any) => ep.entryPointType === 'video'
-        )?.uri;
-
-        return {
-            success: true,
-            eventId: response.data.id || undefined,
-            htmlLink: response.data.htmlLink || undefined,
-            meetLink: meetLink || undefined,
-        };
+        googleEvent = response.data;
+        googleEventId = response.data.id!;
     } catch (err: any) {
-        console.error(`[Calendar] Create event error for user ${userId}:`, err.message);
-        return { success: false, error: err.message };
+        console.warn(`[Calendar] Google Sync skipped/failed for user ${userId}:`, err.message);
+        googleError = err.message;
     }
+
+    // 2. Save to Local DB (Activity)
+    try {
+        let orgId = organizationId;
+        if (!orgId) {
+            const member = await prisma.organizationMember.findFirst({
+                where: { userId }
+            });
+            orgId = member?.organizationId;
+        }
+
+        if (orgId) {
+            const metadata = {
+                summary: event.summary,
+                start: event.start.toISOString(),
+                end: event.end.toISOString(),
+                attendees: event.attendees,
+                location: event.location,
+                googleEventId: googleEventId,
+                htmlLink: googleEvent?.htmlLink,
+                meetLink: googleEvent?.conferenceData?.entryPoints?.find((ep: any) => ep.entryPointType === 'video')?.uri,
+                googleError
+            };
+
+            const activity = await prisma.activity.create({
+                data: {
+                    organizationId: orgId,
+                    userId: userId,
+                    type: 'MEETING',
+                    description: event.summary || "Evento de Calendario",
+                    metadata: metadata as any
+                }
+            });
+
+            return {
+                success: true,
+                eventId: googleEventId || activity.id,
+                htmlLink: googleEvent?.htmlLink,
+                meetLink: metadata.meetLink,
+            };
+        }
+    } catch (dbErr: any) {
+        console.error("Local DB Save failed:", dbErr);
+        // If both failed, return error
+        if (!googleEvent) {
+            const finalError = (googleError && !googleError.includes('Invalid')) ? googleError : dbErr.message;
+            return { success: false, error: finalError };
+        }
+    }
+
+    // Default return if google worked but DB failed (unlikely but safe)
+    return {
+        success: true,
+        eventId: googleEventId,
+        htmlLink: googleEvent?.htmlLink,
+        meetLink: googleEvent?.conferenceData?.entryPoints?.find((ep: any) => ep.entryPointType === 'video')?.uri,
+    };
 }
 
 // List upcoming events with support for Range and MaxResults
+// HYBRID: List events from DB + Google
 export async function listEvents(
     userId: string,
     options: { maxResults?: number; timeMin?: Date; timeMax?: Date } = {}
 ): Promise<{ success: boolean; events?: any[]; error?: string }> {
+    let localEvents: any[] = [];
+    let googleEvents: any[] = [];
+    let googleError: string | null = null;
+
+    // 1. Fetch from Google
     try {
         const calendar = await getCalendarClient(userId);
 
@@ -245,15 +310,13 @@ export async function listEvents(
         if (options.timeMin) requestParams.timeMin = options.timeMin.toISOString();
         if (options.timeMax) requestParams.timeMax = options.timeMax.toISOString();
 
-        // Default behavior: upcoming 10 events if no filtering provided
         if (!options.timeMin && !options.timeMax && !options.maxResults) {
             requestParams.timeMin = new Date().toISOString();
             requestParams.maxResults = 10;
         }
 
         const response = await calendar.events.list(requestParams);
-
-        const events = response.data.items?.map(event => ({
+        googleEvents = response.data.items?.map(event => ({
             id: event.id,
             summary: event.summary,
             description: event.description,
@@ -263,17 +326,61 @@ export async function listEvents(
             htmlLink: event.htmlLink,
             meetLink: event.conferenceData?.entryPoints?.find((ep: any) => ep.entryPointType === 'video')?.uri,
             attendees: event.attendees?.map(a => a.email),
+            source: 'google'
         })) || [];
 
-        return { success: true, events };
     } catch (err: any) {
-        // Graceful handling for not connected
-        if (err.message.includes('No conectado') || err.message.includes('Token')) {
-            return { success: false, error: 'Google Calendar no conectado' };
-        }
-        console.error(`[Calendar] List events error for user ${userId}:`, err.message);
-        return { success: false, error: err.message };
+        // Just log, don't break
+        googleError = err.message;
     }
+
+    // 2. Fetch from Local DB
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: { memberships: true }
+        });
+        const orgId = user?.memberships[0]?.organizationId;
+
+        if (orgId) {
+            const activities = await prisma.activity.findMany({
+                where: {
+                    organizationId: orgId,
+                    type: 'MEETING',
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 100 // Limit for now
+            });
+
+            localEvents = activities.map(a => {
+                const meta = a.metadata as any || {};
+                // Filter by date if options provided (manual filtering since handled in memory/metadata)
+                const start = meta.start ? new Date(meta.start) : a.createdAt;
+
+                // Simple date filter
+                if (options.timeMin && start < options.timeMin) return null;
+                if (options.timeMax && start > options.timeMax) return null;
+
+                return {
+                    id: a.id,
+                    summary: meta.summary || a.description,
+                    description: a.description,
+                    start: meta.start || a.createdAt.toISOString(),
+                    end: meta.end || new Date(a.createdAt.getTime() + 3600000).toISOString(),
+                    location: meta.location,
+                    htmlLink: meta.htmlLink,
+                    meetLink: meta.meetLink,
+                    attendees: meta.attendees, // string or array
+                    source: 'crm'
+                };
+            }).filter(e => e !== null);
+        }
+    } catch (e) {
+        console.error("Local fetch failed:", e);
+    }
+
+    // Return merged list
+    return { success: true, events: [...localEvents, ...googleEvents] };
 }
 
 // Update an event

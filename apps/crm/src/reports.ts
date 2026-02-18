@@ -4,45 +4,43 @@ import { prisma } from './db.js';
 import { Response } from 'express';
 
 // Generate Invoice PDF
-export async function generateInvoicePDF(invoiceId: string, res: Response) {
-    const invoice = await prisma.invoice.findUnique({
-        where: { id: invoiceId },
-        include: {
-            customer: true,
-            items: true,
-            payments: true,
-        },
-    });
-
-    if (!invoice) {
-        throw new Error('Factura no encontrada'); // Invoice not found
-    }
-
-    const doc = new PDFDocument({ margin: 50 });
-
-    // Stream directly to response
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=invoice-${invoice.number}.pdf`);
-    doc.pipe(res);
-
+// Helper to build the PDF content
+function buildInvoicePDF(doc: PDFKit.PDFDocument, invoice: any, organization?: any) {
     // Header
+    const title = invoice.type === 'QUOTE' ? 'PROPUESTA ECONOMICA' : 'FACTURA';
+    const dateLabel = invoice.type === 'QUOTE' ? 'Fecha Emisión' : 'Fecha';
+    const dueLabel = invoice.type === 'QUOTE' ? 'Válido Hasta' : 'Vencimiento';
+
+    // Organization info - use provided data or defaults
+    const orgName = organization?.name || 'ChronusCRM';
+    const orgAddress = organization?.address || '';
+    const orgCity = organization?.city || '';
+    const orgEmail = organization?.email || 'soporte@chronuscrm.com';
+    const orgPhone = organization?.phone || '';
+
     doc
         .fontSize(20)
-        .text('FACTURA', 50, 50)
+        .text(title, 50, 50)
         .fontSize(10)
-        .text('ChronusCRM', { align: 'right' })
-        .text('Calle Principal 123', { align: 'right' })
-        .text('Caracas, Venezuela', { align: 'right' })
-        .text('support@chronuscrm.com', { align: 'right' })
-        .moveDown();
+        .text(orgName, { align: 'right' });
+
+    if (orgAddress) doc.text(orgAddress, { align: 'right' });
+    if (orgCity) doc.text(orgCity, { align: 'right' });
+    if (orgPhone) doc.text(orgPhone, { align: 'right' });
+    doc.text(orgEmail, { align: 'right' }).moveDown();
 
     // Invoice Details
     doc
         .fontSize(10)
-        .text(`Número: ${invoice.number}`, 50, 130)
-        .text(`Fecha: ${invoice.createdAt.toLocaleDateString()}`, 50, 145)
-        .text(`Vencimiento: ${invoice.dueDate.toLocaleDateString()}`, 50, 160)
+        .text(`${invoice.type === 'QUOTE' ? 'Cotización' : 'Número'}: ${invoice.number}`, 50, 130)
+        .text(`${dateLabel}: ${invoice.createdAt.toLocaleDateString()}`, 50, 145)
+        .text(`${dueLabel}: ${(invoice.validUntil || invoice.dueDate).toLocaleDateString()}`, 50, 160)
         .text(`Estado: ${invoice.status}`, 50, 175);
+
+    // Terms
+    if (invoice.terms) {
+        doc.text(`Términos: ${invoice.terms}`, 50, 190);
+    }
 
     // Customer Details
     doc
@@ -74,7 +72,7 @@ export async function generateInvoicePDF(invoiceId: string, res: Response) {
 
     // Items List
     let y = tableTop + 30;
-    invoice.items.forEach(item => {
+    invoice.items.forEach((item: any) => {
         doc
             .text(item.description, 50, y)
             .text(item.quantity.toString(), 350, y, { width: 50, align: 'center' })
@@ -98,8 +96,81 @@ export async function generateInvoicePDF(invoiceId: string, res: Response) {
         .fontSize(10)
         .font('Helvetica')
         .text('Gracias por su negocio.', 50, 700, { align: 'center', width: 500 });
+}
+
+// Generate Invoice PDF - Stream to Response
+export async function generateInvoicePDF(invoiceId: string, res: Response, organizationId?: string) {
+    const invoice = await prisma.invoice.findUnique({
+        where: { id: invoiceId },
+        include: {
+            customer: true,
+            items: true,
+            payments: true,
+        },
+    });
+
+    if (!invoice) {
+        throw new Error('Factura no encontrada'); // Invoice not found
+    }
+
+    // Fetch organization data for branding
+    const orgId = organizationId || invoice.customer?.organizationId;
+    const organization = orgId ? await prisma.organization.findUnique({
+        where: { id: orgId }
+    }) : null;
+
+    const doc = new PDFDocument({ margin: 50 });
+
+    // Stream directly to response
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${invoice.type === 'QUOTE' ? 'propuesta' : 'factura'}-${invoice.number}.pdf`);
+    doc.pipe(res);
+
+    buildInvoicePDF(doc, invoice, organization);
 
     doc.end();
+}
+
+// Get Invoice PDF as Buffer (for Email)
+export async function getInvoicePDFBuffer(invoiceId: string, organizationId?: string): Promise<{ buffer: Buffer, invoice: any, filename: string }> {
+    const invoice = await prisma.invoice.findUnique({
+        where: { id: invoiceId },
+        include: {
+            customer: true,
+            items: true,
+            payments: true,
+        },
+    });
+
+    if (!invoice) {
+        throw new Error('Factura no encontrada');
+    }
+
+    // Fetch organization data for branding
+    const orgId = organizationId || invoice.customer?.organizationId;
+    const organization = orgId ? await prisma.organization.findUnique({
+        where: { id: orgId }
+    }) : null;
+
+    return new Promise((resolve, reject) => {
+        const doc = new PDFDocument({ margin: 50 });
+        const buffers: Buffer[] = [];
+
+        doc.on('data', buffers.push.bind(buffers));
+        doc.on('end', () => {
+            const buffer = Buffer.concat(buffers);
+            resolve({
+                buffer,
+                invoice,
+                filename: `${invoice.type === 'QUOTE' ? 'Propuesta' : 'Factura'}-${invoice.number}.pdf`
+            });
+        });
+        doc.on('error', reject);
+
+        buildInvoicePDF(doc, invoice, organization);
+
+        doc.end();
+    });
 }
 
 // Generate General Report (Analytics)
@@ -146,3 +217,4 @@ export async function generateAnalyticsPDF(res: Response) {
 
     doc.end();
 }
+

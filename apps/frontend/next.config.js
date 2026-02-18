@@ -6,13 +6,24 @@ const nextConfig = {
     buildActivity: true,
   },
   async rewrites() {
+    // Use localhost for local dev, Docker hostname for container
+    const backendUrl = process.env.CHRONUSDEV_BACKEND_URL || 'http://localhost:3001';
     return [
       {
+        source: '/api/socket.io/:path*',
+        destination: `${backendUrl}/socket.io/:path*`, // Proxy Socket.io with /api prefix
+      },
+      {
+        source: '/socket.io/:path*',
+        destination: `${backendUrl}/socket.io/:path*`, // Proxy Socket.io standard path
+      },
+      {
         source: '/api/:path*',
-        destination: `${process.env.CRM_BACKEND_INTERNAL_URL || 'http://chronuscrm-backend:3002'}/:path*`, // Proxy to CRM Backend
+        destination: `${backendUrl}/:path*`, // Proxy to ChronusDev Backend
       }
     ]
   },
 }
 
 module.exports = nextConfig
+

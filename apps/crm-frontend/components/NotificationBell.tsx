@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 
 import { API_URL } from '../app/api';
@@ -13,28 +14,30 @@ type Notification = {
     body: string;
     data?: any;
     read: boolean;
+    link?: string;
     createdAt: string;
 };
 
 const TYPE_ICONS: Record<string, string> = {
-    lead: '📥',
-    client: '🎉',
-    ticket: '🎫',
-    message: '💬',
-    conversion: '🌟',
-    system: '🔔'
+    LEAD: '📥',
+    CLIENT: '🎉',
+    TICKET: '🎫',
+    MESSAGE: '💬',
+    CONVERSION: '🌟',
+    SYSTEM: '🔔'
 };
 
 const TYPE_COLORS: Record<string, string> = {
-    lead: 'bg-blue-500',
-    client: 'bg-emerald-500',
-    ticket: 'bg-orange-500',
-    message: 'bg-purple-500',
-    conversion: 'bg-yellow-500',
-    system: 'bg-gray-500'
+    LEAD: 'bg-blue-500',
+    CLIENT: 'bg-emerald-500',
+    TICKET: 'bg-orange-500',
+    MESSAGE: 'bg-purple-500',
+    CONVERSION: 'bg-yellow-500',
+    SYSTEM: 'bg-gray-500'
 };
 
 export default function NotificationBell() {
+    const router = useRouter();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
@@ -44,21 +47,21 @@ export default function NotificationBell() {
     // Helper for auth headers
     function getAuthHeaders() {
         if (typeof window === 'undefined') return {};
-        const token = localStorage.getItem('crm_token');
+        const token = localStorage.getItem('crm_token'); // Fix: consistent token key
         return token ? { 'Authorization': `Bearer ${token}` } : {};
     }
 
     // Load notifications on mount
     useEffect(() => {
         const headers = getAuthHeaders() as any;
-        fetch(`${API_URL}/notifications?userId=all`, { headers })
+        fetch(`${API_URL}/notifications`, { headers }) // Endpoint is /notifications based on backend
             .then(res => {
                 if (res.status === 401) throw new Error('Unauthorized');
                 return res.json();
             })
             .then(data => {
                 const notifs = Array.isArray(data) ? data : [];
-                setNotifications(notifs.slice(0, 20)); // Keep last 20
+                setNotifications(notifs); // Already taken 20 in backend
                 setUnreadCount(notifs.filter((n: Notification) => !n.read).length);
             })
             .catch(console.error);
@@ -66,8 +69,12 @@ export default function NotificationBell() {
 
     // Socket connection for real-time notifications
     useEffect(() => {
-        // Use /api/socket.io to leverage the Next.js rewrite which proxies /api -> backend
-        const newSocket = io({ path: '/api/socket.io' });
+        const token = localStorage.getItem('crm_token');
+        // Using explicit socket.io path from next.config.js rewrite
+        const newSocket = io({
+            path: '/api/socket.io',
+            auth: { token }
+        });
         setSocket(newSocket);
 
         newSocket.on('notification', (notif: Notification) => {
@@ -78,7 +85,7 @@ export default function NotificationBell() {
             try {
                 const audio = new Audio('/notification.mp3');
                 audio.volume = 0.3;
-                audio.play().catch(() => { }); // Ignore autoplay restrictions
+                audio.play().catch(() => { });
             } catch { }
         });
 
@@ -100,15 +107,38 @@ export default function NotificationBell() {
 
     const handleMarkAllRead = async () => {
         try {
-            await fetch(`${API_URL}/notifications/mark-all-read`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: 'all' })
+            const headers = getAuthHeaders() as any;
+            await fetch(`${API_URL}/notifications/read-all`, {
+                method: 'PUT',
+                headers: { ...headers, 'Content-Type': 'application/json' }
             });
             setNotifications(prev => prev.map(n => ({ ...n, read: true })));
             setUnreadCount(0);
         } catch (err) {
             console.error('Error marking all as read:', err);
+        }
+    };
+
+    const handleMarkRead = async (id: string, currentReadStatus: boolean) => {
+        // Optimistic update regardless of current status to ensure UI feels responsive
+        // though strictly unnecessary if already read.
+        if (currentReadStatus) return;
+
+        try {
+            const headers = getAuthHeaders() as any;
+            // Optimistic update
+            setNotifications(prev => {
+                const newState = prev.map(n => n.id === id ? { ...n, read: true } : n);
+                setUnreadCount(newState.filter(n => !n.read).length);
+                return newState;
+            });
+
+            await fetch(`${API_URL}/notifications/${id}/read`, {
+                method: 'PUT',
+                headers: { ...headers, 'Content-Type': 'application/json' }
+            });
+        } catch (err) {
+            console.error('Error marking as read:', err);
         }
     };
 
@@ -167,6 +197,13 @@ export default function NotificationBell() {
                             notifications.map(notif => (
                                 <div
                                     key={notif.id}
+                                    onClick={() => {
+                                        handleMarkRead(notif.id, notif.read);
+                                        if (notif.link) {
+                                            router.push(notif.link);
+                                            setIsOpen(false);
+                                        }
+                                    }}
                                     className={`p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${!notif.read ? 'bg-blue-50/50' : ''}`}
                                 >
                                     <div className="flex gap-3">

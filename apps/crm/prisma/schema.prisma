@@ -1,147 +1,924 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-// ==================== AUTHENTICATION ====================
-
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  password      String?   // Null if using OAuth only
-  name          String
-  role          Role      @default(AGENT)
-  avatar        String?
-  phone         String?
-  
-  // AssistAI SSO
-  assistaiId    String?   @unique
-  assistaiToken String?
-  
-  // Relations
-  assignedTickets   Ticket[]    @relation("AssignedTickets")
-  createdTickets    Ticket[]    @relation("CreatedTickets")
-  createdLeads      Lead[]      @relation("CreatedLeads")
-  notifications     Notification[]
-  sessions          Session[]
-  activities        Activity[]
-  integrations      Integration[]
-  aiAgents          AiAgent[]
-  pushDevices       PushDevice[]
-  notifPrefs        NotificationPreferences?
-  
-  // Project Management (ChronusDev)
-  projects        ProjectMember[]
-  assignedTasks   Task[]          @relation("AssignedTasks")
-  createdTasks    Task[]          @relation("CreatedTasks")
-  timeLogs        TimeLog[]
-  taskComments    TaskComment[]
-  payouts         Payout[]
-  createdPayouts  Payout[]    @relation("CreatedPayouts")
+  id                  String                   @id @default(cuid())
+  email               String                   @unique
+  password            String?
+  name                String
+  role                Role                     @default(AGENT)
+  avatar              String?
+  phone               String?
+  assistaiId          String?                  @unique
+  assistaiToken       String?
+  googleAccessToken   String?
+  googleRefreshToken  String?
+  googleCalendarEmail String?
+  googleTokenExpiry   BigInt?
+  resetToken          String?                  @unique
+  resetTokenExpires   DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  lastLoginAt         DateTime?
+  activities          Activity[]
+  calendarEvents      CalendarEvent[]
+  integrations        Integration[]
+  assignedLeads       Lead[]                   @relation("AssignedLeads")
+  createdLeads        Lead[]                   @relation("CreatedLeads")
+  notifications       Notification[]
+  notifPrefs          NotificationPreferences?
+  memberships         OrganizationMember[]
+  createdPayouts      Payout[]                 @relation("CreatedPayouts")
+  payouts             Payout[]
+  projects            ProjectMember[]
+  pushDevices         PushDevice[]
+  sessions            Session[]
+  assignedTasks       Task[]                   @relation("AssignedTasks")
+  createdTasks        Task[]                   @relation("CreatedTasks")
+  taskComments        TaskComment[]
+  assignedTickets     Ticket[]                 @relation("AssignedTickets")
+  createdTickets      Ticket[]                 @relation("CreatedTickets")
+  ticketComments      TicketComment[]
+  timeLogs            TimeLog[]
+  aiAgents            AiAgent[]                @relation("AiAgentToUser")
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  lastLoginAt   DateTime?
-
-  // Multi-tenancy
-  // organizationId - REMOVED single relation
-  // organization   - REMOVED single relation
-  memberships    OrganizationMember[]
-  
   @@index([email])
   @@index([assistaiId])
 }
 
 model Organization {
-  id            String    @id @default(cuid())
-  name          String
-  slug          String    @unique // for subdomain or url path
-  
-  // AssistAI Configuration per Tenant
-  assistaiConfig Json?    // { apiToken: string, orgCode: string, tenantDomain: string }
-
-  // SaaS Management
-  enabledServices String   @default("CRM,CHRONUSDEV,ASSISTAI") // "CRM,CHRONUSDEV,ASSISTAI"
-
-  // Subscription Fields
-  plan              String   @default("FREE") // FREE, PRO, ENTERPRISE
-  subscriptionStatus String   @default("ACTIVE") // ACTIVE, TRIALING, PAST_DUE, CANCELED
-  trialEndsAt       DateTime?
-  
-  members       OrganizationMember[]
-  integrations  Integration[]
-  aiAgents      AiAgent[]
-  
-  // Scoped Data
-  customers     Customer[]
-  leads         Lead[]
-  tickets       Ticket[]
-  invoices      Invoice[]
-  transactions  Transaction[]
-  conversations Conversation[]
-  notifications Notification[]
-  activities    Activity[]
-  tags          Tag[]
-  communications Communication[]
-  channels      Channel[]
-  contacts      Contact[]
-  takeovers     Takeover[]
-  pushDevices   PushDevice[]
-  notifPrefs    NotificationPreferences[]
-  payouts       Payout[]
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  // Project Management (ChronusDev)
-  projects      Project[]
-  
-  // Automated Reminders
-  reminderTemplates ReminderTemplate[]
-
-  // Mini ERP
-  globalProducts GlobalProduct[]
-  shoppingCarts  AssistantShoppingCart[]
+  id                 String                    @id @default(cuid())
+  name               String
+  slug               String                    @unique
+  assistaiConfig     Json?
+  smtpConfig         Json?
+  enabledServices    String                    @default("CRM,CHRONUSDEV,ASSISTAI")
+  plan               String                    @default("FREE")
+  subscriptionStatus String                    @default("ACTIVE")
+  stripeCustomerId   String?
+  billingEmail       String?
+  trialEndsAt        DateTime?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  activities         Activity[]
+  aiAgents           AiAgent[]
+  apiKeys            ApiKey[]
+  billingInvoices    BillingInvoice[]
+  channels           Channel[]
+  communications     Communication[]
+  contacts           Contact[]
+  conversations      Conversation[]
+  customers          Customer[]
+  integrations       Integration[]
+  invoices           Invoice[]
+  leads              Lead[]
+  notifications      Notification[]
+  notifPrefs         NotificationPreferences[]
+  members            OrganizationMember[]
+  payouts            Payout[]
+  pipelineStages     PipelineStage[]
+  projects           Project[]
+  pushDevices        PushDevice[]
+  reminderTemplates  ReminderTemplate[]
+  tags               Tag[]
+  takeovers          Takeover[]
+  tickets            Ticket[]
+  transactions       Transaction[]
+  webhookEndpoints   WebhookEndpoint[]
+  shoppingCarts      AssistantShoppingCart[]
+  globalProducts     GlobalProduct[]
+  marketSegments     MarketSegment[]
+  campaigns          Campaign[]
+  reminders          Reminder[]
 }
 
 model OrganizationMember {
   id             String       @id @default(cuid())
   userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  role           Role         @default(AGENT) // Role within this org
+  role           Role         @default(AGENT)
   defaultPayRate Float        @default(0)
-
-
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId])
   @@index([userId])
   @@index([organizationId])
 }
 
-
-
 model Session {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   token     String   @unique
   expiresAt DateTime
   userAgent String?
   ipAddress String?
   createdAt DateTime @default(now())
-  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([token])
   @@index([userId])
+}
+
+model Customer {
+  id                         String                  @id @default(cuid())
+  name                       String
+  email                      String
+  phone                      String?
+  company                    String?
+  plan                       Plan                    @default(FREE)
+  status                     CustomerStatus          @default(TRIAL)
+  monthlyRevenue             Float                   @default(0)
+  currency                   String                  @default("USD")
+  notes                      String?
+  customFields               Json?
+  taxId                      String?
+  address                    String?
+  billingAddress             String?
+  paymentTerms               String?
+  chronusDevClientId         String?
+  chronusDevDefaultProjectId String?
+  birthDate                  DateTime?
+  paymentDueDay              Int?
+  organizationId             String
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
+  activities                 Activity[]
+  communications             Communication[]
+  contacts                   Contact[]
+  conversations              Conversation[]
+  organization               Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tags                       CustomerTag[]
+  invoices                   Invoice[]
+  leads                      Lead[]                  @relation("ConvertedLeads")
+  projects                   Project[]
+  scheduledInteractions      ScheduledInteraction[]
+  tickets                    Ticket[]
+  transactions               Transaction[]
+  shoppingCarts              AssistantShoppingCart[]
+  segments                   MarketSegment[]
+
+  @@unique([email, organizationId])
+  @@index([email])
+  @@index([status])
+  @@index([organizationId])
+}
+
+model Communication {
+  id             String                 @id @default(cuid())
+  customerId     String
+  type           CommunicationType
+  direction      CommunicationDirection
+  subject        String?
+  content        String
+  metadata       Json?
+  createdBy      String?
+  organizationId String
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  customer       Customer               @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([organizationId])
+  @@index([type])
+}
+
+model ScheduledInteraction {
+  id          String   @id @default(cuid())
+  customerId  String
+  type        String   @default("VOICE")
+  scheduledAt DateTime
+  status      String   @default("PENDING")
+  metadata    Json?
+  content     String?
+  subject     String?
+  externalId  String?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([type])
+}
+
+model ReminderTemplate {
+  id             String              @id @default(cuid())
+  organizationId String
+  name           String
+  triggerType    ReminderTriggerType
+  daysBefore     Int                 @default(0)
+  channel        ReminderChannel
+  subject        String?
+  content        String
+  isEnabled      Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([triggerType])
+}
+
+model Contact {
+  id             String       @id @default(cuid())
+  customerId     String
+  type           ContactType
+  value          String
+  displayName    String?
+  verified       Boolean      @default(false)
+  isPrimary      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  organizationId String
+  customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([type, value])
+  @@index([customerId])
+  @@index([organizationId])
+}
+
+model Lead {
+  id             String          @id @default(cuid())
+  name           String
+  email          String
+  phone          String?
+  company        String?
+  value          Float           @default(0)
+  status         String          @default("NEW")
+  source         LeadSource      @default(MANUAL)
+  score          Int             @default(0)
+  notes          String?
+  customFields   Json?
+  organizationId String
+  createdById    String?
+  convertedToId  String?
+  assignedToId   String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  convertedAt    DateTime?
+  activities     Activity[]
+  jobs           AutomationJob[]
+  invoices       Invoice[]
+  assignedTo     User?           @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  convertedTo    Customer?       @relation("ConvertedLeads", fields: [convertedToId], references: [id])
+  createdBy      User?           @relation("CreatedLeads", fields: [createdById], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tags           LeadTag[]
+
+  @@index([email])
+  @@index([status])
+  @@index([organizationId])
+}
+
+model PipelineStage {
+  id             String               @id @default(cuid())
+  name           String
+  order          Int
+  color          String               @default("#3B82F6")
+  isDefault      Boolean              @default(false)
+  organizationId String
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  automations    PipelineAutomation[]
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model PipelineAutomation {
+  id           String          @id @default(cuid())
+  stageId      String
+  trigger      String          @default("ENTER_STAGE")
+  actionType   String
+  delayMinutes Int             @default(0)
+  config       Json?
+  isEnabled    Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  jobs         AutomationJob[]
+  stage        PipelineStage   @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@index([stageId])
+}
+
+model AutomationJob {
+  id           String             @id @default(cuid())
+  automationId String
+  leadId       String
+  status       String             @default("PENDING")
+  scheduledAt  DateTime
+  attempts     Int                @default(0)
+  error        String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  automation   PipelineAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  lead         Lead               @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+model Ticket {
+  id             String             @id @default(cuid())
+  title          String
+  description    String?
+  status         TicketStatus       @default(OPEN)
+  priority       Priority           @default(MEDIUM)
+  dueDate        DateTime?
+  customerId     String
+  assignedToId   String?
+  createdById    String?
+  taskId         String?
+  customFields   Json?
+  organizationId String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  resolvedAt     DateTime?
+  activities     Activity[]
+  assignedTo     User?              @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  createdBy      User?              @relation("CreatedTickets", fields: [createdById], references: [id])
+  customer       Customer           @relation(fields: [customerId], references: [id])
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task           Task?              @relation(fields: [taskId], references: [id])
+  attachments    TicketAttachment[]
+  comments       TicketComment[]
+  tags           TicketTag[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([organizationId])
+}
+
+model TicketComment {
+  id         String   @id @default(cuid())
+  ticketId   String
+  content    String
+  authorId   String?
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  author     User?    @relation(fields: [authorId], references: [id])
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+model TicketAttachment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  url       String
+  name      String
+  type      String
+  size      Int
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  number         String        @unique
+  customerId     String?
+  leadId         String?
+  status         InvoiceStatus @default(DRAFT)
+  type           InvoiceType   @default(INVOICE)
+  issueDate      DateTime      @default(now())
+  dueDate        DateTime
+  validUntil     DateTime?
+  amount         Float
+  subtotal       Float         @default(0)
+  tax            Float         @default(0)
+  discount       Float         @default(0)
+  balance        Float         @default(0)
+  currency       String        @default("USD")
+  paymentMethod  String?
+  terms          String?
+  paidAt         DateTime?
+  notes          String?
+  organizationId String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  customer       Customer?     @relation(fields: [customerId], references: [id])
+  lead           Lead?         @relation(fields: [leadId], references: [id])
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  items          InvoiceItem[]
+  payments       Payment[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([organizationId])
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Int     @default(1)
+  unitPrice   Float
+  total       Float
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  invoiceId String
+  amount    Float
+  method    PaymentMethod
+  reference String?
+  paidAt    DateTime      @default(now())
+  invoice   Invoice       @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+}
+
+model Transaction {
+  id             String          @id @default(cuid())
+  type           TransactionType
+  amount         Float
+  currency       String          @default("USD")
+  description    String?
+  category       String?
+  status         String          @default("COMPLETED")
+  customerId     String?
+  organizationId String
+  date           DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+  customer       Customer?       @relation(fields: [customerId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([type])
+  @@index([date])
+  @@index([organizationId])
+}
+
+model Conversation {
+  id              String             @id @default(cuid())
+  sessionId       String             @unique
+  platform        Platform
+  customerName    String?
+  customerContact String
+  agentCode       String?
+  agentName       String?
+  status          ConversationStatus @default(ACTIVE)
+  customerId      String?
+  organizationId  String
+  metadata        Json?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  customer        Customer?          @relation(fields: [customerId], references: [id])
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages        Message[]
+  takeover        Takeover?
+
+  @@index([sessionId])
+  @@index([customerId])
+  @@index([platform])
+  @@index([organizationId])
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  content        String
+  sender         MessageSender
+  senderName     String?
+  mediaUrl       String?
+  mediaType      MediaType?
+  status         MessageStatus @default(SENT)
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+model Takeover {
+  id              String       @id @default(cuid())
+  conversationId  String       @unique
+  takenById       String
+  durationMinutes Int          @default(30)
+  expiresAt       DateTime
+  organizationId  String
+  createdAt       DateTime     @default(now())
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model Notification {
+  id             String           @id @default(cuid())
+  userId         String
+  type           NotificationType
+  title          String
+  body           String
+  data           Json?
+  read           Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+  @@index([organizationId])
+}
+
+model Activity {
+  id             String       @id @default(cuid())
+  type           ActivityType
+  description    String
+  userId         String?
+  customerId     String?
+  leadId         String?
+  ticketId       String?
+  organizationId String
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  customer       Customer?    @relation(fields: [customerId], references: [id])
+  lead           Lead?        @relation(fields: [leadId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticket         Ticket?      @relation(fields: [ticketId], references: [id])
+  user           User?        @relation(fields: [userId], references: [id])
+
+  @@index([customerId])
+  @@index([leadId])
+  @@index([ticketId])
+  @@index([createdAt])
+  @@index([organizationId])
+}
+
+model Tag {
+  id             String        @id @default(cuid())
+  name           String
+  color          String        @default("#6B7280")
+  organizationId String
+  createdAt      DateTime      @default(now())
+  customers      CustomerTag[]
+  leads          LeadTag[]
+  tickets        TicketTag[]
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([name, organizationId])
+  @@index([organizationId])
+}
+
+model CustomerTag {
+  customerId String
+  tagId      String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([customerId, tagId])
+}
+
+model TicketTag {
+  ticketId String
+  tagId    String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([ticketId, tagId])
+}
+
+model LeadTag {
+  leadId String
+  tagId  String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, tagId])
+}
+
+model Channel {
+  id                String       @id @default(cuid())
+  name              String
+  platform          Platform
+  mode              ChannelMode  @default(HYBRID)
+  enabled           Boolean      @default(true)
+  assistaiAgentCode String?
+  autoResumeMinutes Int          @default(30)
+  config            Json?
+  organizationId    String
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model Integration {
+  id             String        @id @default(cuid())
+  userId         String?
+  provider       String
+  credentials    Json
+  isEnabled      Boolean       @default(true)
+  metadata       Json?
+  organizationId String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([organizationId])
+}
+
+model AiAgent {
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  provider       AiProvider
+  model          String
+  systemPrompt   String?
+  apiKey         String?
+  config         Json?
+  isEnabled      Boolean      @default(true)
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users          User[]       @relation("AiAgentToUser")
+
+  @@index([organizationId])
+  @@index([provider])
+}
+
+model PushDevice {
+  id             String       @id @default(cuid())
+  userId         String
+  token          String
+  platform       String
+  organizationId String
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+}
+
+model NotificationPreferences {
+  id             String       @id @default(cuid())
+  userId         String       @unique
+  email          Boolean      @default(true)
+  push           Boolean      @default(true)
+  whatsapp       Boolean      @default(true)
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model Project {
+  id             String          @id @default(cuid())
+  name           String
+  description    String?
+  customerId     String?
+  budget         Float           @default(0)
+  currency       String          @default("USD")
+  status         String          @default("ACTIVE")
+  organizationId String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  customer       Customer?       @relation(fields: [customerId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members        ProjectMember[]
+  tasks          Task[]
+  timeLogs       TimeLog[]
+
+  @@index([organizationId])
+  @@index([customerId])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  payRate   Float    @default(0)
+  billRate  Float    @default(0)
+  role      String   @default("DEV")
+  joinedAt  DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model Task {
+  id             String        @id @default(cuid())
+  projectId      String
+  title          String
+  description    String?
+  status         String        @default("BACKLOG")
+  priority       String        @default("MEDIUM")
+  assignedToId   String?
+  createdById    String
+  estimatedHours Float?
+  dueDate        DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  assignedTo     User?         @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  createdBy      User          @relation("CreatedTasks", fields: [createdById], references: [id])
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  comments       TaskComment[]
+  tickets        Ticket[]
+  timeLogs       TimeLog[]
+
+  @@index([projectId])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model TimeLog {
+  id          String    @id @default(cuid())
+  taskId      String?
+  projectId   String
+  userId      String
+  start       DateTime
+  end         DateTime?
+  description String?
+  payRate     Float?
+  billRate    Float?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task        Task?     @relation(fields: [taskId], references: [id])
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([taskId])
+}
+
+model Payout {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  amount         Float
+  currency       String       @default("USD")
+  month          String
+  note           String?
+  createdById    String
+  createdAt      DateTime     @default(now())
+  createdBy      User         @relation("CreatedPayouts", fields: [createdById], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([month])
+}
+
+model GlobalProduct {
+  id             String                      @id @default(cuid())
+  name           String
+  description    String?
+  price          Float
+  sku            String                      @unique
+  stock          Int                         @default(0)
+  imageUrl       String?
+  category       String?
+  organizationId String
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  cartItems      AssistantShoppingCartItem[]
+  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("global_products")
+}
+
+model AssistantShoppingCart {
+  id             String                      @id @default(cuid())
+  customerId     String
+  status         String                      @default("OPEN")
+  total          Float                       @default(0)
+  organizationId String
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  items          AssistantShoppingCartItem[]
+  customer       Customer                    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([organizationId])
+  @@map("assistant_shopping_carts")
+}
+
+model AssistantShoppingCartItem {
+  id             String                @id @default(cuid())
+  shoppingCartId String
+  productId      String
+  quantity       Int
+  unitPrice      Float
+  total          Float
+  createdAt      DateTime              @default(now())
+  product        GlobalProduct         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  shoppingCart   AssistantShoppingCart @relation(fields: [shoppingCartId], references: [id], onDelete: Cascade)
+
+  @@index([shoppingCartId])
+  @@index([productId])
+  @@map("assistant_shopping_cart_items")
+}
+
+model CalendarEvent {
+  id            String   @id @default(cuid())
+  userId        String
+  summary       String
+  description   String?
+  start         DateTime
+  end           DateTime
+  location      String?
+  googleEventId String?
+  htmlLink      String?
+  meetLink      String?
+  attendees     Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([start])
+}
+
+model ApiKey {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  keyHash        String
+  keyPrefix      String
+  lastUsedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([keyHash])
+}
+
+model WebhookEndpoint {
+  id             String       @id @default(cuid())
+  organizationId String
+  url            String
+  description    String?
+  events         String[]
+  isActive       Boolean      @default(true)
+  secret         String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+model BillingInvoice {
+  id              String       @id @default(cuid())
+  amount          Float
+  currency        String       @default("USD")
+  status          String       @default("PAID")
+  pdfUrl          String?
+  invoiceDate     DateTime     @default(now())
+  dueDate         DateTime?
+  stripeInvoiceId String?
+  organizationId  String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
 
 enum Role {
@@ -151,59 +928,6 @@ enum Role {
   VIEWER
   SUPER_ADMIN
   DEV
-}
-
-// ==================== CUSTOMERS ====================
-
-model Customer {
-  id              String    @id @default(cuid())
-  name            String
-  email           String    @unique
-  phone           String?
-  company         String?
-  plan            Plan      @default(FREE)
-  status          CustomerStatus @default(TRIAL)
-  monthlyRevenue  Float     @default(0)
-  currency        String    @default("USD")
-  notes           String?
-  customFields    Json?
-  
-  // External IDs
-  chronusDevClientId      String?
-  chronusDevDefaultProjectId String?
-  
-  // Reminder dates
-  birthDate       DateTime?
-  paymentDueDay   Int?       // Day of month (1-28) for recurring billing reminders
-
-  // Multi-tenancy
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  // Relations
-  contacts      Contact[]
-  tickets       Ticket[]
-  invoices      Invoice[]
-  leads         Lead[]      @relation("ConvertedLeads")
-  conversations Conversation[]
-  transactions  Transaction[]
-  communications Communication[]
-  activities    Activity[]
-  tags          CustomerTag[]
-  scheduledInteractions ScheduledInteraction[]
-  
-  // Project Management (ChronusDev)
-  projects      Project[]
-
-  // Mini ERP
-  shoppingCarts AssistantShoppingCart[]
-
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  @@index([email])
-  @@index([status])
-  @@index([organizationId])
 }
 
 enum CommunicationType {
@@ -220,63 +944,6 @@ enum CommunicationDirection {
   OUTBOUND
 }
 
-model Communication {
-  id          String    @id @default(cuid())
-  customerId  String
-  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  
-  type        CommunicationType
-  direction   CommunicationDirection
-  subject     String?
-  content     String
-  metadata    Json?
-  
-  createdBy   String?   // User ID or System
-  
-  // Multi-tenancy
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@index([customerId])
-  @@index([organizationId])
-  @@index([type])
-}
-
-model ScheduledInteraction {
-  id          String    @id @default(cuid())
-  customerId  String
-  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  
-  type        String    @default("VOICE") // VOICE, WHATSAPP, EMAIL
-  scheduledAt DateTime
-  status      String    @default("PENDING") // PENDING, COMPLETED, FAILED
-  metadata    Json?     // Context for AI or extras
-  
-  // Content for non-voice
-  content     String?   // Message body
-  subject     String?   // Email subject
-  
-  // Results
-  externalId  String?   // Call SID or Message ID
-  error       String?
-
-  // Multi-tenancy (implied by Customer, but good to have if querying directly)
-  // organizationId String
-  // organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
-  @@index([scheduledAt])
-  @@index([status])
-  @@index([type])
-}
-
-// ==================== AUTOMATED REMINDERS ====================
-
 enum ReminderTriggerType {
   BIRTHDAY
   PAYMENT_DUE
@@ -287,47 +954,6 @@ enum ReminderChannel {
   WHATSAPP
   EMAIL
   VOICE
-}
-
-model ReminderTemplate {
-  id              String   @id @default(cuid())
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  name            String        // "Birthday Greeting", "Payment Reminder"
-  triggerType     ReminderTriggerType
-  daysBefore      Int @default(0)  // Send X days before the date (0 = on the day)
-  channel         ReminderChannel
-  
-  subject         String?       // For EMAIL
-  content         String        // Template with placeholders: {{name}}, {{date}}, {{company}}
-  
-  isEnabled       Boolean @default(true)
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  @@index([organizationId])
-  @@index([triggerType])
-}
-
-model Contact {
-  id          String      @id @default(cuid())
-  customerId  String
-  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  type        ContactType
-  value       String
-  displayName String?
-  verified    Boolean     @default(false)
-  isPrimary   Boolean     @default(false)
-  createdAt   DateTime    @default(now())
-  // Multi-tenancy
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  @@unique([type, value])
-  @@index([customerId])
-  @@index([organizationId])
 }
 
 enum Plan {
@@ -352,42 +978,6 @@ enum ContactType {
   TELEGRAM
 }
 
-// ==================== LEADS ====================
-
-model Lead {
-  id          String      @id @default(cuid())
-  name        String
-  email       String
-  phone       String?
-  company     String?
-  value       Float       @default(0)
-  status      LeadStatus  @default(NEW)
-  source      LeadSource  @default(MANUAL)
-  score       Int         @default(0)
-  notes       String?
-  customFields Json?
-
-  // Multi-tenancy
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  // Relations
-  createdById String?
-  createdBy   User?       @relation("CreatedLeads", fields: [createdById], references: [id])
-  convertedToId String?
-  convertedTo Customer?   @relation("ConvertedLeads", fields: [convertedToId], references: [id])
-  tags        LeadTag[]
-  activities  Activity[]
-  
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  convertedAt DateTime?
-  
-  @@index([email])
-  @@index([status])
-  @@index([organizationId])
-}
-
 enum LeadStatus {
   NEW
   CONTACTED
@@ -408,63 +998,6 @@ enum LeadSource {
   ASSISTAI
 }
 
-// ==================== TICKETS ====================
-
-model Ticket {
-  id          String       @id @default(cuid())
-  title       String
-  description String?
-  status      TicketStatus @default(OPEN)
-  priority    Priority     @default(MEDIUM)
-  
-  // Relations
-  customerId  String
-  customer    Customer     @relation(fields: [customerId], references: [id])
-  assignedToId String?
-  assignedTo  User?        @relation("AssignedTickets", fields: [assignedToId], references: [id])
-  createdById String?
-  createdBy   User?        @relation("CreatedTickets", fields: [createdById], references: [id])
-  
-  // Linked Task (ChronusDev Integration)
-  taskId      String?
-  task        Task?        @relation(fields: [taskId], references: [id])
-  
-  // Previously just strings, can deprecate or remove. Let's keep for backward compat if needed, or replace.
-  // chronusDevTaskId String?
-  // chronusDevProjectId String?
-  
-  customFields Json?
-
-  // Multi-tenancy
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  // Relations
-  comments    TicketComment[]
-  activities  Activity[]
-  
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  resolvedAt  DateTime?
-  
-  @@index([customerId])
-  @@index([status])
-  @@index([assignedToId])
-  @@index([organizationId])
-}
-
-model TicketComment {
-  id        String   @id @default(cuid())
-  ticketId  String
-  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  content   String
-  authorId  String?
-  isInternal Boolean @default(false)
-  createdAt DateTime @default(now())
-  
-  @@index([ticketId])
-}
-
 enum TicketStatus {
   OPEN
   IN_PROGRESS
@@ -480,66 +1013,17 @@ enum Priority {
   URGENT
 }
 
-// ==================== INVOICES ====================
-
-model Invoice {
-  id          String        @id @default(cuid())
-  number      String        @unique
-  customerId  String
-  customer    Customer      @relation(fields: [customerId], references: [id])
-  amount      Float
-  currency    String        @default("USD")
-  status      InvoiceStatus @default(DRAFT)
-  dueDate     DateTime
-  paidAt      DateTime?
-  notes       String?
-
-  // Multi-tenancy
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  // Relations
-  items       InvoiceItem[]
-  payments    Payment[]
-  
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  
-  @@index([customerId])
-  @@index([status])
-  @@index([organizationId])
-}
-
-model InvoiceItem {
-  id          String   @id @default(cuid())
-  invoiceId   String
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  description String
-  quantity    Int      @default(1)
-  unitPrice   Float
-  total       Float
-  
-  @@index([invoiceId])
-}
-
-model Payment {
-  id          String        @id @default(cuid())
-  invoiceId   String
-  invoice     Invoice       @relation(fields: [invoiceId], references: [id])
-  amount      Float
-  method      PaymentMethod
-  reference   String?
-  paidAt      DateTime      @default(now())
-  
-  @@index([invoiceId])
-}
-
 enum InvoiceStatus {
   DRAFT
   SENT
   PAID
   OVERDUE
   CANCELLED
+}
+
+enum InvoiceType {
+  INVOICE
+  QUOTE
 }
 
 enum PaymentMethod {
@@ -551,103 +1035,9 @@ enum PaymentMethod {
   OTHER
 }
 
-// ==================== TRANSACTIONS ====================
-
-model Transaction {
-  id          String          @id @default(cuid())
-  type        TransactionType
-  amount      Float
-  currency    String          @default("USD")
-  description String?
-  category    String?
-  status      String          @default("COMPLETED")
-  customerId  String?
-  customer    Customer?       @relation(fields: [customerId], references: [id])
-  
-  // Multi-tenancy
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  date        DateTime        @default(now())
-  createdAt   DateTime        @default(now())
-  
-  @@index([type])
-  @@index([date])
-  @@index([organizationId])
-}
-
 enum TransactionType {
   INCOME
   EXPENSE
-}
-
-// ==================== CONVERSATIONS ====================
-
-model Conversation {
-  id              String            @id @default(cuid())
-  sessionId       String            @unique
-  platform        Platform
-  customerName    String?
-  customerContact String
-  agentCode       String?
-  agentName       String?
-  status          ConversationStatus @default(ACTIVE)
-  
-  // Relations
-  customerId      String?
-  customer        Customer?         @relation(fields: [customerId], references: [id])
-  messages        Message[]
-  takeover        Takeover?
-  
-  // Multi-tenancy
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  // Metadata
-  metadata        Json?
-  
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  
-  @@index([sessionId])
-  @@index([customerId])
-  @@index([platform])
-  @@index([organizationId])
-}
-
-model Message {
-  id              String        @id @default(cuid())
-  conversationId  String
-  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  content         String
-  sender          MessageSender
-  senderName      String?
-  mediaUrl        String?
-  mediaType       MediaType?
-  status          MessageStatus @default(SENT)
-  metadata        Json?
-  
-  createdAt       DateTime      @default(now())
-  
-  @@index([conversationId])
-  @@index([createdAt])
-}
-
-model Takeover {
-  id              String       @id @default(cuid())
-  conversationId  String       @unique
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  takenById       String
-  durationMinutes Int          @default(30)
-  expiresAt       DateTime
-
-  // Multi-tenancy
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  createdAt       DateTime     @default(now())
-  
-  @@index([organizationId])
 }
 
 enum Platform {
@@ -685,28 +1075,6 @@ enum MessageStatus {
   FAILED
 }
 
-// ==================== NOTIFICATIONS ====================
-
-model Notification {
-  id        String           @id @default(cuid())
-  userId    String
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      NotificationType
-  title     String
-  body      String
-  data      Json?
-  read      Boolean          @default(false)
-  createdAt DateTime         @default(now())
-
-  // Multi-tenancy (Optional, as user is already scoped, but good for filtering)
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  @@index([userId])
-  @@index([read])
-  @@index([organizationId])
-}
-
 enum NotificationType {
   LEAD
   CLIENT
@@ -714,37 +1082,6 @@ enum NotificationType {
   MESSAGE
   CONVERSION
   SYSTEM
-}
-
-// ==================== ACTIVITY LOG ====================
-
-model Activity {
-  id          String       @id @default(cuid())
-  type        ActivityType
-  description String
-  
-  // Polymorphic relations
-  userId      String?
-  user        User?        @relation(fields: [userId], references: [id])
-  customerId  String?
-  customer    Customer?    @relation(fields: [customerId], references: [id])
-  leadId      String?
-  lead        Lead?        @relation(fields: [leadId], references: [id])
-  ticketId    String?
-  ticket      Ticket?      @relation(fields: [ticketId], references: [id])
-
-  // Multi-tenancy
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  metadata    Json?
-  createdAt   DateTime     @default(now())
-  
-  @@index([customerId])
-  @@index([leadId])
-  @@index([ticketId])
-  @@index([createdAt])
-  @@index([organizationId])
 }
 
 enum ActivityType {
@@ -758,69 +1095,7 @@ enum ActivityType {
   CALL
   MEETING
   NOTE
-}
-
-// ==================== TAGS ====================
-
-model Tag {
-  id          String        @id @default(cuid())
-  name        String
-  color       String        @default("#6B7280")
-  
-  // Multi-tenancy
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  customers   CustomerTag[]
-  leads       LeadTag[]
-  createdAt   DateTime      @default(now())
-
-  @@unique([name, organizationId]) // Tags are unique per org
-  @@index([organizationId])
-}
-
-model CustomerTag {
-  customerId  String
-  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  tagId       String
-  tag         Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
-  
-  @@id([customerId, tagId])
-}
-
-model LeadTag {
-  leadId      String
-  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  tagId       String
-  tag         Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
-  
-  @@id([leadId, tagId])
-}
-
-// ==================== CHANNELS ====================
-
-model Channel {
-  id          String       @id @default(cuid())
-  name        String
-  platform    Platform
-  mode        ChannelMode  @default(HYBRID)
-  enabled     Boolean      @default(true)
-  
-  // AssistAI config
-  assistaiAgentCode String?
-  autoResumeMinutes Int      @default(30)
-  
-  // Provider config
-  config      Json?
-
-  // Multi-tenancy
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  @@index([organizationId])
+  SYSTEM
 }
 
 enum ChannelMode {
@@ -829,299 +1104,94 @@ enum ChannelMode {
   HYBRID
 }
 
-// ==================== INTEGRATIONS ====================
-
-model Integration {
-  id          String   @id @default(cuid())
-  userId      String?  // If null, it's system-wide
-  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider    String   // 'GOOGLE', 'GMAIL', 'ASSISTAI', etc.
-  credentials Json     // Stores clientId, clientSecret, etc.
-  isEnabled   Boolean  @default(true)
-  metadata    Json?
-
-  organizationId String?
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  @@unique([userId, provider])
-  @@index([organizationId])
-}
-
-// ==================== AI AGENTS MODULE ====================
-
 enum AiProvider {
   OPENAI
   GEMINI
   ELEVENLABS
+  ASSISTAI
 }
 
-model AiAgent {
-  id              String        @id @default(cuid())
-  name            String
-  description     String?
-  provider        AiProvider
-  model           String        // e.g. gpt-4, gemini-pro, eleven_turbo_v2 (voiceId via config)
-  systemPrompt    String?       // SQLite handles text automatically
-  apiKey          String?       // Optional override, otherwise use env
-  config          Json?         // { voiceId, temperature, maxTokens, etc }
-  isEnabled       Boolean       @default(true)
-  
-  organizationId  String
-  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  users           User[]        // Created by / Managed by
-  
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  @@index([organizationId])
-  @@index([provider])
-}
-
-model PushDevice {
-  id              String       @id @default(cuid())
-  userId          String
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token           String
-  platform        String
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt       DateTime     @default(now())
-  @@index([userId])
-  @@index([organizationId])
-}
-
-model NotificationPreferences {
-  id              String       @id @default(cuid())
-  userId          String       @unique
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  email           Boolean      @default(true)
-  push            Boolean      @default(true)
-  whatsapp        Boolean      @default(true)
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  @@index([organizationId])
-}
-
-// ==================== PROJECT MANAGEMENT (ChronusDev) ====================
-
-model Project {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  
-  // Relations
-  customerId  String?
-  customer    Customer? @relation(fields: [customerId], references: [id])
-  
-  budget      Float    @default(0)
-  currency    String   @default("USD")
-  status      String   @default("ACTIVE") // PLANNING, ACTIVE, ON_HOLD, COMPLETED, CANCELLED
-
-  // Multi-tenancy
+model MarketSegment {
+  id             String         @id @default(cuid())
+  name           String
+  description    String?
+  type           String         @default("STATIC") // STATIC or DYNAMIC
+  criteria       Json?          // For dynamic segments (e.g. { tags: ["VIP"] })
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customers      Customer[]
+  campaigns      Campaign[]
 
-  // Sub-relations
-  members     ProjectMember[]
-  tasks       Task[]
-  timeLogs    TimeLog[]
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
   @@index([organizationId])
-  @@index([customerId])
 }
 
-model ProjectMember {
-  id          String   @id @default(cuid())
-  
-  projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  payRate     Float    @default(0)
-  billRate    Float    @default(0)
-  role        String   @default("DEV") // DEV, MANAGER, ADMIN
+model Campaign {
+  id             String         @id @default(cuid())
+  name           String
+  subject        String
+  content        String         @db.Text
+  status         String         @default("DRAFT") // DRAFT, SCHEDULED, SENDING, COMPLETED, FAILED
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  totalRecipients Int           @default(0)
+  sentCount      Int            @default(0)
+  failedCount    Int            @default(0)
+  segmentId      String?
+  organizationId String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  segment        MarketSegment? @relation(fields: [segmentId], references: [id])
+  jobs           CampaignJob[]
 
-  joinedAt    DateTime @default(now())
-  
-  @@unique([projectId, userId])
-  @@index([userId])
-}
-
-model Task {
-  id          String   @id @default(cuid())
-  
-  projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  title       String
-  description String?
-  status      String   @default("BACKLOG") // BACKLOG, TODO, IN_PROGRESS, REVIEW, DONE
-  priority    String   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
-  
-  // Assignee
-  assignedToId String?
-  assignedTo   User?    @relation("AssignedTasks", fields: [assignedToId], references: [id])
-  
-  createdById  String
-  createdBy    User     @relation("CreatedTasks", fields: [createdById], references: [id])
-
-  // Relations
-  tickets      Ticket[]
-  comments     TaskComment[]
-  timeLogs     TimeLog[]
-  
-  estimatedHours Float?
-  dueDate      DateTime?
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  
-  @@index([projectId])
-  @@index([assignedToId])
+  @@index([organizationId])
   @@index([status])
 }
 
-model TaskComment {
-  id        String   @id @default(cuid())
-  
-  taskId    String
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  content   String
-  
-  createdAt DateTime @default(now())
-  
-  @@index([taskId])
+model CampaignJob {
+  id             String         @id @default(cuid())
+  campaignId     String
+  status         String         @default("PENDING")
+  processedCount Int            @default(0)
+  totalCount     Int            @default(0)
+  error          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  campaign       Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
 }
 
-model TimeLog {
-  id        String   @id @default(cuid())
-  
-  taskId    String?
-  task      Task?     @relation(fields: [taskId], references: [id])
-  
-  projectId String
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  start     DateTime
-  end       DateTime?
-  
-  description String?
-  
-  // Snapshot rates at time of log
-  payRate   Float?
-  billRate  Float?
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  @@index([userId])
-  @@index([projectId])
-  @@index([taskId])
-}
-
-model Payout {
-  id              String       @id @default(cuid())
-  userId          String
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  amount          Float
-  currency        String       @default("USD")
-  month           String       // YYYY-MM
-  note            String?
-  
-  createdById     String
-  createdBy       User         @relation("CreatedPayouts", fields: [createdById], references: [id])
-
-  createdAt       DateTime     @default(now())
-  
-  @@index([userId])
-  @@index([organizationId])
-  @@index([month])
-}
-  // ... (previous content)
-
-// ==================== MINI ERP (ASSISTAI) ====================
-
-model GlobalProduct {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  price       Float
-  sku         String   @unique
-  stock       Int      @default(0)
-  imageUrl    String?
-  category    String?
-  
-  // Multi-tenancy
+model Reminder {
+  id             String        @id @default(cuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  cartItems   AssistantShoppingCartItem[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  name           String
+  triggerType    String        // INVOICE_DUE, BIRTHDAY, CUSTOM_DATE
+  offsetDays     Int           @default(0) // -3 = 3 days before, 0 = on day, 3 = 3 days after
+  channel        String        // EMAIL, WHATSAPP, SYSTEM
+  template       String        @db.Text
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  logs           NotificationLog[]
 
-  @@map("global_products")
   @@index([organizationId])
 }
 
-model AssistantShoppingCart {
-  id          String   @id @default(cuid())
-  customerId  String
-  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  
-  status      String   @default("OPEN") // OPEN, COMPLETED, ABANDONED
-  total       Float    @default(0)
-  
-  // Multi-tenancy
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  items       AssistantShoppingCartItem[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model NotificationLog {
+  id             String    @id @default(cuid())
+  reminderId     String
+  customerId     String?
+  entityId       String?   // ID of invoice, ticket, etc. that triggered it
+  channel        String
+  status         String    // SENT, FAILED
+  error          String?
+  sentAt         DateTime  @default(now())
+  reminder       Reminder  @relation(fields: [reminderId], references: [id], onDelete: Cascade)
 
-  @@map("assistant_shopping_carts")
+  @@index([reminderId])
   @@index([customerId])
-  @@index([organizationId])
-}
-
-model AssistantShoppingCartItem {
-  id              String                @id @default(cuid())
-  shoppingCartId  String
-  shoppingCart    AssistantShoppingCart @relation(fields: [shoppingCartId], references: [id], onDelete: Cascade)
-  
-  productId       String
-  product         GlobalProduct         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  
-  quantity        Int
-  unitPrice       Float
-  total           Float
-  
-  createdAt       DateTime @default(now())
-
-  @@map("assistant_shopping_cart_items")
-  @@index([shoppingCartId])
-  @@index([productId])
 }

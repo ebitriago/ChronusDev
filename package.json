@@ -11,11 +11,14 @@
     "build:backend": "cd apps/backend && npm run build",
     "build:frontend": "cd apps/frontend && npm run build",
     "start:backend": "cd apps/backend && npm run start",
-    "start:frontend": "cd apps/frontend && npm run start"
+    "start:frontend": "cd apps/frontend && npm run start",
+    "dev:full": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev --prefix apps/crm\" \"npm run dev --prefix apps/crm-frontend\""
   },
   "workspaces": [
     "apps/backend",
-    "apps/frontend"
+    "apps/frontend",
+    "apps/crm",
+    "apps/crm-frontend"
   ],
   "devDependencies": {
     "concurrently": "^8.2.2",

@@ -12,6 +12,7 @@ import {
     markAsRead,
     MetaWebhookPayload
 } from '../services/meta-whatsapp.js';
+import { AssistAIService, getAssistAIConfig } from '../services/assistai.js';
 
 const router = express.Router();
 
@@ -78,6 +79,11 @@ router.post('/webhook', async (req, res) => {
 
         const organizationId = integration.organizationId;
 
+        if (!organizationId) {
+            console.warn('[Meta Webhook] Integration has no organizationId');
+            return;
+        }
+
         // Process messages
         for (const msg of parsed.messages) {
             const sessionId = `meta-wa-${msg.from}`;
@@ -108,6 +114,101 @@ router.post('/webhook', async (req, res) => {
                 }
             });
 
+            console.log(`[Meta Webhook] Saved message from ${msg.from} to conversation ${conversation.id}`);
+
+            // AI Logic Integration
+            try {
+                // 1. Find Channel Config
+                const channel = await prisma.channel.findFirst({
+                    where: {
+                        organizationId,
+                        platform: 'WHATSAPP',
+                        name: msg.from // Match phone number if dedicated, or default if generic? 
+                        // Actually, 'channelValue' in settings is usually the business phone number.
+                        // msg.from is the USER's phone number.
+                        // We need to match on the 'Recipient' ID (our business ID), but webhook payload structure for recipient might differ.
+                        // For now, let's assume we use the default channel or finding one that matches criteria.
+                        // If we want to assign agent based on USER, we need a different logic.
+                        // The requirement is "assign agents... in specific channels".
+                        // So if the channel identifier (our phone number) matches.
+                        // But parsed.messages doesn't easily give 'to' phone number in simplified structure. 
+                        // We might need to look at 'channel' config generally for the Org.
+                    }
+                });
+
+                // Fallback: Find any enabled WhatsApp channel with AI mode for this Org
+                const activeChannel = channel || await prisma.channel.findFirst({
+                    where: {
+                        organizationId,
+                        platform: 'WHATSAPP',
+                        enabled: true,
+                        mode: { in: ['AI_ONLY', 'HYBRID'] }
+                    }
+                });
+
+                if (activeChannel && (activeChannel.mode === 'AI_ONLY' || activeChannel.mode === 'HYBRID')) {
+                    // 2. Check for Human Takeover
+                    const takeover = await prisma.takeover.findUnique({
+                        where: { conversationId: conversation.id }
+                    });
+
+                    if (takeover && takeover.expiresAt > new Date()) {
+                        console.log(`[AssistAI] Skipping: Human takeover active for ${sessionId}`);
+                        continue;
+                    }
+
+                    // 3. Trigger AssistAI
+                    if (activeChannel.assistaiAgentCode) {
+                        const aiConfig = await getAssistAIConfig(organizationId!);
+                        if (aiConfig) {
+                            console.log(`[AssistAI] Triggering agent ${activeChannel.assistaiAgentCode} for ${sessionId}`);
+
+                            // Send to AssistAI (User message)
+                            // We use sessionId as conversation UUID for consistency
+                            // First, create/ensure conversation exists with this agent
+                            try {
+                                await AssistAIService.createConversation(aiConfig, {
+                                    agentCode: activeChannel.assistaiAgentCode,
+                                    contact: {
+                                        identifier: msg.from,
+                                        name: msg.fromName,
+                                        channel: 'whatsapp'
+                                    },
+                                    source: 'whatsapp'
+                                });
+                            } catch (e) {
+                                // Ignore if exists
+                            }
+
+                            // Send Message
+                            const aiResponse = await AssistAIService.sendMessage(aiConfig, conversation.id, msg.content, msg.fromName);
+
+                            // 4. Handle Response (If synchronous and text)
+                            if (aiResponse && aiResponse.text) {
+                                // Send back to WhatsApp
+                                const metaConfig = await getMetaConfig(organizationId!);
+                                if (metaConfig) {
+                                    await sendTextMessage(metaConfig, msg.from, aiResponse.text);
+
+                                    // Save AI reply
+                                    await prisma.message.create({
+                                        data: {
+                                            conversationId: conversation.id,
+                                            sender: 'AI',
+                                            content: aiResponse.text
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    } else {
+                        console.log(`[AssistAI] No agent assigned to channel ${activeChannel.name}`);
+                    }
+                }
+            } catch (aiError) {
+                console.error('[AssistAI] Error trigger:', aiError);
+            }
+
             // Optionally mark as read
             if (organizationId) {
                 const config = await getMetaConfig(organizationId);
@@ -115,8 +216,6 @@ router.post('/webhook', async (req, res) => {
                     // markAsRead could be called here if needed
                 }
             }
-
-            console.log(`[Meta Webhook] Saved message from ${msg.from} to conversation ${conversation.id}`);
         }
 
         // Process statuses

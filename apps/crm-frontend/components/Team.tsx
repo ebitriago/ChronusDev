@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
     getUsers,
     createUser,
@@ -20,6 +20,8 @@ import {
 import { useToast } from './Toast';
 import { Skeleton } from './Skeleton';
 import { format } from 'date-fns';
+import { exportTeamToCSV, exportTeamToODS, exportTeamToPDF, type TeamMemberData } from '../utils/csvExport';
+import MemberProfile from './MemberProfile';
 
 export default function Team() {
     const [users, setUsers] = useState<User[]>([]);
@@ -39,6 +41,7 @@ export default function Team() {
     const [name, setName] = useState('');
     const [role, setRole] = useState<UserRole>('DEV');
     const [payRate, setPayRate] = useState(25);
+    const [password, setPassword] = useState('');
 
     // Pay Form
     const [payAmount, setPayAmount] = useState(0);
@@ -48,7 +51,20 @@ export default function Team() {
     // Edit Form
     const [editName, setEditName] = useState('');
     const [editRole, setEditRole] = useState<UserRole>('DEV');
+
+    // Search & Filter
+    const [searchQuery, setSearchQuery] = useState('');
+    const [roleFilter, setRoleFilter] = useState<'ALL' | 'DEV' | 'ADMIN'>('ALL');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [editPayRate, setEditPayRate] = useState(25);
+
+    // Debounce search query
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchQuery);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     useEffect(() => {
         loadData();
@@ -75,7 +91,7 @@ export default function Team() {
     async function handleInvite(e: React.FormEvent) {
         e.preventDefault();
         try {
-            const newUser = await createUser({ email, name, role, defaultPayRate: payRate });
+            const newUser = await createUser({ email, name, role, defaultPayRate: payRate, password });
             setUsers(prev => [...prev, newUser]);
             showToast(`${name} agregado al equipo con tarifa $${payRate}/hr`, 'success');
             setShowModal(false);
@@ -169,10 +185,90 @@ export default function Team() {
         setName('');
         setRole('DEV');
         setPayRate(25);
+        setPassword('');
     }
 
     function getBalanceForUser(userId: string): TeamMemberBalance | undefined {
         return balances.find(b => b.userId === userId);
+    }
+
+    // Filter users based on search and role
+    const filteredUsers = useMemo(() => {
+        return users.filter(user => {
+            const matchesSearch =
+                user.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+                user.email.toLowerCase().includes(debouncedSearch.toLowerCase());
+            const matchesRole = roleFilter === 'ALL' || user.role === roleFilter;
+            return matchesSearch && matchesRole;
+        });
+    }, [users, debouncedSearch, roleFilter]);
+
+    // Export to CSV
+    function handleExportCSV() {
+        const devUsers = filteredUsers.filter(u => u.role === 'DEV');
+        const exportData: TeamMemberData[] = devUsers.map(user => {
+            const balance = getBalanceForUser(user.id);
+            return {
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                defaultPayRate: balance?.defaultPayRate ?? (user as any).defaultPayRate ?? 0,
+                totalHours: balance?.totalHours ?? 0,
+                totalDebt: balance?.totalDebt ?? 0,
+                totalPaid: balance?.totalPaid ?? 0,
+                balance: balance?.balance ?? 0
+            };
+        });
+        exportTeamToCSV(exportData);
+        showToast(`Exportados ${exportData.length} miembros del equipo`, 'success');
+    }
+
+    // Export to ODS
+    async function handleExportODS() {
+        const devUsers = filteredUsers.filter(u => u.role === 'DEV');
+        const exportData: TeamMemberData[] = devUsers.map(user => {
+            const balance = getBalanceForUser(user.id);
+            return {
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                defaultPayRate: balance?.defaultPayRate ?? (user as any).defaultPayRate ?? 0,
+                totalHours: balance?.totalHours ?? 0,
+                totalDebt: balance?.totalDebt ?? 0,
+                totalPaid: balance?.totalPaid ?? 0,
+                balance: balance?.balance ?? 0
+            };
+        });
+        try {
+            await exportTeamToODS(exportData);
+            showToast(`Exportados ${exportData.length} miembros del equipo (ODS)`, 'success');
+        } catch (error) {
+            showToast('Error al exportar ODS', 'error');
+        }
+    }
+
+    // Export to PDF
+    async function handleExportPDF() {
+        const devUsers = filteredUsers.filter(u => u.role === 'DEV');
+        const exportData: TeamMemberData[] = devUsers.map(user => {
+            const balance = getBalanceForUser(user.id);
+            return {
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                defaultPayRate: balance?.defaultPayRate ?? (user as any).defaultPayRate ?? 0,
+                totalHours: balance?.totalHours ?? 0,
+                totalDebt: balance?.totalDebt ?? 0,
+                totalPaid: balance?.totalPaid ?? 0,
+                balance: balance?.balance ?? 0
+            };
+        });
+        try {
+            await exportTeamToPDF(exportData);
+            showToast(`Exportados ${exportData.length} miembros del equipo (PDF)`, 'success');
+        } catch (error) {
+            showToast('Error al exportar PDF', 'error');
+        }
     }
 
     if (loading) return (
@@ -197,6 +293,66 @@ export default function Team() {
                 >
                     <span>+</span> Nuevo Miembro
                 </button>
+            </div>
+
+            {/* Search & Filters */}
+            <div className="mb-6 space-y-3">
+                {/* Search Input */}
+                <div className="w-full">
+                    <input
+                        type="text"
+                        placeholder="🔍 Buscar por nombre o email..."
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                    />
+                </div>
+
+                {/* Filters and Export Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <select
+                        value={roleFilter}
+                        onChange={e => setRoleFilter(e.target.value as 'ALL' | 'DEV' | 'ADMIN')}
+                        className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                    >
+                        <option value="ALL">Todos los roles</option>
+                        <option value="DEV">Desarrolladores</option>
+                        <option value="ADMIN">Administradores</option>
+                    </select>
+
+                    {/* Export Buttons Group */}
+                    <div className="flex gap-2 flex-wrap">
+                        <button
+                            onClick={handleExportCSV}
+                            className="flex-1 sm:flex-none px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 font-medium min-w-[100px]"
+                        >
+                            📊 CSV
+                        </button>
+                        <button
+                            onClick={handleExportODS}
+                            className="flex-1 sm:flex-none px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 font-medium min-w-[100px]"
+                        >
+                            📑 ODS
+                        </button>
+                        <button
+                            onClick={handleExportPDF}
+                            className="flex-1 sm:flex-none px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 font-medium min-w-[100px]"
+                        >
+                            📝 PDF
+                        </button>
+                    </div>
+
+                    {/* Clear Filters Button */}
+                    {(searchQuery || roleFilter !== 'ALL') && (
+                        <button
+                            onClick={() => { setSearchQuery(''); setRoleFilter('ALL'); }}
+                            className="px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 transition-colors"
+                            title="Limpiar filtros"
+                        >
+                            ✕
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Active Now Section */}
@@ -227,372 +383,353 @@ export default function Team() {
 
             {/* Team Table with Balances */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 overflow-hidden shadow-sm">
-                <table className="w-full">
-                    <thead>
-                        <tr className="bg-gray-50 dark:bg-slate-900/50 border-b border-gray-100 dark:border-slate-700 text-left">
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Miembro</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Rol</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Tarifa/hr</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Horas</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Debe</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Pagado</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Saldo</th>
-                            <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-                        {users.filter(u => u.role === 'DEV').map(user => {
-                            const balance = getBalanceForUser(user.id);
-                            return (
-                                <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold shadow-md shadow-indigo-500/20">
-                                                {user.name.charAt(0).toUpperCase()}
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[800px]">
+                        <thead>
+                            <tr className="bg-gray-50 dark:bg-slate-900/50 border-b border-gray-100 dark:border-slate-700 text-left">
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Miembro</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Rol</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Tarifa/hr</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Horas</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Debe</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Pagado</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Saldo</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                            {filteredUsers.filter(u => u.role === 'DEV').length === 0 ? (
+                                <tr>
+                                    <td colSpan={8} className="px-6 py-16 text-center">
+                                        <div className="flex flex-col items-center gap-3">
+                                            <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center text-3xl">
+                                                👥
                                             </div>
                                             <div>
-                                                <span className="font-medium text-gray-900 dark:text-white">{user.name}</span>
-                                                <p className="text-xs text-gray-400">{user.email}</p>
+                                                <p className="text-lg font-medium text-gray-900 dark:text-white mb-1">No hay desarrolladores en el equipo</p>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">Agrega tu primer miembro usando el botón "Nuevo Miembro"</p>
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                            {user.role}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <span className="font-bold text-gray-900 dark:text-white">${balance?.defaultPayRate ?? (user as any).defaultPayRate ?? 25}</span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right text-gray-600 dark:text-gray-300">
-                                        {balance?.totalHours?.toFixed(1) ?? '0'}h
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <span className="font-medium text-orange-600">${balance?.totalDebt?.toLocaleString() ?? '0'}</span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <span className="font-medium text-green-600">${balance?.totalPaid?.toLocaleString() ?? '0'}</span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <span className={`font-bold text-lg ${(balance?.balance ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                            ${balance?.balance?.toLocaleString() ?? '0'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => handleOpenPayModal(user.id)}
-                                                disabled={(balance?.balance ?? 0) <= 0}
-                                                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                                                title="Pagar"
-                                            >
-                                                💰
-                                            </button>
-                                            <button
-                                                onClick={() => handleOpenEditModal(user)}
-                                                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-gray-500"
-                                                title="Editar"
-                                            >
-                                                ✏️
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteUser(user)}
-                                                className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors text-red-500"
-                                                title="Eliminar"
-                                            >
-                                                🗑️
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Admin Users (separate) */}
-            {users.filter(u => u.role === 'ADMIN').length > 0 && (
-                <div className="mt-8">
-                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Administradores</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {users.filter(u => u.role === 'ADMIN').map(user => (
-                            <div key={user.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-100 dark:border-slate-700 flex items-center gap-3">
-                                <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-white font-bold">
-                                    {user.name.charAt(0).toUpperCase()}
-                                </div>
-                                <div>
-                                    <span className="font-medium text-gray-900 dark:text-white">{user.name}</span>
-                                    <p className="text-xs text-gray-400">{user.email}</p>
-                                </div>
-                                <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                                    ADMIN
-                                </span>
-                            </div>
-                        ))}
-                    </div>
+                            ) : (
+                                filteredUsers.filter(u => u.role === 'DEV').map(user => {
+                                    const balance = getBalanceForUser(user.id);
+                                    return (
+                                        <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold shadow-md shadow-indigo-500/20">
+                                                        {user.name.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <span className="font-medium text-gray-900 dark:text-white">{user.name}</span>
+                                                        <p className="text-xs text-gray-400">{user.email}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                    {user.role}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="font-bold text-gray-900 dark:text-white">${balance?.defaultPayRate ?? (user as any).defaultPayRate ?? 25}</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right text-gray-600 dark:text-gray-300">
+                                                {balance?.totalHours?.toFixed(1) ?? '0'}h
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="font-medium text-orange-600">${balance?.totalDebt?.toLocaleString() ?? '0'}</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="font-medium text-green-600">${balance?.totalPaid?.toLocaleString() ?? '0'}</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className={`font-bold text-lg ${(balance?.balance ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                    ${balance?.balance?.toLocaleString() ?? '0'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => handleOpenPayModal(user.id)}
+                                                        disabled={(balance?.balance ?? 0) <= 0}
+                                                        className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                                                        title="Pagar"
+                                                    >
+                                                        💰
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleOpenEditModal(user)}
+                                                        className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-gray-500"
+                                                        title="Editar"
+                                                    >
+                                                        ✏️
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteUser(user)}
+                                                        className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors text-red-500"
+                                                        title="Eliminar"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                    </table>
                 </div>
-            )}
 
-            {/* Invite Modal */}
-            {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Nuevo Miembro</h3>
-                            <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
-                        </div>
-
-                        <form onSubmit={handleInvite} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre Completo</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={name}
-                                    onChange={e => setName(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                                    placeholder="Ej: Jane Smith"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
-                                <input
-                                    type="email"
-                                    required
-                                    value={email}
-                                    onChange={e => setEmail(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                                    placeholder="jane@company.com"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rol</label>
-                                    <select
-                                        value={role}
-                                        onChange={e => setRole(e.target.value as UserRole)}
-                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                                    >
-                                        <option value="DEV">Desarrollador</option>
-                                        <option value="ADMIN">Administrador</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tarifa/hora</label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={payRate}
-                                            onChange={e => setPayRate(Number(e.target.value))}
-                                            className="w-full pl-8 pr-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                                        />
+                {/* Admin Users (separate) */}
+                {users.filter(u => u.role === 'ADMIN').length > 0 && (
+                    <div className="mt-8">
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Administradores</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {users.filter(u => u.role === 'ADMIN').map(user => (
+                                <div key={user.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-gray-100 dark:border-slate-700 flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-white font-bold">
+                                        {user.name.charAt(0).toUpperCase()}
                                     </div>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-2 rounded-xl hover:shadow-lg hover:from-purple-700 hover:to-purple-800 transition-all font-medium"
-                                >
-                                    Crear Miembro
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Edit Modal */}
-            {showEditModal && editingUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Editar Miembro</h3>
-                            <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
-                        </div>
-
-                        <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={editName}
-                                    onChange={e => setEditName(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rol</label>
-                                    <select
-                                        value={editRole}
-                                        onChange={e => setEditRole(e.target.value as UserRole)}
-                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                                    >
-                                        <option value="DEV">Desarrollador</option>
-                                        <option value="ADMIN">Administrador</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tarifa/hora</label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={editPayRate}
-                                            onChange={e => setEditPayRate(Number(e.target.value))}
-                                            className="w-full pl-8 pr-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                                        />
+                                    <div>
+                                        <span className="font-medium text-gray-900 dark:text-white">{user.name}</span>
+                                        <p className="text-xs text-gray-400">{user.email}</p>
                                     </div>
+                                    <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                        ADMIN
+                                    </span>
                                 </div>
-                            </div>
-
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowEditModal(false)}
-                                    className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-2 rounded-xl hover:shadow-lg transition-all font-medium"
-                                >
-                                    Guardar Cambios
-                                </button>
-                            </div>
-                        </form>
+                            ))}
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* Pay Modal */}
-            {showPayModal && selectedUserBalance && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 dark:border-slate-800">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">💰 Registrar Pago</h3>
-                                <button onClick={() => setShowPayModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                {/* Invite Modal */}
+                {showModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                            <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Nuevo Miembro</h3>
+                                <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
                             </div>
-                            <p className="text-gray-500 text-sm mt-1">Para: <span className="font-bold text-gray-900 dark:text-white">{selectedUserBalance.userName}</span></p>
-                        </div>
 
-                        <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50">
-                            <div className="grid grid-cols-3 gap-4 text-center">
+                            <form onSubmit={handleInvite} className="p-6 space-y-4">
                                 <div>
-                                    <div className="text-xs text-gray-500 uppercase">Debe</div>
-                                    <div className="text-lg font-bold text-orange-600">${selectedUserBalance.totalDebt.toLocaleString()}</div>
-                                </div>
-                                <div>
-                                    <div className="text-xs text-gray-500 uppercase">Pagado</div>
-                                    <div className="text-lg font-bold text-green-600">${selectedUserBalance.totalPaid.toLocaleString()}</div>
-                                </div>
-                                <div>
-                                    <div className="text-xs text-gray-500 uppercase">Saldo</div>
-                                    <div className="text-lg font-bold text-red-600">${selectedUserBalance.balance.toLocaleString()}</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <form onSubmit={handlePaySubmit} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Monto a Pagar</label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg">$</span>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre Completo</label>
                                     <input
-                                        type="number"
-                                        min="0.01"
-                                        step="0.01"
-                                        max={selectedUserBalance.balance}
-                                        value={payAmount}
-                                        onChange={e => setPayAmount(Number(e.target.value))}
-                                        className="w-full pl-8 pr-4 py-3 text-2xl font-bold rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                                        type="text"
+                                        required
+                                        value={name}
+                                        onChange={e => setName(e.target.value)}
+                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                                        placeholder="Ej: Jane Smith"
                                     />
                                 </div>
-                                <p className="text-xs text-gray-400 mt-1">
-                                    Saldo después del pago: <span className="font-bold text-emerald-600">${(selectedUserBalance.balance - payAmount).toLocaleString()}</span>
-                                </p>
-                            </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mes que cubre</label>
-                                <input
-                                    type="month"
-                                    value={payMonth}
-                                    onChange={e => setPayMonth(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                                />
-                            </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                                    <input
+                                        type="email"
+                                        required
+                                        value={email}
+                                        onChange={e => setEmail(e.target.value)}
+                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                                        placeholder="jane@company.com"
+                                    />
+                                </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nota (opcional)</label>
-                                <input
-                                    type="text"
-                                    value={payNote}
-                                    onChange={e => setPayNote(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                                    placeholder="Ej: Pago parcial quincena 1"
-                                />
-                            </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contraseña Inicial</label>
+                                    <input
+                                        type="password"
+                                        required
+                                        minLength={6}
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
+                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                                        placeholder="Mínimo 6 caracteres"
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1">El usuario podrá cambiar su contraseña después de iniciar sesión</p>
+                                </div>
 
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPayModal(false)}
-                                    className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={payAmount <= 0}
-                                    className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 disabled:from-gray-300 disabled:to-gray-400 text-white px-4 py-2 rounded-xl hover:shadow-lg hover:from-emerald-700 hover:to-emerald-800 transition-all font-medium"
-                                >
-                                    Confirmar Pago
-                                </button>
-                            </div>
-                        </form>
-
-                        {/* Payment History */}
-                        {selectedUserBalance.payments && selectedUserBalance.payments.length > 0 && (
-                            <div className="p-6 border-t border-gray-100 dark:border-slate-800 max-h-48 overflow-y-auto">
-                                <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Historial de Pagos</h4>
-                                <div className="space-y-2">
-                                    {selectedUserBalance.payments.map(p => (
-                                        <div key={p.id} className="flex justify-between items-center text-sm bg-gray-50 dark:bg-slate-800 p-2 rounded-lg">
-                                            <div>
-                                                <span className="font-medium text-gray-900 dark:text-white">${p.amount.toLocaleString()}</span>
-                                                <span className="text-gray-400 ml-2">{p.month}</span>
-                                            </div>
-                                            <span className="text-xs text-gray-400">{new Date(p.createdAt).toLocaleDateString()}</span>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rol</label>
+                                        <select
+                                            value={role}
+                                            onChange={e => setRole(e.target.value as UserRole)}
+                                            className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                                        >
+                                            <option value="DEV">Desarrollador</option>
+                                            <option value="ADMIN">Administrador</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tarifa/hora</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={payRate}
+                                                onChange={e => setPayRate(Number(e.target.value))}
+                                                className="w-full pl-8 pr-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                                            />
                                         </div>
-                                    ))}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowModal(false)}
+                                        className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-2 rounded-xl hover:shadow-lg hover:from-purple-700 hover:to-purple-800 transition-all font-medium"
+                                    >
+                                        Crear Miembro
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* Member Profile Slide-over */}
+                {showEditModal && editingUser && (
+                    <MemberProfile
+                        user={editingUser}
+                        isOpen={showEditModal}
+                        onClose={() => {
+                            setShowEditModal(false);
+                            setEditingUser(null);
+                        }}
+                        onUpdate={() => {
+                            loadData();
+                            // Optional: Close on update or keep open?
+                            // Usually keeping open is better for multiple edits, but let's close to be simple or just reload data.
+                            // The component handles toast.
+                        }}
+                    />
+                )}
+
+                {/* Pay Modal */}
+                {showPayModal && selectedUserBalance && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                            <div className="p-6 border-b border-gray-100 dark:border-slate-800">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">💰 Registrar Pago</h3>
+                                    <button onClick={() => setShowPayModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                                </div>
+                                <p className="text-gray-500 text-sm mt-1">Para: <span className="font-bold text-gray-900 dark:text-white">{selectedUserBalance.userName}</span></p>
+                            </div>
+
+                            <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50">
+                                <div className="grid grid-cols-3 gap-4 text-center">
+                                    <div>
+                                        <div className="text-xs text-gray-500 uppercase">Debe</div>
+                                        <div className="text-lg font-bold text-orange-600">${selectedUserBalance.totalDebt.toLocaleString()}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-gray-500 uppercase">Pagado</div>
+                                        <div className="text-lg font-bold text-green-600">${selectedUserBalance.totalPaid.toLocaleString()}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-gray-500 uppercase">Saldo</div>
+                                        <div className="text-lg font-bold text-red-600">${selectedUserBalance.balance.toLocaleString()}</div>
+                                    </div>
                                 </div>
                             </div>
-                        )}
+
+                            <form onSubmit={handlePaySubmit} className="p-6 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Monto a Pagar</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg">$</span>
+                                        <input
+                                            type="number"
+                                            min="0.01"
+                                            step="0.01"
+                                            max={selectedUserBalance.balance}
+                                            value={payAmount}
+                                            onChange={e => setPayAmount(Number(e.target.value))}
+                                            className="w-full pl-8 pr-4 py-3 text-2xl font-bold rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        Saldo después del pago: <span className="font-bold text-emerald-600">${(selectedUserBalance.balance - payAmount).toLocaleString()}</span>
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mes que cubre</label>
+                                    <input
+                                        type="month"
+                                        value={payMonth}
+                                        onChange={e => setPayMonth(e.target.value)}
+                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nota (opcional)</label>
+                                    <input
+                                        type="text"
+                                        value={payNote}
+                                        onChange={e => setPayNote(e.target.value)}
+                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                                        placeholder="Ej: Pago parcial quincena 1"
+                                    />
+                                </div>
+
+                                <div className="flex gap-3 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPayModal(false)}
+                                        className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={payAmount <= 0}
+                                        className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 disabled:from-gray-300 disabled:to-gray-400 text-white px-4 py-2 rounded-xl hover:shadow-lg hover:from-emerald-700 hover:to-emerald-800 transition-all font-medium"
+                                    >
+                                        Confirmar Pago
+                                    </button>
+                                </div>
+                            </form>
+
+                            {/* Payment History */}
+                            {selectedUserBalance.payments && selectedUserBalance.payments.length > 0 && (
+                                <div className="p-6 border-t border-gray-100 dark:border-slate-800 max-h-48 overflow-y-auto">
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Historial de Pagos</h4>
+                                    <div className="space-y-2">
+                                        {selectedUserBalance.payments.map(p => (
+                                            <div key={p.id} className="flex justify-between items-center text-sm bg-gray-50 dark:bg-slate-800 p-2 rounded-lg">
+                                                <div>
+                                                    <span className="font-medium text-gray-900 dark:text-white">${p.amount.toLocaleString()}</span>
+                                                    <span className="text-gray-400 ml-2">{p.month}</span>
+                                                </div>
+                                                <span className="text-xs text-gray-400">{new Date(p.createdAt).toLocaleDateString()}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 }

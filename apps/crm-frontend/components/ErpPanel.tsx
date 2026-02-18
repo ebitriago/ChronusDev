@@ -1,30 +1,57 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import { useAuth } from './AuthProvider';
 import { toast } from 'react-hot-toast';
+import Finances from './Finances';
+import Invoices from './Invoices'; // Assuming this exists or works similarly
 
 export default function ErpPanel() {
     const { token } = useAuth();
-    const [activeTab, setActiveTab] = useState<'products' | 'orders'>('orders');
+    const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'invoices' | 'finance'>('orders');
+
+    // Data States
     const [products, setProducts] = useState<any[]>([]);
     const [orders, setOrders] = useState<any[]>([]);
-    const [selectedOrder, setSelectedOrder] = useState<any>(null);
+    const [customers, setCustomers] = useState<any[]>([]);
+
+    // UI States
     const [loading, setLoading] = useState(false);
-
-    // Modal States
+    const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [showProductModal, setShowProductModal] = useState(false);
+    const [showOrderModal, setShowOrderModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState<any>(null);
-    const [showOrderModal, setShowOrderModal] = useState(false); // For manual order creation
 
-    // Form States
-    const [formData, setFormData] = useState({
+    // Form: Product
+    const [productForm, setProductForm] = useState({
         name: '', description: '', price: '', sku: '', stock: '', category: '', imageUrl: ''
     });
 
+    // Form: Order
+    const [orderForm, setOrderForm] = useState({
+        customerId: '',
+        items: [] as { productId: string; quantity: number }[]
+    });
+
     useEffect(() => {
-        if (token) loadData();
-    }, [activeTab, token]); // Reload when tab changes
+        if (token) {
+            loadData();
+            if (customers.length === 0) loadCustomers();
+        }
+    }, [activeTab, token]);
+
+    const loadCustomers = async () => {
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_CRM_API_URL}/customers`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) setCustomers(await res.json());
+        } catch (e) { console.error(e); }
+    };
 
     const loadData = async () => {
+        if (activeTab === 'finance' || activeTab === 'invoices') return; // Handled by sub-components
+
         setLoading(true);
         try {
             const endpoint = activeTab === 'products' ? '/erp/products' : '/erp/orders';
@@ -37,7 +64,6 @@ export default function ErpPanel() {
                 else setOrders(data);
             }
         } catch (error) {
-            console.error(error);
             toast.error('Error loading data');
         } finally {
             setLoading(false);
@@ -49,415 +75,421 @@ export default function ErpPanel() {
             const res = await fetch(`${process.env.NEXT_PUBLIC_CRM_API_URL}/erp/orders/${id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            if (res.ok) {
-                const data = await res.json();
-                setSelectedOrder(data);
-            }
-        } catch (error) {
-            toast.error('Error details');
-        }
+            if (res.ok) setSelectedOrder(await res.json());
+        } catch (error) { toast.error('Error details'); }
     };
 
-    // --- Product Actions ---
+    // --- Actions ---
+
     const handleSaveProduct = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
             const url = editingProduct
                 ? `${process.env.NEXT_PUBLIC_CRM_API_URL}/erp/products/${editingProduct.id}`
                 : `${process.env.NEXT_PUBLIC_CRM_API_URL}/erp/products`;
-
             const method = editingProduct ? 'PUT' : 'POST';
 
             const res = await fetch(url, {
                 method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify(formData)
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify(productForm)
             });
 
             if (res.ok) {
                 toast.success(editingProduct ? 'Producto actualizado' : 'Producto creado');
                 setShowProductModal(false);
                 setEditingProduct(null);
-                setFormData({ name: '', description: '', price: '', sku: '', stock: '', category: '', imageUrl: '' });
+                setProductForm({ name: '', description: '', price: '', sku: '', stock: '', category: '', imageUrl: '' });
                 loadData();
-            } else {
-                toast.error('Error al guardar producto');
             }
-        } catch (error) {
-            toast.error('Error de conexión');
-        }
+        } catch (e) { toast.error('Error connection'); }
     };
 
     const handleDeleteProduct = async (id: string) => {
-        if (!confirm('¿Estás seguro de eliminar este producto?')) return;
+        if (!confirm('Delete product?')) return;
+        await fetch(`${process.env.NEXT_PUBLIC_CRM_API_URL}/erp/products/${id}`, {
+            method: 'DELETE', headers: { Authorization: `Bearer ${token}` }
+        });
+        loadData();
+    };
+
+    const handleCreateOrder = async (e: React.FormEvent) => {
+        e.preventDefault();
         try {
-            await fetch(`${process.env.NEXT_PUBLIC_CRM_API_URL}/erp/products/${id}`, {
-                method: 'DELETE',
+            const res = await fetch(`${process.env.NEXT_PUBLIC_CRM_API_URL}/erp/orders`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify(orderForm)
+            });
+            if (res.ok) {
+                toast.success('Pedido Creado');
+                setShowOrderModal(false);
+                setOrderForm({ customerId: '', items: [] });
+                loadData();
+            } else {
+                toast.error('Error creating order');
+            }
+        } catch (e) { toast.error('Error connection'); }
+    };
+
+    const handleConvertToInvoice = async (orderId: string) => {
+        if (!confirm('¿Convertir este pedido en factura?')) return;
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_CRM_API_URL}/erp/orders/${orderId}/convert`, {
+                method: 'POST',
                 headers: { Authorization: `Bearer ${token}` }
             });
-            toast.success('Producto eliminado');
-            loadData();
-        } catch (error) {
-            toast.error('Error eliminando producto');
-        }
-    };
-
-    const handleEditProduct = (p: any) => {
-        setEditingProduct(p);
-        setFormData({
-            name: p.name, description: p.description || '', price: p.price, sku: p.sku,
-            stock: p.stock, category: p.category || '', imageUrl: p.imageUrl || ''
-        });
-        setShowProductModal(true);
-    };
-
-    // --- Order Actions ---
-    const handleUpdateOrderStatus = async (id: string, newStatus: string) => {
-        try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_CRM_API_URL}/erp/orders/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify({ status: newStatus })
-            });
-
             if (res.ok) {
-                toast.success(`Estado actualizado a ${newStatus}`);
-                setSelectedOrder({ ...selectedOrder, status: newStatus });
-                loadData(); // Update list too
+                toast.success('Factura creada exitosamente');
+                loadOrderDetails(orderId); // Refresh details
+            } else {
+                toast.error('Error al convertir');
             }
-        } catch (error) {
-            toast.error('Error actualizando estado');
-        }
+        } catch (e) { toast.error('Connection error'); }
     };
 
-    // Simulate AssistAI Webhook for testing
-    const simulateAssistAIOrder = async () => {
-        if (!process.env.NEXT_PUBLIC_CRM_API_URL) return;
+    const handleExportCSV = (type: 'products' | 'orders') => {
+        const data = type === 'products' ? products : orders;
+        if (!data.length) return toast('No hay datos para exportar');
 
-        try {
-            const mockPayload = {
-                cart: {
-                    total: 1499.98,
-                    items: [
-                        { sku: 'LP-PRO-X', quantity: 1, price: 1299.99 },
-                        { sku: 'WH-NC-1', quantity: 1, price: 199.99 }
-                    ]
-                },
-                customer: {
-                    name: 'Test Webhook User',
-                    phone: '5559876543' // Will trigger generic customer creation
-                },
-                agentCode: 'TEST_AGENT'
-            };
+        const headers = type === 'products'
+            ? ['ID', 'Name', 'SKU', 'Price', 'Stock', 'Category']
+            : ['ID', 'Customer', 'Total', 'Status', 'Date'];
 
-            await fetch(`${process.env.NEXT_PUBLIC_CRM_API_URL}/assistai/webhook`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-assistai-event': 'ORDER_CREATED'
-                },
-                body: JSON.stringify(mockPayload)
+        const rows = data.map(row => type === 'products'
+            ? [row.id, row.name, row.sku, row.price, row.stock, row.category]
+            : [row.id, row.customer?.name, row.total, row.status, new Date(row.createdAt).toLocaleDateString()]
+        );
+
+        const csvContent = "data:text/csv;charset=utf-8,"
+            + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+
+        const link = document.createElement("a");
+        link.setAttribute("href", encodeURI(csvContent));
+        link.setAttribute("download", `${type}_export.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    // Helper to manage Order Form Items
+    const addOrderItem = (productId: string) => {
+        if (!productId) return;
+        const exists = orderForm.items.find(i => i.productId === productId);
+        if (exists) {
+            setOrderForm({
+                ...orderForm,
+                items: orderForm.items.map(i => i.productId === productId ? { ...i, quantity: i.quantity + 1 } : i)
             });
-
-            toast.success('Simulación de Webhook enviada');
-            loadData(); // Refresh orders
-        } catch (e) {
-            toast.error('Error simulando webhook');
+        } else {
+            setOrderForm({
+                ...orderForm,
+                items: [...orderForm.items, { productId, quantity: 1 }]
+            });
         }
     };
 
+    const removeOrderItem = (productId: string) => {
+        setOrderForm({
+            ...orderForm,
+            items: orderForm.items.filter(i => i.productId !== productId)
+        });
+    };
+
+    // Calculate total for new order form
+    const calculateFormTotal = () => {
+        return orderForm.items.reduce((acc, item) => {
+            const p = products.find(p => p.id === item.productId);
+            return acc + (p ? p.price * item.quantity : 0);
+        }, 0);
+    };
 
     return (
         <div className="h-full flex flex-col p-6 space-y-6">
-            <header className="flex justify-between items-center">
+            <header className="flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
                     <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                        Mini ERP (Gestión de Pedidos)
+                        Mini ERP
                     </h1>
-                    <p className="text-gray-500 text-sm">Gestiona productos y pedidos de AssistAI</p>
+                    <p className="text-gray-500 text-sm">Gestión integral de Negocio</p>
                 </div>
-                <div className="flex space-x-2 bg-gray-100 p-1 rounded-lg">
-                    <button
-                        onClick={() => setActiveTab('orders')}
-                        className={`px-4 py-2 rounded-md transition-all ${activeTab === 'orders' ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        Pedidos
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('products')}
-                        className={`px-4 py-2 rounded-md transition-all ${activeTab === 'products' ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        Productos
-                    </button>
+                <div className="flex space-x-1 bg-gray-100 p-1 rounded-xl overflow-x-auto">
+                    {[
+                        { id: 'orders', label: 'Pedidos', icon: '📦' },
+                        { id: 'products', label: 'Productos', icon: '🏷️' },
+                        { id: 'invoices', label: 'Facturas', icon: '📄' },
+                        { id: 'finance', label: 'Finanzas', icon: '💰' },
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id as any)}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === tab.id ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            <span>{tab.icon}</span> {tab.label}
+                        </button>
+                    ))}
                 </div>
             </header>
 
-            {/* Action Bar */}
-            <div className="flex justify-end gap-3">
+            {/* ACTION BAR */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div className="text-sm text-gray-400">
+                    {activeTab === 'orders' && `${orders.length} pedidos encontrados`}
+                    {activeTab === 'products' && `${products.length} productos registrados`}
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto">
+                    {activeTab === 'products' && (
+                        <>
+                            <button onClick={() => handleExportCSV('products')} className="bg-gray-800 text-white px-3 py-2 rounded-lg text-sm">⬇️ CSV</button>
+                            <button onClick={() => { setEditingProduct(null); setShowProductModal(true); }} className="flex-1 sm:flex-none bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold">+ Producto</button>
+                        </>
+                    )}
+                    {activeTab === 'orders' && (
+                        <>
+                            <button onClick={() => handleExportCSV('orders')} className="bg-gray-800 text-white px-3 py-2 rounded-lg text-sm">⬇️ CSV</button>
+                            <button onClick={() => setShowOrderModal(true)} className="flex-1 sm:flex-none bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold">+ Nuevo Pedido</button>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* CONTENT AREA */}
+            <div className="flex-1 overflow-auto">
+                {activeTab === 'finance' && <Finances customers={customers} />}
+                {activeTab === 'invoices' && <Invoices />}
+
                 {activeTab === 'products' && (
-                    <button
-                        onClick={() => { setEditingProduct(null); setFormData({ name: '', description: '', price: '', sku: '', stock: '', category: '', imageUrl: '' }); setShowProductModal(true); }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2"
-                    >
-                        <span>+</span> Nuevo Producto
-                    </button>
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                        {products.map((p) => (
+                            <div key={p.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group">
+                                <div className="h-32 bg-gray-50 flex items-center justify-center relative">
+                                    {p.imageUrl ? <img src={p.imageUrl} className="h-full w-full object-cover" /> : <span className="text-4xl">📦</span>}
+                                    <span className="absolute top-2 right-2 bg-white/90 px-2 py-1 text-xs font-bold rounded-full shadow-sm">Stock: {p.stock}</span>
+                                </div>
+                                <div className="p-4">
+                                    <div className="flex justify-between mb-2">
+                                        <h3 className="font-bold text-gray-900 truncate">{p.name}</h3>
+                                        <span className="text-blue-600 font-bold">${p.price}</span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mb-3">{p.sku}</p>
+                                    <div className="flex justify-end gap-2 border-t pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => { setEditingProduct(p); setProductForm(p); setShowProductModal(true); }} className="text-blue-600 text-sm">Editar</button>
+                                        <button onClick={() => handleDeleteProduct(p.id)} className="text-red-600 text-sm">Eliminar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 )}
+
                 {activeTab === 'orders' && (
-                    <button
-                        onClick={simulateAssistAIOrder}
-                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2"
-                        title="Simula que AssistAI envió un pedido vía Webhook"
-                    >
-                        <span>🤖</span> Simular Pedido AssistAI
-                    </button>
+                    <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                        {/* Mobile Cards */}
+                        <div className="md:hidden divide-y divide-gray-100">
+                            {orders.map(o => (
+                                <div key={o.id} className="p-4 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer" onClick={() => loadOrderDetails(o.id)}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <p className="font-bold text-gray-900">{o.customer?.name || 'Unknown'}</p>
+                                            <p className="text-xs text-gray-500 font-mono">#{o.id.slice(-6)}</p>
+                                        </div>
+                                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${o.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{o.status}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center mt-3">
+                                        <span className="text-xs text-gray-500">{new Date(o.createdAt).toLocaleDateString()}</span>
+                                        <span className="font-bold text-gray-900">${o.total.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        {/* Desktop Table */}
+                        <table className="w-full text-left hidden md:table">
+                            <thead className="bg-gray-50 border-b border-gray-100">
+                                <tr>
+                                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">ID</th>
+                                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">Cliente</th>
+                                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">Total</th>
+                                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">Estado</th>
+                                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">Fecha</th>
+                                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {orders.map(o => (
+                                    <tr key={o.id} className="hover:bg-gray-50 transition-colors border-b border-gray-50">
+                                        <td className="p-4 text-xs font-mono text-gray-500">{o.id.slice(-6)}</td>
+                                        <td className="p-4 font-medium">{o.customer?.name || 'Unknown'}</td>
+                                        <td className="p-4 font-bold text-gray-900">${o.total.toFixed(2)}</td>
+                                        <td className="p-4"><span className={`px-2 py-1 rounded-full text-xs font-bold ${o.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{o.status}</span></td>
+                                        <td className="p-4 text-sm text-gray-500">{new Date(o.createdAt).toLocaleDateString()}</td>
+                                        <td className="p-4"><button onClick={() => loadOrderDetails(o.id)} className="text-blue-600 hover:underline text-sm font-medium">Ver</button></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
 
-            {loading && <div className="text-center py-10 text-gray-400 animate-pulse">Cargando datos...</div>}
+            {/* MODALS */}
 
-            {/* PRODUCT LIST */}
-            {!loading && activeTab === 'products' && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {products.map((p) => (
-                        <div key={p.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group">
-                            <div className="h-32 bg-gray-100 flex items-center justify-center relative">
-                                {p.imageUrl ? (
-                                    <img src={p.imageUrl} alt={p.name} className="h-full w-full object-cover" />
-                                ) : (
-                                    <span className="text-4xl opacity-50">📦</span>
-                                )}
-                                <span className="absolute top-2 right-2 bg-white/90 px-2 py-1 text-xs font-bold rounded-full shadow-sm">
-                                    Stock: {p.stock}
-                                </span>
-                            </div>
-                            <div className="p-4">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                        <h3 className="font-semibold text-gray-900">{p.name}</h3>
-                                        <p className="text-xs text-gray-500 font-mono">{p.sku}</p>
-                                    </div>
-                                    <span className="text-blue-600 font-bold">${p.price}</span>
-                                </div>
-                                <p className="text-sm text-gray-600 line-clamp-2 mb-4 h-10">{p.description}</p>
-
-                                <div className="flex justify-end gap-2 pt-2 border-t border-gray-50 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                        onClick={() => handleEditProduct(p)}
-                                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-                                    >
-                                        ✏️
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeleteProduct(p.id)}
-                                        className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                                    >
-                                        🗑️
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                    {products.length === 0 && (
-                        <div className="col-span-3 text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-                            <p className="text-gray-500">No hay productos registrados.</p>
-                            <button onClick={() => setShowProductModal(true)} className="mt-2 text-blue-600 font-medium">Crear el primero</button>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* ORDER LIST */}
-            {!loading && activeTab === 'orders' && (
-                <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Order ID</th>
-                                <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente</th>
-                                <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
-                                <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
-                                <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Fecha</th>
-                                <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {orders.map((o) => (
-                                <tr key={o.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="p-4 font-mono text-xs text-gray-500 select-all">{o.id.slice(-8)}</td>
-                                    <td className="p-4">
-                                        <div className="font-medium text-gray-900">{o.customer?.name || 'Cliente desconocido'}</div>
-                                        <div className="text-xs text-gray-400">{o.customer?.email}</div>
-                                    </td>
-                                    <td className="p-4 font-bold text-gray-900">${o.total.toFixed(2)}</td>
-                                    <td className="p-4">
-                                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${o.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
-                                                o.status === 'OPEN' ? 'bg-blue-100 text-blue-700' :
-                                                    o.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
-                                            }`}>
-                                            {o.status}
-                                        </span>
-                                    </td>
-                                    <td className="p-4 text-sm text-gray-500">{new Date(o.createdAt).toLocaleDateString()}</td>
-                                    <td className="p-4">
-                                        <button
-                                            onClick={() => loadOrderDetails(o.id)}
-                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium bg-blue-50 px-3 py-1 rounded hover:bg-blue-100 transition-colors"
-                                        >
-                                            Ver Detalles
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {orders.length === 0 && (
-                                <tr>
-                                    <td colSpan={6} className="p-12 text-center text-gray-400">
-                                        No hay pedidos recientes.
-                                        <br />
-                                        <span className="text-sm">Usa el botón "Simular" para probar la integración.</span>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-
-            {/* PRODUCT MODAL */}
+            {/* Create Product Modal */}
             {showProductModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-fadeIn">
-                        <div className="p-6 border-b border-gray-100">
-                            <h2 className="text-xl font-bold text-gray-900">{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</h2>
-                        </div>
-                        <form onSubmit={handleSaveProduct} className="p-6 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre</label>
-                                    <input required className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">SKU</label>
-                                    <input required className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={formData.sku} onChange={e => setFormData({ ...formData, sku: e.target.value })} />
-                                </div>
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl animate-fadeIn">
+                        <h2 className="text-xl font-bold mb-4">{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</h2>
+                        <form onSubmit={handleSaveProduct} className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <input placeholder="Nombre" className="border p-2 rounded" required value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })} />
+                                <input placeholder="SKU" className="border p-2 rounded" required value={productForm.sku} onChange={e => setProductForm({ ...productForm, sku: e.target.value })} />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Precio</label>
-                                    <input required type="number" step="0.01" className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Stock</label>
-                                    <input required type="number" className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={formData.stock} onChange={e => setFormData({ ...formData, stock: e.target.value })} />
-                                </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <input type="number" placeholder="Precio" className="border p-2 rounded" required value={productForm.price} onChange={e => setProductForm({ ...productForm, price: e.target.value })} />
+                                <input type="number" placeholder="Stock" className="border p-2 rounded" required value={productForm.stock} onChange={e => setProductForm({ ...productForm, stock: e.target.value })} />
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Descripción</label>
-                                <textarea className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" rows={3}
-                                    value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">URL Imagen</label>
-                                <input className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={formData.imageUrl} onChange={e => setFormData({ ...formData, imageUrl: e.target.value })} placeholder="https://..." />
-                            </div>
-
-                            <div className="flex justify-end gap-2 pt-4">
-                                <button type="button" onClick={() => setShowProductModal(false)} className="px-4 py-2 text-gray-500 hover:text-gray-700">Cancelar</button>
-                                <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Guardar</button>
+                            <textarea placeholder="Descripción" className="w-full border p-2 rounded" value={productForm.description} onChange={e => setProductForm({ ...productForm, description: e.target.value })} />
+                            <input placeholder="Image URL" className="w-full border p-2 rounded" value={productForm.imageUrl} onChange={e => setProductForm({ ...productForm, imageUrl: e.target.value })} />
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button type="button" onClick={() => setShowProductModal(false)} className="px-4 py-2 text-gray-500">Cancelar</button>
+                                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">Guardar</button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
 
-            {/* ORDER DETAILS MODAL */}
-            {selectedOrder && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-fadeIn">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+            {/* Create Order Modal */}
+            {showOrderModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl w-full max-w-2xl p-6 shadow-xl animate-fadeIn max-h-[90vh] overflow-y-auto">
+                        <h2 className="text-xl font-bold mb-4">Crear Nuevo Pedido</h2>
+                        <form onSubmit={handleCreateOrder} className="space-y-6">
+                            {/* Customer Select */}
                             <div>
-                                <h2 className="text-xl font-bold text-gray-900">Pedido #{selectedOrder.id.slice(-8)}</h2>
-                                <p className="text-sm text-gray-500">{new Date(selectedOrder.createdAt).toLocaleString()}</p>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Cliente</label>
+                                <select
+                                    className="w-full border p-2 rounded-lg"
+                                    required
+                                    value={orderForm.customerId}
+                                    onChange={e => setOrderForm({ ...orderForm, customerId: e.target.value })}
+                                >
+                                    <option value="">Seleccionar Cliente...</option>
+                                    {customers.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Add Items */}
+                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                <label className="block text-sm font-bold text-gray-700 mb-2">Agregar Productos</label>
+                                <div className="flex gap-2 mb-4">
+                                    <select className="flex-1 border p-2 rounded-lg text-sm" id="product-select">
+                                        <option value="">Seleccionar producto...</option>
+                                        {products.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name} - ${p.price}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const select = document.getElementById('product-select') as HTMLSelectElement;
+                                            addOrderItem(select.value);
+                                        }}
+                                        className="bg-gray-900 text-white px-3 py-2 rounded-lg text-sm"
+                                    >
+                                        Agregar
+                                    </button>
+                                </div>
+
+                                {/* Items List */}
+                                <div className="space-y-2">
+                                    {orderForm.items.map((item, idx) => {
+                                        const p = products.find(p => p.id === item.productId);
+                                        if (!p) return null;
+                                        return (
+                                            <div key={idx} className="flex justify-between items-center bg-white p-2 rounded border shadow-sm">
+                                                <div className="text-sm">
+                                                    <span className="font-bold">{p.name}</span>
+                                                    <span className="text-gray-500 ml-2">${p.price}</span>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <input
+                                                        type="number" min="1"
+                                                        className="w-16 border rounded p-1 text-center"
+                                                        value={item.quantity}
+                                                        onChange={e => {
+                                                            const newItems = [...orderForm.items];
+                                                            newItems[idx].quantity = parseInt(e.target.value);
+                                                            setOrderForm({ ...orderForm, items: newItems });
+                                                        }}
+                                                    />
+                                                    <button type="button" onClick={() => removeOrderItem(item.productId)} className="text-red-500 hover:bg-red-50 p-1 rounded">🗑️</button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {orderForm.items.length === 0 && <p className="text-gray-400 text-center text-sm">No items added</p>}
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between items-center pt-4 border-t">
+                                <div className="text-xl font-bold">Total: ${calculateFormTotal().toFixed(2)}</div>
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={() => setShowOrderModal(false)} className="px-4 py-2 text-gray-500">Cancelar</button>
+                                    <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold">Crear Pedido</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* View Order Modal */}
+            {selectedOrder && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl w-full max-w-2xl p-6 shadow-xl animate-fadeIn max-h-[90vh] overflow-y-auto">
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900">Pedido #{selectedOrder.id.slice(-6)}</h2>
+                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${selectedOrder.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-600'}`}>
+                                    {selectedOrder.status}
+                                </span>
                             </div>
                             <button onClick={() => setSelectedOrder(null)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
                         </div>
 
-                        <div className="p-6 space-y-6">
-                            {/* Status Control */}
-                            <div className="flex items-center justify-between bg-white p-4 border border-blue-100 rounded-xl shadow-sm">
-                                <span className="text-sm font-semibold text-gray-700">Estado Actual:</span>
-                                <div className="flex gap-2">
-                                    {['OPEN', 'COMPLETED', 'CANCELLED'].map(s => (
-                                        <button
-                                            key={s}
-                                            onClick={() => handleUpdateOrderStatus(selectedOrder.id, s)}
-                                            className={`px-3 py-1 text-xs font-bold rounded-full transition-all border ${selectedOrder.status === s
-                                                    ? (s === 'COMPLETED' ? 'bg-green-600 text-white border-green-600' : s === 'CANCELLED' ? 'bg-red-600 text-white border-red-600' : 'bg-blue-600 text-white border-blue-600')
-                                                    : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-                                                }`}
-                                        >
-                                            {s}
-                                        </button>
-                                    ))}
-                                </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                            <div className="bg-gray-50 p-4 rounded-xl">
+                                <p className="text-xs uppercase font-bold text-gray-500">Cliente</p>
+                                <p className="font-bold text-lg">{selectedOrder.customer.name}</p>
+                                <p className="text-gray-500 text-sm">{selectedOrder.customer.email}</p>
                             </div>
-
-                            {/* Customer & Total */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                    <p className="text-xs text-gray-500 uppercase font-bold mb-2">Cliente</p>
-                                    <p className="font-medium text-gray-900">{selectedOrder.customer.name}</p>
-                                    <p className="text-sm text-gray-500">{selectedOrder.customer.email}</p>
-                                    <p className="text-xs text-gray-400 mt-1">{selectedOrder.customer.phone || 'Sin teléfono'}</p>
-                                </div>
-                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col justify-center items-end text-right">
-                                    <p className="text-xs text-gray-500 uppercase font-bold mb-1">Total del Pedido</p>
-                                    <p className="text-3xl font-extrabold text-blue-600">${selectedOrder.total.toFixed(2)}</p>
-                                    <p className="text-xs text-gray-400">{selectedOrder.items.length} items</p>
-                                </div>
-                            </div>
-
-                            {/* Items */}
-                            <div>
-                                <h3 className="font-bold text-gray-900 mb-3 ml-1">Items</h3>
-                                <div className="space-y-2">
-                                    {selectedOrder.items.map((item: any) => (
-                                        <div key={item.id} className="flex justify-between items-center bg-white border border-gray-100 p-3 rounded-lg hover:shadow-sm transition-shadow">
-                                            <div className="flex items-center space-x-3">
-                                                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 text-lg">
-                                                    {item.product?.imageUrl ? <img src={item.product.imageUrl} className="w-full h-full object-cover rounded-lg" /> : '📦'}
-                                                </div>
-                                                <div>
-                                                    <p className="font-medium text-gray-900">{item.product?.name || 'Producto Eliminado'}</p>
-                                                    <div className="text-xs text-gray-500 flex items-center gap-2">
-                                                        <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 font-mono">{item.product?.sku}</span>
-                                                        <span>{item.quantity} x ${item.unitPrice}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <p className="font-bold text-gray-700">${item.total.toFixed(2)}</p>
-                                        </div>
-                                    ))}
-                                </div>
+                            <div className="bg-gray-50 p-4 rounded-xl text-right">
+                                <p className="text-xs uppercase font-bold text-gray-500">Total</p>
+                                <p className="font-bold text-2xl text-blue-600">${selectedOrder.total.toFixed(2)}</p>
                             </div>
                         </div>
 
-                        <div className="p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-end">
+                        <div className="space-y-3 mb-8">
+                            <h3 className="font-bold text-gray-700">Items</h3>
+                            {selectedOrder.items.map((item: any) => (
+                                <div key={item.id} className="flex justify-between border-b pb-2">
+                                    <div>
+                                        <p className="font-medium">{item.product?.name || 'Unknown'}</p>
+                                        <p className="text-xs text-gray-500">{item.quantity} x ${item.unitPrice}</p>
+                                    </div>
+                                    <p className="font-bold">${item.total.toFixed(2)}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-4 border-t">
                             <button
-                                onClick={() => setSelectedOrder(null)}
-                                className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                                onClick={() => handleConvertToInvoice(selectedOrder.id)}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-emerald-500/20 flex items-center gap-2"
                             >
-                                Cerrar Ventana
+                                📄 Convertir a Factura
                             </button>
                         </div>
                     </div>

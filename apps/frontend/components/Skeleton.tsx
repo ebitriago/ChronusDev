@@ -28,14 +28,14 @@ export const Skeleton: React.FC<SkeletonProps> = ({
 };
 
 export const CardSkeleton = () => (
-    <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
+    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-gray-100 dark:border-slate-700 shadow-sm space-y-4">
         <div className="flex justify-between items-start">
             <Skeleton variant="rect" width={48} height={48} />
             <Skeleton variant="rect" width={60} height={20} />
         </div>
         <Skeleton variant="text" width="70%" height={24} />
         <Skeleton variant="text" width="40%" height={16} />
-        <div className="pt-4 border-t border-gray-100">
+        <div className="pt-4 border-t border-gray-100 dark:border-slate-700">
             <div className="flex justify-between items-center">
                 <Skeleton variant="text" width="30%" />
                 <Skeleton variant="text" width="40%" height={20} />
@@ -45,7 +45,7 @@ export const CardSkeleton = () => (
 );
 
 export const StatsSkeleton = () => (
-    <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+    <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-gray-100 dark:border-slate-700 shadow-sm">
         <div className="flex items-center gap-4">
             <Skeleton variant="circle" width={48} height={48} />
             <div className="flex-1 space-y-2">

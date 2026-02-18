@@ -11,14 +11,48 @@
 4. [Inbox Unificado](#inbox-unificado)
 5. [Tickets de Soporte](#tickets-de-soporte)
 6. [Leads y Embudo de Ventas](#leads-y-embudo-de-ventas)
-7. [Facturación](#facturación)
+7. [Invoicing & Propuestas](#invoicing-y-propuestas)
 8. [AssistAI - Agentes de IA](#assistai---agentes-de-ia)
 9. [Developers](#developers)
 10. [Integraciones](#integraciones)
+## Invoicing y Propuestas
+
+ChronusCRM cuenta con un potente módulo de facturación y propuestas comerciales.
+
+### Funcionalidades Principales
+
+1.  **Creación de Propuestas (Quotes)**:
+    - Genera presupuestos profesionales desde el perfil del Lead o Cliente.
+    - Asocia ítems, cantidades y precios.
+    - Soporte Multi-moneda (USD / VES).
+
+2.  **Vista Previa Profesional**:
+    - Antes de enviar, visualiza el documento con un diseño limpio y moderno.
+    - Incluye el logo de tu empresa y datos fiscales.
+
+3.  **Envío Multicanal**:
+    - **Email**: Envía el PDF adjunto directamente al correo del cliente.
+    - **WhatsApp**: Envía el documento a través de tu integración de WhatsApp.
+
+4.  **Pagos en Línea (Stripe)**:
+    - Las facturas incluyen un botón de "Pagar" que genera un link de pago seguro de Stripe.
+    - El cliente puede pagar con tarjeta de crédito/débito al instante.
+
+5.  **Conversión a Factura**:
+    - Convierte una Propuesta aceptada en una Factura con un solo clic.
+
+### Pasos para enviar una Propuesta
+
+1.  Ve al **Perfil del Cliente/Lead**.
+2.  Pestaña **Facturas/Propuestas**.
+3.  Clic en **"+ Nueva Propuesta"**.
+4.  Llena los ítems y monto.
+5.  En la lista, clic en **"👁️ Ver / Enviar"**.
+6.  En el modal de previsualización, selecciona **Email** o **WhatsApp**.
 
 ---
 
-## Introducción
+## AssistAI - Agentes de IA
 
 **ChronusCRM** es una plataforma completa de gestión de relaciones con clientes diseñada para empresas modernas. Integra comunicación multicanal (WhatsApp, Instagram, Email), gestión de tickets, facturación y asistentes de IA para automatizar la atención al cliente.
 
@@ -385,4 +419,84 @@ Conectados a través de AssistAI:
 
 ---
 
-*Última actualización: Enero 2026*
+
+---
+
+## Guía de Cargado Masivo y Webhooks
+
+### 1. Carga Masiva de Leads (Bulk Import)
+
+Para importar grandes cantidades de leads (por ejemplo, desde un Excel antiguo o base de datos):
+
+1. **Prepara tus datos**: Convierte tu archivo a formato JSON.
+2. **Estructura Requerida**:
+   ```json
+   {
+	 "leads": [
+	   {
+		 "name": "Nombre Cliente",
+		 "email": "email@cliente.com",
+		 "company": "Empresa",
+		 "notes": "Importado desde Excel 2025"
+	   }
+	 ]
+   }
+   ```
+3. **Envío**: Usa el endpoint `POST /leads/bulk`.
+4. **Respuesta**: Recibirás el número de leads creados y sus IDs.
+
+> **Tip**: Si tienes un CSV, puedes usar herramientas online para convertir "CSV a JSON" y luego copiar el resultado en el body de tu petición.
+
+### 2. Webhooks de Entrada
+
+Conecta plataformas como **Zapier**, **Typeform** o **WordPress** para crear leads automáticamente.
+
+1. **Genera una API Key**: Ve a *Configuración > Developers* y crea una nueva llave.
+2. **Configura tu herramienta**:
+   - **URL**: `https://api.tudominio.com/webhooks/incoming/leads`
+   - **Header**: `Authorization: Bearer sk_live_...`
+   - **Body**: Mapea los campos de tu formulario a `name`, `email`, `company`.
+3. **Listo**: Cada vez que alguien llene tu formulario, aparecerá instantáneamente como Lead en estado NEW.
+
+---
+
+## Reportes Avanzados
+
+La nueva sección de **Reportes** ofrece una visión profunda del rendimiento de tu negocio.
+
+### Características
+- **Gráficos Interactivos**: Visualiza tendencias de ventas, adquisición de clientes y rendimiento de soporte.
+- **Filtros de Fecha**: Selecciona rangos personalizados (Últimos 7 días, Mes actual, Año, etc.).
+- **Indicadores de Tendencia**: Ve rápidamente si tus métricas (MRR, Tickets, Leads) suben o bajan comparado con el periodo anterior.
+- **Exportación CSV**: Descarga los datos crudos de cada reporte para análisis externo (Excel/Sheets).
+- **Vista Previa PDF**: Genera un reporte ejecutivo en PDF listo para imprimir o enviar.
+
+### Pestañas Disponibles
+1. **Sales**: Ingresos, nuevos clientes, crecimiento.
+2. **Support**: Tickets creados/resueltos, tiempo de respuesta.
+3. **Customers**: Crecimiento de base de datos, segmentación por plan.
+4. **Finance**: Flujo de caja, facturas pendientes/pagadas.
+5. **Trends**: Análisis predictivo y comparativas.
+
+---
+
+## Exportación de Datos
+
+ChronusCRM permite extraer tu información clave fácilmente.
+
+### Exportar Vista 360° de Cliente
+Descarga un archivo JSON completo con toda la historia de un cliente:
+1. Ve al perfil del cliente (Vista 360°).
+2. Haz clic en el botón **"📥 Descargar 360°"** en la cabecera.
+3. El archivo incluirá: Perfil, Contactos, Conversaciones, Tickets, Facturas y Actividad.
+
+### Exportar Historial de Chat
+Guarda una copia de seguridad de cualquier conversación:
+1. Abre el chat en el **Inbox**.
+2. En el panel lateral derecho ("Contexto"), busca la sección de Acciones.
+3. Haz clic en **"Descargar Chat (TXT)"**.
+4. Obtendrás un archivo de texto plano con la transcripción completa, fechas y remitentes.
+
+---
+
+*Última actualización: Febrero 2026*

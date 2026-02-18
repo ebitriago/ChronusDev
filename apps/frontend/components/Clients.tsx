@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getClients, createClient, updateClient, deleteClient, type Client } from '../app/api';
+import { getClients, createClient, updateClient, deleteClient, syncClientsFromCRM, type Client } from '../app/api';
 import { useToast } from './Toast';
 import { Skeleton } from './Skeleton';
 
 export default function Clients() {
     const [clients, setClients] = useState<Client[]>([]);
     const [loading, setLoading] = useState(true);
+    const [syncing, setSyncing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showModal, setShowModal] = useState(false);
     const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -17,6 +18,15 @@ export default function Clients() {
     const [email, setEmail] = useState('');
     const [contactName, setContactName] = useState('');
     const [phone, setPhone] = useState('');
+
+    // Search
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const filteredClients = clients.filter(c =>
+        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.contactName?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     const { showToast } = useToast();
 
@@ -28,7 +38,7 @@ export default function Clients() {
         try {
             setLoading(true);
             const data = await getClients();
-            setClients(data);
+            setClients(Array.isArray(data) ? data : []);
         } catch (err: any) {
             setError(err.message || 'Error loading clients');
         } finally {
@@ -86,6 +96,30 @@ export default function Clients() {
         }
     }
 
+    async function handleSyncFromCRM() {
+        setSyncing(true);
+        try {
+            const result = await syncClientsFromCRM();
+            if (result.success) {
+                if (result.failed && result.failed.length > 0) {
+                    const failures = result.failed.map((f: any) => `${f.name} (${f.reason})`).join(', ');
+                    showToast(`⚠️ ${result.clients.length} ok. ${result.failed.length} fallaron: ${failures}`, 'error');
+                    console.warn('Fallas de sync:', result.failed);
+                } else {
+                    showToast(`✅ ${result.clients.length} clientes sincronizados con éxito`, 'success');
+                }
+            } else {
+                showToast(result.message || 'Sincronización completada', 'info');
+            }
+            loadClients(); // Reload to show newly synced clients
+        } catch (err: any) {
+            console.error(err);
+            showToast(err.message || 'Error al sincronizar', 'error');
+        } finally {
+            setSyncing(false);
+        }
+    }
+
     if (loading) return (
         <div className="p-6 max-w-7xl mx-auto space-y-4">
             <Skeleton height="40px" width="200px" />
@@ -97,26 +131,126 @@ export default function Clients() {
 
     return (
         <div className="p-6 max-w-7xl mx-auto animate-fadeIn">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Clientes</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        Clientes <span className="text-sm font-normal text-gray-500 ml-2">({filteredClients.length} de {clients.length})</span>
+                    </h2>
                     <p className="text-gray-500 dark:text-gray-400">Gestiona las empresas para las que trabajas</p>
                 </div>
-                <button
-                    onClick={handleNew}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl transition-colors shadow-lg shadow-blue-500/30 flex items-center gap-2"
-                >
-                    <span>+</span> Nuevo Cliente
-                </button>
+
+                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                    {/* Search Input */}
+                    <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+                        <input
+                            type="text"
+                            placeholder="Buscar cliente..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full sm:w-64 pl-10 pr-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        />
+                    </div>
+
+                    {/* Export Buttons */}
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => {
+                                const headers = ['Nombre', 'Email', 'Contacto', 'Teléfono'];
+                                const csvContent = [
+                                    headers.join(','),
+                                    ...filteredClients.map(c => [
+                                        `"${c.name}"`,
+                                        `"${c.email || ''}"`,
+                                        `"${c.contactName || ''}"`,
+                                        `"${c.phone || ''}"`
+                                    ].join(','))
+                                ].join('\n');
+
+                                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                                const link = document.createElement('a');
+                                link.href = URL.createObjectURL(blob);
+                                link.download = `clientes_chronus_${new Date().toISOString().split('T')[0]}.csv`;
+                                link.click();
+                            }}
+                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-xl transition-colors shadow-lg shadow-green-500/30 flex items-center justify-center gap-2"
+                            title="Exportar a CSV"
+                        >
+                            <span>📊</span> CSV
+                        </button>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    const jsPDF = (await import('jspdf')).default;
+                                    const autoTable = (await import('jspdf-autotable')).default;
+                                    const doc = new jsPDF();
+
+                                    doc.text('Listado de Clientes - ChronusDev', 14, 20);
+
+                                    autoTable(doc, {
+                                        startY: 30,
+                                        head: [['Nombre', 'Email', 'Contacto', 'Teléfono']],
+                                        body: filteredClients.map(c => [
+                                            c.name || '',
+                                            c.email || '',
+                                            c.contactName || '',
+                                            c.phone || ''
+                                        ]),
+                                    });
+
+                                    doc.save(`clientes_chronus_${new Date().toISOString().split('T')[0]}.pdf`);
+                                } catch (e) {
+                                    console.error('Error generating PDF', e);
+                                    showToast('Error al generar PDF', 'error');
+                                }
+                            }}
+                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-xl transition-colors shadow-lg shadow-red-500/30 flex items-center justify-center gap-2"
+                            title="Exportar a PDF"
+                        >
+                            <span>📄</span> PDF
+                        </button>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleSyncFromCRM}
+                            disabled={syncing}
+                            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl transition-colors shadow-lg shadow-purple-500/30 flex items-center gap-2 disabled:opacity-50 whitespace-nowrap justify-center"
+                            title="Importar clientes desde el CRM vinculado"
+                        >
+                            {syncing ? '⏳ Sync...' : '🔄 Sync CRM'}
+                        </button>
+                        <button
+                            onClick={handleNew}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl transition-colors shadow-lg shadow-blue-500/30 flex items-center gap-2 whitespace-nowrap justify-center"
+                        >
+                            <span>+</span> Nuevo
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            {clients.length === 0 ? (
+            {filteredClients.length === 0 && clients.length > 0 ? (
+                <div className="text-center py-10">
+                    <p className="text-gray-500">No se encontraron clientes con "{searchTerm}"</p>
+                </div>
+            ) : clients.length === 0 ? (
                 <div className="text-center py-20 bg-gray-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-gray-300 dark:border-slate-700">
-                    <p className="text-gray-500 dark:text-gray-400">No hay clientes aún. ¡Crea el primero!</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-lg mb-4">No hay clientes aún.</p>
+                    <p className="text-gray-400 dark:text-gray-500 text-sm mb-6">
+                        Haz clic en &quot;Sincronizar desde CRM&quot; para importar clientes, o crea uno nuevo.
+                    </p>
+                    <button
+                        onClick={handleSyncFromCRM}
+                        disabled={syncing}
+                        className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl transition-colors inline-flex items-center gap-2 disabled:opacity-50"
+                    >
+                        {syncing ? '⏳ Sincronizando...' : '🔗 Sincronizar desde CRM vinculado'}
+                    </button>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {clients.map(client => (
+                    {filteredClients.map(client => (
                         <div key={client.id} className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-shadow group relative">
                             <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button onClick={() => handleEdit(client)} className="text-blue-500 hover:text-blue-700 mr-2">✏️</button>
@@ -146,6 +280,19 @@ export default function Clients() {
                                     </div>
                                 )}
                             </div>
+
+                            {/* Actions Footer */}
+                            {client.projects && client.projects.length > 0 && (
+                                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
+                                    <a
+                                        href={`/?view=kanban&projectId=${client.projects[0].id}`}
+                                        className="w-full justify-center flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                                        title={`Ir al proyecto: ${client.projects[0].name}`}
+                                    >
+                                        🚀 Ver: {client.projects[0].name}
+                                    </a>
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>

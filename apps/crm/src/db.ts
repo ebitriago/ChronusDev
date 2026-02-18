@@ -1,16 +1,16 @@
-// Prisma Client Singleton for the CRM Backend (Prisma 7 with LibSQL adapter)
+// Prisma Client Singleton for the CRM Backend
 import { PrismaClient } from '@prisma/client';
-import { PrismaLibSql } from '@prisma/adapter-libsql';
-import path from 'path';
+// import { PrismaPg } from '@prisma/adapter-pg';
+// import pg from 'pg';
 
-// SQLite file path - use process.cwd() for reliability with tsx watch
-const dbPath = path.resolve(process.cwd(), 'prisma', 'dev.db');
-const dbUrl = `file:${dbPath}`;
+const databaseUrl = process.env.DATABASE_URL;
 
-console.log(`[DB] Connecting to SQLite at: ${dbUrl}`);
+if (!databaseUrl) {
+    throw new Error('DATABASE_URL is not set');
+}
 
-// Create adapter directly with URL (PrismaLibSql handles libsql client internally in v7.3.0)
-const adapter = new PrismaLibSql({ url: dbUrl });
+console.log('🔌 [DB] Connecting to:', databaseUrl.replace(/:[^:@]*@/, ':****@')); // Hide password
+
 
 // Prevent multiple instances during development hot-reload
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
@@ -18,9 +18,13 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 export const prisma =
     globalForPrisma.prisma ||
     new PrismaClient({
-        adapter,
         log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
     });
+
+// Test connection
+prisma.$connect()
+    .then(() => console.log('✅ [DB] Successfully connected to PostgreSQL'))
+    .catch((e: any) => console.error('❌ [DB] Connection failed:', e));
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 

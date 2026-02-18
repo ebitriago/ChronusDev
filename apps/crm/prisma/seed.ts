@@ -1,19 +1,9 @@
 // Seed script for initial data (Prisma 7 with LibSQL)
 import { PrismaClient, Role, CustomerStatus, Plan, LeadStatus, LeadSource, Priority, TicketStatus } from '@prisma/client';
-import { PrismaLibSql } from '@prisma/adapter-libsql';
+import { PrismaClient, Role, CustomerStatus, Plan, LeadStatus, LeadSource, Priority, TicketStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// SQLite file path
-const dbPath = path.join(__dirname, 'dev.db');
-
-// Prisma adapter factory
-const adapter = new PrismaLibSql({ url: `file:${dbPath}` });
-const prisma = new PrismaClient({ adapter }) as any;
+const prisma = new PrismaClient();
 
 async function main() {
     console.log('🌱 Seeding database...');
@@ -79,7 +69,12 @@ async function main() {
 
     for (const c of customers) {
         await prisma.customer.upsert({
-            where: { email: c.email },
+            where: {
+                email_organizationId: {
+                    email: c.email,
+                    organizationId: organization.id
+                }
+            },
             update: {},
             create: {
                 ...c,

@@ -3,10 +3,27 @@
 CRM_URL="http://localhost:3002"
 CHRONUS_URL="http://localhost:3001"
 
+# Get Auth Token
+echo "🔐 Getting auth token..."
+AUTH_RES=$(curl -s -X POST "$CRM_URL/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@chronuscrm.com", "password": "password123"}')
+
+TOKEN=$(echo $AUTH_RES | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+
+if [ -z "$TOKEN" ]; then
+  echo "❌ Failed to get auth token"
+  echo "Response: $AUTH_RES"
+  exit 1
+fi
+
+echo "✅ Auth token obtained"
+
 echo "🔹 Testing CRM Customer Creation with Sync..."
 # Create Customer
 CREATE_RES=$(curl -s -X POST "$CRM_URL/customers" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "name": "Test Company Inc",
     "email": "contact@testcompany.com",
@@ -31,7 +48,7 @@ echo "✅ Customer Created: $CUST_ID"
 sleep 2 # Wait for async sync
 
 echo "🔹 Fetching Customer to verify Sync ID..."
-GET_RES=$(curl -s "$CRM_URL/customers/$CUST_ID")
+GET_RES=$(curl -s "$CRM_URL/customers/$CUST_ID" -H "Authorization: Bearer $TOKEN")
 echo "Get Response: $GET_RES"
 
 CHRONUS_ID_FETCHED=$(echo $GET_RES | grep -o '"chronusDevClientId":"[^"]*' | cut -d'"' -f4)
@@ -45,6 +62,7 @@ fi
 echo "🔹 Testing Customer Update with Sync..."
 UPDATE_RES=$(curl -s -X PUT "$CRM_URL/customers/$CUST_ID" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "notes": "Updated notes for sync test"
   }')
@@ -53,7 +71,7 @@ echo "Update Response: $UPDATE_RES"
 sleep 1
 
 echo "🔹 Testing Manual Sync..."
-SYNC_RES=$(curl -s -X POST "$CRM_URL/customers/$CUST_ID/sync")
+SYNC_RES=$(curl -s -X POST "$CRM_URL/customers/$CUST_ID/sync" -H "Authorization: Bearer $TOKEN")
 echo "Sync Response: $SYNC_RES"
 
 echo "🔹 Done."

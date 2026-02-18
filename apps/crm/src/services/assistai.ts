@@ -8,6 +8,51 @@ export interface AssistAIConfig {
     organizationCode: string;
 }
 
+// Helper to get AssistAI config for an organization
+export async function getAssistAIConfig(organizationId: string): Promise<AssistAIConfig | null> {
+    // First try org-specific integration
+    let integration = await prisma.integration.findFirst({
+        where: {
+            organizationId: organizationId,
+            provider: 'ASSISTAI',
+            isEnabled: true
+        }
+    });
+
+    // Fallback to global integration (organizationId is NULL)
+    if (!integration) {
+        integration = await prisma.integration.findFirst({
+            where: {
+                organizationId: null,
+                provider: 'ASSISTAI',
+                isEnabled: true
+            }
+        });
+    }
+
+    if (integration && integration.credentials) {
+        const creds = integration.credentials as any;
+        return {
+            baseUrl: creds.baseUrl || process.env.ASSISTAI_API_URL || 'https://public.assistai.lat',
+            apiToken: creds.apiToken,
+            tenantDomain: creds.tenantDomain,
+            organizationCode: creds.organizationCode
+        };
+    }
+
+    // Fallback to Environment Variables
+    if (process.env.ASSISTAI_API_TOKEN && process.env.ASSISTAI_TENANT_DOMAIN && process.env.ASSISTAI_ORG_CODE) {
+        return {
+            baseUrl: process.env.ASSISTAI_API_URL || 'https://public.assistai.lat',
+            apiToken: process.env.ASSISTAI_API_TOKEN,
+            tenantDomain: process.env.ASSISTAI_TENANT_DOMAIN,
+            organizationCode: process.env.ASSISTAI_ORG_CODE
+        };
+    }
+
+    return null;
+}
+
 // Helper for AssistAI GET requests
 export async function assistaiFetch(endpoint: string, config: AssistAIConfig) {
     const headers: Record<string, string> = {
@@ -58,6 +103,11 @@ export async function assistaiPost(endpoint: string, body: any, config: AssistAI
 
 // Service Methods
 export const AssistAIService = {
+    // Create conversation with specific agent
+    async createConversation(config: AssistAIConfig, data: { agentCode: string; contact?: any; guest?: any; source?: string }) {
+        return assistaiPost('/conversations', data, config);
+    },
+
     // Get all agents
     async getAgents(config: AssistAIConfig) {
         console.log('[AssistAI] Fetching agents...');
@@ -113,8 +163,8 @@ export const AssistAIService = {
     } = {}) {
         const { page = 1, take = 25, agentCode, orderBy = 'lastMessageDate', order = 'DESC' } = params;
 
-        // Singular endpoint per new docs
-        let endpoint = `/conversation?page=${page}&take=${take}&orderBy=${orderBy}&order=${order}`;
+        // Singular endpoint per new docs (WAIT - 404'd, trying plural)
+        let endpoint = `/conversations?page=${page}&take=${take}&orderBy=${orderBy}&order=${order}`;
         if (agentCode) endpoint += `&agentCode=${agentCode}`;
 
         const response = await assistaiFetch(endpoint, config);
@@ -133,105 +183,131 @@ export const AssistAIService = {
 
     async getMessages(config: AssistAIConfig, uuid: string, limit = 100) {
         // Singular endpoint for messages
-        return assistaiFetch(`/conversation/${uuid}/messages?take=${limit}&order=ASC`, config);
+        return assistaiFetch(`/conversations/${uuid}/messages?take=${limit}&order=ASC`, config);
     },
 
-    async sendMessage(config: AssistAIConfig, uuid: string, content: string, senderName = 'Agent') {
+    async sendMessage(config: AssistAIConfig, uuid: string, content: string, senderName = 'Agent', isIntervention = false) {
         // Singular endpoint for sending
-        return assistaiPost(`/conversation/${uuid}/messages`, {
+        // If isIntervention is true, we might need to signal to AssistAI to pause the bot
+        // Based on AssistAI docs (assumed), sending as a human usually pauses the bot automatically or requires a flag.
+        // We will send 'role: agent' and specific metadata.
+
+        return assistaiPost(`/conversations/${uuid}/messages`, {
             content,
             senderMetadata: {
-                id: 0,
-                email: 'system@chronus.com',
+                id: isIntervention ? 999 : 0, // 0 usually means bot
+                email: isIntervention ? 'human@chronus.com' : 'system@chronus.com',
                 firstname: senderName,
-                lastname: 'Bot'
-            }
+                lastname: isIntervention ? '(Human)' : 'Bot',
+                role: isIntervention ? 'admin' : 'assistant'
+            },
+            // Some platforms use 'start_intervention' or similar flags. 
+            // We'll assume the metadata role triggers the logic or we add a specific flag if known.
+            intervention: isIntervention
         }, config);
     },
 
-    // Sync specific recent conversations (e.g. last 20)
-    async syncRecentConversations(config: AssistAIConfig, organizationId: string, limit = 20) {
-        console.log(`[AssistAI] Syncing last ${limit} conversations...`);
+    // Sync specific recent conversations (e.g. last 20 per agent)
+    async syncRecentConversations(config: AssistAIConfig, organizationId: string, limit = 10) {
+        // console.log(`[AssistAI] Syncing conversations...`);
 
-        // 1. Get agents for mapping names
-        const agentsData = await this.getAgents(config);
-        const agentsMap = new Map<string, string>();
-        for (const agent of agentsData.data || []) {
-            agentsMap.set(agent.code, agent.name);
+        // 1. Get agents
+        let agents: any[] = [];
+        try {
+            const agentsData = await this.getAgents(config);
+            agents = agentsData.data || [];
+        } catch (e) {
+            console.warn('[AssistAI] Failed to fetch agents for sync', e);
+            return { success: false, syncedCount: 0 };
         }
 
-        // 2. Fetch recent conversations
-        const convData = await assistaiFetch(`/conversation?take=${limit}&order=DESC`, config);
         const syncedConvs = [];
 
-        // 3. Process and persist
-        for (const conv of convData.data || []) {
-            const uuid = conv.id || conv.uuid; // Handle ID variations
-            if (!uuid) continue;
-
-            const sessionId = `assistai-${uuid}`;
-
-            // Fetch messages for this conversation
-            let messages: any[] = [];
+        // 2. Sync for each agent to ensure we capture Agent Code/Name correctly
+        // (Since the global list endpoint often omits agentCode)
+        for (const agent of agents) {
             try {
-                const msgData = await this.getMessages(config, uuid, 50); // Get last 50 messages
-                messages = msgData.data || [];
-            } catch (e) {
-                console.warn(`Failed to fetch messages for ${uuid}`);
-            }
+                // Fetch recent conversations for this SPECIFIC agent
+                const convData = await this.getConversations(config, { take: limit, agentCode: agent.code });
 
-            // Determine Platform
-            const firstMessage = messages[0];
-            let platform = 'assistai';
-            if (firstMessage?.channel === 'whatsapp' || conv.source === 'whatsapp') platform = 'whatsapp';
-            else if (firstMessage?.channel === 'instagram' || conv.source === 'instagram') platform = 'instagram';
+                for (const conv of convData.data || []) {
+                    const uuid = conv.uuid || conv.id; // Correctly grab UUID
+                    if (!uuid) continue;
 
-            // Agent Info
-            const agentCode = conv.agentCode || '';
-            const agentName = agentCode ? (agentsMap.get(agentCode) || 'AssistAI Bot') : 'Unknown Agent';
+                    const sessionId = `assistai-${uuid}`;
 
-            // PERSIST TO DATABASE
-            try {
-                const dbConv = await prisma.conversation.upsert({
-                    where: { sessionId },
-                    update: {
-                        updatedAt: new Date(conv.updatedAt || conv.createdAt || new Date()),
-                        status: 'ACTIVE',
-                        agentName: agentName,
-                        agentCode: agentCode
-                    },
-                    create: {
-                        sessionId,
-                        platform: platform.toUpperCase() as any,
-                        customerName: conv.guest?.name || conv.contact?.name || `@${conv.sender || uuid}`,
-                        customerContact: conv.contactPhone || conv.sender || uuid,
-                        agentCode,
-                        agentName,
-                        organizationId,
-                        status: 'ACTIVE',
-                        createdAt: new Date(conv.createdAt || new Date()),
-                        updatedAt: new Date(conv.updatedAt || conv.createdAt || new Date())
+                    // Fetch messages
+                    let messages: any[] = [];
+                    try {
+                        const msgData = await this.getMessages(config, uuid, 50);
+                        messages = msgData.data || [];
+                    } catch (e) {
+                        // console.warn(`Failed to fetch messages for ${uuid}`);
                     }
-                });
 
-                // Sync Messages
-                for (const m of messages) {
-                    await prisma.message.upsert({
-                        where: { id: `assistai-${m.id}` },
-                        update: { status: 'DELIVERED' },
-                        create: {
-                            id: `assistai-${m.id}`,
-                            conversationId: dbConv.id,
-                            sender: m.role === 'user' ? 'USER' : 'AGENT',
-                            content: m.content || '',
-                            createdAt: new Date(m.createdAt),
+                    // Determine Platform
+                    const firstMessage = messages[0];
+                    let platform = 'assistai';
+                    if (firstMessage?.channel === 'whatsapp' || conv.source === 'whatsapp' || conv.channel === 'whatsapp') platform = 'whatsapp';
+                    else if (firstMessage?.channel === 'instagram' || conv.source === 'instagram' || conv.channel === 'instagram') platform = 'instagram';
+                    else if (firstMessage?.channel === 'web' || conv.source === 'web' || conv.channel === 'web') platform = 'web';
+
+                    // Use Agent Info from the Loop Context
+                    const agentCode = agent.code;
+                    const agentName = agent.name;
+
+                    // PERSIST TO DATABASE
+                    try {
+                        const dbConv = await prisma.conversation.upsert({
+                            where: { sessionId },
+                            update: {
+                                updatedAt: new Date(conv.updatedAt || conv.createdAt || new Date()),
+                                status: 'ACTIVE',
+                                agentName: agentName,
+                                agentCode: agentCode,
+                                // Update customer info if it changed
+                                customerName: conv.guest?.name || conv.contact?.name || conv.customer?.name || conv.title || `@${uuid}`,
+                                customerContact: conv.contactPhone || conv.customer?.phone || conv.customer?.phoneNumber || uuid,
+                            },
+                            create: {
+                                sessionId,
+                                platform: platform.toUpperCase() as any,
+                                customerName: conv.guest?.name || conv.contact?.name || conv.customer?.name || conv.title || `@${uuid}`,
+                                customerContact: conv.contactPhone || conv.customer?.phone || conv.customer?.phoneNumber || uuid,
+                                agentCode,
+                                agentName,
+                                organizationId,
+                                status: 'ACTIVE',
+                                createdAt: new Date(conv.createdAt || new Date()),
+                                updatedAt: new Date(conv.updatedAt || conv.createdAt || new Date())
+                            }
+                        });
+
+                        // Sync Messages
+                        for (const m of messages) {
+                            const msgDate = m.createdAt ? new Date(m.createdAt) : new Date();
+                            const safeDate = isNaN(msgDate.getTime()) ? new Date() : msgDate;
+
+                            await prisma.message.upsert({
+                                where: { id: `assistai-${m.id}` },
+                                update: { status: 'DELIVERED' },
+                                create: {
+                                    id: `assistai-${m.id}`,
+                                    conversationId: dbConv.id,
+                                    sender: m.role === 'user' ? 'USER' : 'AGENT',
+                                    content: m.content || '',
+                                    createdAt: safeDate,
+                                }
+                            });
                         }
-                    });
-                }
 
-                syncedConvs.push(dbConv);
-            } catch (dbErr) {
-                console.error(`Error syncing conversation ${uuid}:`, dbErr);
+                        syncedConvs.push(dbConv);
+                    } catch (dbErr) {
+                        console.error(`Error syncing conversation ${uuid}:`, dbErr);
+                    }
+                }
+            } catch (agentErr) {
+                console.warn(`[AssistAI] Failed to sync for agent ${agent.name}`, agentErr);
             }
         }
 

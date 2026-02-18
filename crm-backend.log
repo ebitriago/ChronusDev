@@ -1,0 +1,151 @@
+
+> @chronusdev/crm@0.1.0 dev
+> tsx watch src/index.ts
+
+🔌 [DB] Connecting to: postgresql://postgres:****@127.0.0.1:5434/chronuscrm?schema=public
+[Scheduler] Initialized. Polling for scheduled interactions every minute...
+[ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+🚀 ChronusCRM API running on http://localhost:3002
+📚 API Docs: http://localhost:3002/api/docs
+🔌 Socket.io ready for connections
+✅ [DB] Successfully connected to PostgreSQL
+[Auth] Request: GET /notifications
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /customers
+[Auth] Request: GET /users
+[Auth] Request: GET /notifications
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /projects
+[Auth] Request: GET /tickets
+[Auth] Request: GET /projects
+[Auth] Request: GET /pipeline-stages
+[Auth] Request: GET /leads
+[Auth] Request: GET /pipeline-stages
+[Auth] Request: GET /leads
+[Auth] Request: GET /tickets
+[Auth] Request: GET /tickets
+[Auth] Request: GET /calendar/status
+[Auth] Request: GET /calendar/status
+[Auth] Request: GET /assistai/conversations
+[Auth] Request: GET /assistai/configs
+[Auth] Request: GET /assistai/conversations
+[Auth] Request: GET /assistai/configs
+[Auth] Request: GET /reports/sales
+[Auth] Request: GET /reports/sales
+[Auth] Request: GET /auth/me
+[Auth] Request: GET /auth/me
+[Auth] Request: GET /customers
+[Auth] Request: GET /erp/orders
+[Auth] Request: GET /customers
+[Auth] Request: GET /erp/orders
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /projects
+[Auth] Request: GET /projects
+[Auth] Request: GET /tickets
+[Auth] Request: GET /tickets
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /notifications
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /customers
+[Auth] Request: GET /users
+[Auth] Request: GET /notifications
+[Dashboard] GET /summary reached
+[Auth] Request: GET /tickets
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /projects
+[Dashboard] GET /summary reached
+[Auth] Request: GET /projects
+[Auth] Request: GET /leads
+[Auth] Request: GET /pipeline-stages
+[Auth] Request: GET /leads
+[Auth] Request: GET /pipeline-stages
+[Auth] Request: GET /tickets
+[Auth] Request: GET /tickets
+[Auth] Request: GET /calendar/status
+[Auth] Request: GET /calendar/events?start=2026-01-26T04%3A00%3A00.000Z&end=2026-03-02T03%3A59%3A59.999Z
+[Auth] Request: GET /calendar/status
+[Auth] Request: GET /calendar/events?start=2026-01-26T04%3A00%3A00.000Z&end=2026-03-02T03%3A59%3A59.999Z
+[Auth] Request: GET /assistai/conversations
+[Auth] Request: GET /assistai/configs
+[Auth] Request: GET /assistai/conversations
+[Auth] Request: GET /assistai/configs
+[Auth] Request: GET /auth/me
+[Auth] Request: GET /auth/me
+[Auth] Request: GET /customers
+[Auth] Request: GET /erp/orders
+[Auth] Request: GET /erp/orders
+[Auth] Request: GET /customers
+[Auth] Request: GET /api-keys
+[Auth] Request: GET /webhooks
+[Auth] Request: GET /api-keys
+[Auth] Request: GET /webhooks
+[Auth] Request: GET /calendar/status
+[Auth] Request: GET /calendar/events?start=2026-01-26T04%3A00%3A00.000Z&end=2026-03-02T03%3A59%3A59.999Z
+[Auth] Request: GET /calendar/status
+[Auth] Request: GET /calendar/events?start=2026-01-26T04%3A00%3A00.000Z&end=2026-03-02T03%3A59%3A59.999Z
+[Auth] Request: GET /tickets
+[Auth] Request: GET /tickets
+[Auth] Request: GET /customers
+[Auth] Request: PUT /tickets/cml6oqqe8000mpt3sqkwpxq5p
+prisma:error 
+Invalid `prisma.ticket.update()` invocation in
+/Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/routes/tickets.ts:119:44
+
+  116 if (dueDate) updateData.dueDate = new Date(dueDate);
+  117 if (assignedToId !== undefined) updateData.assignedToId = assignedToId; // Allow null to unassign
+  118 
+→ 119 const ticket = await prisma.ticket.update(
+Foreign key constraint failed on the field: `Ticket_assignedToId_fkey (index)`
+PUT /tickets/:id error: PrismaClientKnownRequestError: 
+Invalid `prisma.ticket.update()` invocation in
+/Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/routes/tickets.ts:119:44
+
+  116 if (dueDate) updateData.dueDate = new Date(dueDate);
+  117 if (assignedToId !== undefined) updateData.assignedToId = assignedToId; // Allow null to unassign
+  118 
+→ 119 const ticket = await prisma.ticket.update(
+Foreign key constraint failed on the field: `Ticket_assignedToId_fkey (index)`
+    at Ln.handleRequestError (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/node_modules/@prisma/client/runtime/library.js:121:7753)
+    at Ln.handleAndLogRequestError (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/node_modules/@prisma/client/runtime/library.js:121:7061)
+    at Ln.request (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/node_modules/@prisma/client/runtime/library.js:121:6745)
+    at async l (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async <anonymous> (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/routes/tickets.ts:119:24) {
+  code: 'P2003',
+  clientVersion: '5.19.1',
+  meta: {
+    modelName: 'Ticket',
+    field_name: 'Ticket_assignedToId_fkey (index)'
+  }
+}
+11:26:00 PM [tsx] change in ./src/routes/tickets.ts Restarting...
+c🔌 [DB] Connecting to: postgresql://postgres:****@127.0.0.1:5434/chronuscrm?schema=public
+[Scheduler] Initialized. Polling for scheduled interactions every minute...
+[ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+🚀 ChronusCRM API running on http://localhost:3002
+📚 API Docs: http://localhost:3002/api/docs
+🔌 Socket.io ready for connections
+✅ [DB] Successfully connected to PostgreSQL
+[Auth] Request: GET /customers
+[Auth] Request: GET /users
+[Auth] Request: GET /users
+[Auth] Request: GET /customers
+11:31:54 PM [tsx] change in ./src/routes/tickets.ts Restarting...
+c🔌 [DB] Connecting to: postgresql://postgres:****@127.0.0.1:5434/chronuscrm?schema=public
+[Scheduler] Initialized. Polling for scheduled interactions every minute...
+[ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+🚀 ChronusCRM API running on http://localhost:3002
+📚 API Docs: http://localhost:3002/api/docs
+🔌 Socket.io ready for connections
+✅ [DB] Successfully connected to PostgreSQL
+[Auth] Request: GET /notifications
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /customers
+[Auth] Request: GET /users
+[Dashboard] GET /summary reached
+[Auth] Request: GET /notifications
+[Auth] Request: GET /tickets
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /projects
+[Dashboard] GET /summary reached
+[Auth] Request: GET /projects

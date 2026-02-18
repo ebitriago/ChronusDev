@@ -1,0 +1,5 @@
+name, email, company, value, status
+Test CSV User 1, csv1@test.com, Tech Demo Inc, 1500, Nuevo
+Test CSV User 2, csv2@test.com, Design Studio, 3200, Calificado
+Test CSV User 3, csv3@test.com, Global Corp, 10000, Negociación
+Test CSV User 4, csv4@test.com, Startup Hub, 500, Nuevo

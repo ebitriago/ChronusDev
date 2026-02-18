@@ -1,26 +1,57 @@
 # Build Stage
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y openssl python3 make g++
+
 WORKDIR /app
+
+# Copy root package files
 COPY package*.json ./
-COPY prisma ./prisma/
-RUN npm ci
-COPY . .
-RUN npx prisma generate
-RUN npm run build 
-# Note: Ensure "build" script in package.json runs tsc
+
+# Copy app package files
+COPY apps/crm/package*.json ./apps/crm/
+COPY apps/crm/prisma ./apps/crm/prisma/
+
+# Install dependencies (Monorepo aware)
+RUN npm ci --workspace=apps/crm
+
+# Copy source code
+COPY apps/crm ./apps/crm
+
+# Generate Prisma Client
+RUN npx prisma generate --schema=apps/crm/prisma/schema.prisma
+
+# Build
+RUN npm run --workspace=apps/crm build
 
 # Production Stage
-FROM node:20-alpine
+FROM node:20-bookworm-slim
 WORKDIR /app
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
-# Copy public assets if any
-COPY --from=builder /app/public ./public 
 
-# Install dependencies strictly needed for runtime
-RUN apk add --no-cache openssl curl libc6-compat
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y openssl curl ca-certificates
+
+# Copy package files
+COPY package*.json ./
+COPY apps/crm/package*.json ./apps/crm/
+
+# Install production dependencies
+RUN npm ci --workspace=apps/crm --omit=dev
+
+# Copy built artifacts and prisma
+COPY --from=builder /app/apps/crm/dist ./apps/crm/dist
+COPY --from=builder /app/apps/crm/prisma ./apps/crm/prisma
+# Copy entrypoint from source
+COPY --from=builder /app/apps/crm/entrypoint.sh ./apps/crm/entrypoint.sh
+
+ENV NODE_ENV=production
+ENV PORT=3002
 
 EXPOSE 3002
+
+WORKDIR /app/apps/crm
+RUN chmod +x entrypoint.sh
+
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["node", "dist/index.js"]

@@ -1,26 +1,24 @@
-/** @type {import('ts-jest').JestConfigWithTsJest} */
 export default {
-    preset: 'ts-jest/presets/default-esm',
+    preset: 'ts-jest/presets/default-esm', // or 'ts-jest/presets/js-with-ts-esm'
     testEnvironment: 'node',
-    testMatch: ['**/*.test.ts'],
-    moduleFileExtensions: ['ts', 'js'],
     extensionsToTreatAsEsm: ['.ts'],
     moduleNameMapper: {
         '^(\\.{1,2}/.*)\\.js$': '$1',
     },
     transform: {
+        // '^.+\\.[tj]sx?$' to process js/ts with `ts-jest`
+        // '^.+\\.m?[tj]sx?$' to process js/ts/mjs/mts with `ts-jest`
         '^.+\\.tsx?$': [
             'ts-jest',
             {
                 useESM: true,
                 tsconfig: {
-                    module: 'node16',
+                    module: 'esnext', // or nodenext
                     target: 'esnext',
-                    moduleResolution: 'node16',
+                    isolatedModules: true,
                     allowSyntheticDefaultImports: true
                 }
             },
         ],
     },
-    verbose: true,
 };

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { API_URL } from '../app/api';
+import { useState, useEffect, useCallback } from 'react';
+import { API_URL, getHeaders } from '../app/api';
 
 type Agent = {
     code: string;
@@ -35,6 +35,7 @@ export default function AssistAI() {
     const [agents, setAgents] = useState<Agent[]>([]);
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [syncing, setSyncing] = useState(false);
     const [syncResult, setSyncResult] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'agents' | 'conversations'>('agents');
@@ -46,77 +47,99 @@ export default function AssistAI() {
     const [agentError, setAgentError] = useState<string | null>(null);
     const [currentAgentCode, setCurrentAgentCode] = useState<string>('');
     const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
     const [editNotes, setEditNotes] = useState('');
     const [editCustomName, setEditCustomName] = useState('');
 
+    // Connection status
+    const [isConnected, setIsConnected] = useState(false);
+
     // Fetch agents and conversations
-    useEffect(() => {
-        const token = localStorage.getItem('crm_token');
-        if (!token) return;
+    const loadData = useCallback(async () => {
+        setLoadError(null);
+        try {
+            const headers = getHeaders();
+            const [agentsRes, convsRes, configsRes] = await Promise.all([
+                fetch(`${API_URL}/assistai/agents`, { headers }),
+                fetch(`${API_URL}/assistai/conversations`, { headers }),
+                fetch(`${API_URL}/assistai/configs`, { headers })
+            ]);
 
-        const headers = { 'Authorization': `Bearer ${token}` };
+            const agentsData = agentsRes.ok ? await agentsRes.json() : { data: [] };
+            const convsData = convsRes.ok ? await convsRes.json() : { data: [] };
+            const configs = configsRes.ok ? await configsRes.json() : [];
 
-        Promise.all([
-            fetch(`${API_URL}/assistai/agents`, { headers }).then(r => r.ok ? r.json() : { data: [] }),
-            fetch(`${API_URL}/assistai/conversations`, { headers }).then(r => r.ok ? r.json() : { data: [] }),
-            fetch(`${API_URL}/assistai/configs`, { headers }).then(r => r.ok ? r.json() : [])
-        ])
-            .then(([agentsData, convsData, configs]) => {
-                // Merge local configs with agents
-                const configsMap = new Map(configs.map((c: any) => [c.code, c]));
-                const enrichedAgents = (agentsData.data || []).map((agent: Agent) => ({
-                    ...agent,
-                    localConfig: configsMap.get(agent.code) || null
-                }));
-                setAgents(enrichedAgents);
-                setConversations(convsData.data || []);
-                setLoading(false);
-            })
-            .catch(() => setLoading(false));
+            // At least one endpoint succeeded = connected
+            setIsConnected(agentsRes.ok);
+
+            // Merge local configs with agents
+            const configsMap = new Map(configs.map((c: any) => [c.code, c]));
+            const enrichedAgents = (agentsData.data || []).map((agent: Agent) => ({
+                ...agent,
+                localConfig: configsMap.get(agent.code) || null
+            }));
+            setAgents(enrichedAgents);
+            setConversations(convsData.data || []);
+        } catch (err) {
+            setIsConnected(false);
+            setLoadError('Error de conexión con AssistAI');
+            console.error('[AssistAI] Load error:', err);
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
-    // Sync all conversations (enhanced)
-    const handleSyncAll = async () => {
-        const token = localStorage.getItem('crm_token');
-        if (!token) return;
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
+    // Sync all conversations
+    const handleSyncAll = async () => {
         setSyncing(true);
         setSyncResult(null);
+
+        // Timeout protection: auto-reset after 60s
+        const timeout = setTimeout(() => {
+            setSyncing(false);
+            setSyncResult('❌ Timeout: La sincronización tardó demasiado');
+        }, 60000);
+
         try {
             const res = await fetch(`${API_URL}/assistai/sync-all`, {
                 method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: getHeaders()
             });
             const data = await res.json();
             if (data.success) {
                 setSyncResult(`✅ Sincronizadas ${data.synced} nuevas, ${data.updated} actualizadas. Total: ${data.total} conversaciones`);
                 // Refresh list
-                const convRes = await fetch(`${API_URL}/assistai/conversations`, { headers: { 'Authorization': `Bearer ${token}` } });
-                const convData = await convRes.json();
-                setConversations(convData.data || []);
+                const convRes = await fetch(`${API_URL}/assistai/conversations`, { headers: getHeaders() });
+                if (convRes.ok) {
+                    const convData = await convRes.json();
+                    setConversations(convData.data || []);
+                }
             } else {
                 setSyncResult(`❌ Error: ${data.error}`);
             }
         } catch (err) {
             setSyncResult('❌ Error de conexión');
         } finally {
+            clearTimeout(timeout);
             setSyncing(false);
         }
     };
 
     // Open agent detail modal
     const openAgentDetail = async (agentCode: string) => {
-        const token = localStorage.getItem('crm_token');
-        if (!token) return;
-
         setLoadingAgent(true);
         setAgentModalOpen(true);
         setAgentError(null);
+        setSaveError(null);
         setSelectedAgent(null);
         setCurrentAgentCode(agentCode);
         try {
             const res = await fetch(`${API_URL}/assistai/agents/${agentCode}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: getHeaders()
             });
             const data = await res.json();
             if (res.ok) {
@@ -136,17 +159,13 @@ export default function AssistAI() {
     // Save local config
     const saveAgentConfig = async () => {
         if (!selectedAgent) return;
-        const token = localStorage.getItem('crm_token');
-        if (!token) return;
 
         setSaving(true);
+        setSaveError(null);
         try {
             const res = await fetch(`${API_URL}/assistai/agents/${selectedAgent.code}/config`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
+                headers: getHeaders(),
                 body: JSON.stringify({
                     customName: editCustomName,
                     notes: editNotes
@@ -160,9 +179,12 @@ export default function AssistAI() {
                         : a
                 ));
                 setAgentModalOpen(false);
+            } else {
+                const data = await res.json().catch(() => ({}));
+                setSaveError(data.error || 'Error guardando configuración');
             }
         } catch (err) {
-            console.error(err);
+            setSaveError('Error de conexión al guardar');
         } finally {
             setSaving(false);
         }
@@ -190,9 +212,13 @@ export default function AssistAI() {
                     >
                         🔗 Ir a AssistAI
                     </a>
-                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold flex items-center gap-1">
-                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                        Conectado
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${isConnected
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}>
+                        <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                            }`}></span>
+                        {isConnected ? 'Conectado' : 'Desconectado'}
                     </span>
                 </div>
             </div>
@@ -215,6 +241,17 @@ export default function AssistAI() {
 
             {loading ? (
                 <div className="text-center py-20 text-gray-400">Cargando datos de AssistAI...</div>
+            ) : loadError ? (
+                <div className="text-center py-20">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">⚠️</div>
+                    <p className="text-red-600 font-bold mb-2">{loadError}</p>
+                    <button
+                        onClick={loadData}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-colors"
+                    >
+                        🔄 Reintentar
+                    </button>
+                </div>
             ) : (
                 <>
                     {/* Agents Tab */}
@@ -402,6 +439,13 @@ export default function AssistAI() {
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Save Error */}
+                                {saveError && (
+                                    <div className="mb-4 p-2 bg-red-50 text-red-600 rounded-lg text-xs">
+                                        ❌ {saveError}
+                                    </div>
+                                )}
 
                                 {/* Actions */}
                                 <div className="flex gap-3">

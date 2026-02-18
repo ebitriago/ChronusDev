@@ -4,11 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 
 interface Notification {
     id: string;
-    type: 'TASK' | 'TICKET' | 'MESSAGE' | 'SYSTEM';
+    type: 'TASK' | 'TICKET' | 'MESSAGE' | 'SYSTEM' | 'CRM_SYNC';
     title: string;
     message: string;
     read: boolean;
     link?: string;
+    data?: any;
     createdAt: string;
 }
 
@@ -154,8 +155,9 @@ export default function NotificationCenter({ apiUrl = '/api' }: NotificationCent
                                         key={notification.id}
                                         onClick={() => {
                                             markAsRead(notification.id);
-                                            if (notification.link) {
-                                                window.location.href = notification.link;
+                                            const link = notification.link || (notification.data as any)?.link;
+                                            if (link) {
+                                                window.location.href = link;
                                             }
                                         }}
                                         className={`px-4 py-3 border-b border-gray-50 cursor-pointer transition-colors hover:bg-gray-50 ${!notification.read ? 'bg-blue-50/50' : ''

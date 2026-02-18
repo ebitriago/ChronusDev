@@ -1,69 +1,453 @@
 
-> @chronusdev/crm-frontend@0.1.0 dev
-> next dev -p 3003
+> chronusdev-frontend@0.1.0 dev
+> next dev
 
   ▲ Next.js 14.2.35
-  - Local:        http://localhost:3003
+  - Local:        http://localhost:3000
+  - Environments: .env.local
 
  ✓ Starting...
- ✓ Ready in 1242ms
+ ✓ Ready in 1304ms
+(node:57186) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Failed to proxy http://localhost:3001/timelogs/current Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+ ✓ Compiled /_error in 270ms (262 modules)
+Failed to proxy http://localhost:3001/timelogs/current Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Failed to proxy http://localhost:3001/timelogs/current Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Failed to proxy http://localhost:3001/timelogs/current Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Failed to proxy http://localhost:3001/timelogs/current Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Failed to proxy http://localhost:3001/auth/login Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Failed to proxy http://localhost:3001/timelogs/current Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Failed to proxy http://localhost:3001/timelogs/current Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Failed to proxy http://localhost:3001/timelogs/current Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
  ○ Compiling / ...
- ✓ Compiled / in 861ms (621 modules)
-🔗 API configured at: http://127.0.0.1:3002
- GET / 200 in 1020ms
- ✓ Compiled in 112ms (300 modules)
- ✓ Compiled /_not-found in 172ms (610 modules)
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 238ms
-🔗 API configured at: http://127.0.0.1:3002
- GET / 200 in 211ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 13ms
- GET / 200 in 48ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 26ms
- GET / 200 in 61ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 65ms
- GET / 200 in 41ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 31ms
- GET / 200 in 46ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 54ms
- GET / 200 in 33ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 29ms
- GET / 200 in 28ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 22ms
- GET / 200 in 42ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 39ms
- GET / 200 in 39ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 35ms
- GET / 200 in 57ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 21ms
- GET / 200 in 107ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 28ms
- ✓ Compiled in 578ms (621 modules)
-🔗 API configured at: http://127.0.0.1:3002
- GET / 200 in 109ms
- ✓ Compiled /_not-found in 162ms (610 modules)
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 200ms
-🔗 API configured at: http://127.0.0.1:3002
- GET / 200 in 74ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 37ms
- GET / 200 in 35ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 52ms
- GET / 200 in 26ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 41ms
+ ✓ Compiled / in 1300ms (1856 modules)
+🔗 API configured at: http://localhost:3002
+ GET / 200 in 1533ms
+ ✓ Compiled in 320ms (1011 modules)
+Failed to proxy http://localhost:3001/auth/me Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Failed to proxy http://localhost:3001/auth/me Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Failed to proxy http://localhost:3001/auth/login Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Failed to proxy http://localhost:3001/auth/login Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+ ✓ Compiled in 511ms (1854 modules)
+ ⨯ ./components/Kanban.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/Users/eduardobitriagoe/ChronusDev-1/apps/frontend/components/Kanban.tsx[0m:297:1]
+ [2m297[0m |   }
+ [2m298[0m | 
+ [2m299[0m |   return (
+ [2m300[0m |     <>
+     : [31;1m     ^[0m
+ [2m301[0m |       <div className="p-6 max-w-full">
+ [2m302[0m |         {/* Header */}
+ [2m303[0m |         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+     `----
+
+  [31mx[0m Expected ',', got '{'
+     ,-[[36;1;4m/Users/eduardobitriagoe/ChronusDev-1/apps/frontend/components/Kanban.tsx[0m:530:1]
+ [2m530[0m |         </div>
+ [2m531[0m |       </div >
+ [2m532[0m | 
+ [2m533[0m |       {/* Task detail modal */}
+     : [31;1m      ^[0m
+ [2m534[0m |       {
+ [2m535[0m |         selectedTask && (
+ [2m536[0m |           <div
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/Kanban.tsx
+./app/page.tsx
+ ⨯ ./components/Kanban.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/Users/eduardobitriagoe/ChronusDev-1/apps/frontend/components/Kanban.tsx[0m:297:1]
+ [2m297[0m |   }
+ [2m298[0m | 
+ [2m299[0m |   return (
+ [2m300[0m |     <>
+     : [31;1m     ^[0m
+ [2m301[0m |       <div className="p-6 max-w-full">
+ [2m302[0m |         {/* Header */}
+ [2m303[0m |         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+     `----
+
+  [31mx[0m Expected ',', got '{'
+     ,-[[36;1;4m/Users/eduardobitriagoe/ChronusDev-1/apps/frontend/components/Kanban.tsx[0m:530:1]
+ [2m530[0m |         </div>
+ [2m531[0m |       </div >
+ [2m532[0m | 
+ [2m533[0m |       {/* Task detail modal */}
+     : [31;1m      ^[0m
+ [2m534[0m |       {
+ [2m535[0m |         selectedTask && (
+ [2m536[0m |           <div
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/Kanban.tsx
+./app/page.tsx
+ ⨯ ./components/Kanban.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/Users/eduardobitriagoe/ChronusDev-1/apps/frontend/components/Kanban.tsx[0m:297:1]
+ [2m297[0m |   }
+ [2m298[0m | 
+ [2m299[0m |   return (
+ [2m300[0m |     <>
+     : [31;1m     ^[0m
+ [2m301[0m |       <div className="p-6 max-w-full">
+ [2m302[0m |         {/* Header */}
+ [2m303[0m |         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+     `----
+
+  [31mx[0m Expected ',', got '{'
+     ,-[[36;1;4m/Users/eduardobitriagoe/ChronusDev-1/apps/frontend/components/Kanban.tsx[0m:556:1]
+ [2m556[0m |         </div>
+ [2m557[0m |       </div >
+ [2m558[0m | 
+ [2m559[0m |       {/* Task detail modal */}
+     : [31;1m      ^[0m
+ [2m560[0m |       {
+ [2m561[0m |         selectedTask && (
+ [2m562[0m |           <div
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/Kanban.tsx
+./app/page.tsx
+ ⨯ ./components/Kanban.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/Users/eduardobitriagoe/ChronusDev-1/apps/frontend/components/Kanban.tsx[0m:297:1]
+ [2m297[0m |   }
+ [2m298[0m | 
+ [2m299[0m |   return (
+ [2m300[0m |     <>
+     : [31;1m     ^[0m
+ [2m301[0m |       <div className="p-6 max-w-full">
+ [2m302[0m |         {/* Header */}
+ [2m303[0m |         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+     `----
+
+  [31mx[0m Expected ',', got '{'
+     ,-[[36;1;4m/Users/eduardobitriagoe/ChronusDev-1/apps/frontend/components/Kanban.tsx[0m:556:1]
+ [2m556[0m |         </div>
+ [2m557[0m |       </div >
+ [2m558[0m | 
+ [2m559[0m |       {/* Task detail modal */}
+     : [31;1m      ^[0m
+ [2m560[0m |       {
+ [2m561[0m |         selectedTask && (
+ [2m562[0m |           <div
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/Kanban.tsx
+./app/page.tsx
+Failed to proxy http://localhost:3001/auth/login Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+ ⨯ ./components/Kanban.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/Users/eduardobitriagoe/ChronusDev-1/apps/frontend/components/Kanban.tsx[0m:297:1]
+ [2m297[0m |   }
+ [2m298[0m | 
+ [2m299[0m |   return (
+ [2m300[0m |     <>
+     : [31;1m     ^[0m
+ [2m301[0m |       <div className="p-6 max-w-full">
+ [2m302[0m |         {/* Header */}
+ [2m303[0m |         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+     `----
+
+  [31mx[0m Expected ',', got '{'
+     ,-[[36;1;4m/Users/eduardobitriagoe/ChronusDev-1/apps/frontend/components/Kanban.tsx[0m:556:1]
+ [2m556[0m |         </div>
+ [2m557[0m |       </div >
+ [2m558[0m | 
+ [2m559[0m |       {/* Task detail modal */}
+     : [31;1m      ^[0m
+ [2m560[0m |       {
+ [2m561[0m |         selectedTask && (
+ [2m562[0m |           <div
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/Kanban.tsx
+./app/page.tsx
+ ○ Compiling /_error ...
+ ⨯ ./components/Kanban.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4m/Users/eduardobitriagoe/ChronusDev-1/apps/frontend/components/Kanban.tsx[0m:297:1]
+ [2m297[0m |   }
+ [2m298[0m | 
+ [2m299[0m |   return (
+ [2m300[0m |     <>
+     : [31;1m     ^[0m
+ [2m301[0m |       <div className="p-6 max-w-full">
+ [2m302[0m |         {/* Header */}
+ [2m303[0m |         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+     `----
+
+  [31mx[0m Expected ',', got '{'
+     ,-[[36;1;4m/Users/eduardobitriagoe/ChronusDev-1/apps/frontend/components/Kanban.tsx[0m:556:1]
+ [2m556[0m |         </div>
+ [2m557[0m |       </div >
+ [2m558[0m | 
+ [2m559[0m |       {/* Task detail modal */}
+     : [31;1m      ^[0m
+ [2m560[0m |       {
+ [2m561[0m |         selectedTask && (
+ [2m562[0m |           <div
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/Kanban.tsx
+./app/page.tsx
+ GET / 500 in 152ms
+ ✓ Compiled /_error in 752ms (1856 modules)
+🔗 API configured at: http://localhost:3002
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET / 200 in 188ms
+ ✓ Compiled /_not-found in 336ms (1845 modules)
+🔗 API configured at: http://localhost:3002
+ GET / 200 in 97ms
+Failed to proxy http://localhost:3001/auth/me Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+ GET / 200 in 27ms
+ ✓ Compiled in 263ms (1856 modules)
+Failed to proxy http://localhost:3001/auth/me Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Failed to proxy http://localhost:3001/auth/me Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+ ✓ Compiled in 663ms (1861 modules)
+Failed to proxy http://localhost:3001/auth/me Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
  GET / 200 in 138ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 43ms
- ✓ Compiled in 638ms (621 modules)
-🔗 API configured at: http://127.0.0.1:3002
- GET / 200 in 91ms
- ✓ Compiled /_not-found in 199ms (610 modules)
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 238ms
-🔗 API configured at: http://127.0.0.1:3002
- GET / 200 in 87ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 25ms
- GET / 200 in 47ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 36ms
- GET / 200 in 135ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 51ms
- GET / 200 in 38ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 48ms
- GET / 200 in 117ms
- GET /.well-known/appspecific/com.chrome.devtools.json 404 in 35ms
+ GET / 200 in 23ms
+Failed to proxy http://localhost:3001/auth/me Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at Socket.socketCloseListener (node:_http_client:548:27)
+    at Socket.emit (node:events:520:35)
+    at TCP.<anonymous> (node:net:346:12) {
+  code: 'ECONNRESET'
+}

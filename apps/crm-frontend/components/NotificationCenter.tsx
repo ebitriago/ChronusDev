@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface Notification {
     id: string;
@@ -17,6 +18,7 @@ interface NotificationCenterProps {
 }
 
 export default function NotificationCenter({ apiUrl = '/api' }: NotificationCenterProps) {
+    const router = useRouter();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -155,7 +157,8 @@ export default function NotificationCenter({ apiUrl = '/api' }: NotificationCent
                                         onClick={() => {
                                             markAsRead(notification.id);
                                             if (notification.link) {
-                                                window.location.href = notification.link;
+                                                router.push(notification.link);
+                                                setIsOpen(false);
                                             }
                                         }}
                                         className={`px-4 py-3 border-b border-gray-50 cursor-pointer transition-colors hover:bg-gray-50 ${!notification.read ? 'bg-blue-50/50' : ''

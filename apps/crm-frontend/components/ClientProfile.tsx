@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useToast } from './Toast';
 import { API_URL } from '../app/api';
+import InvoicePreviewModal from './InvoicePreviewModal';
+import TicketModal from './TicketModal';
 
 type Contact = {
     id: string;
@@ -31,6 +33,7 @@ type ClientData = {
     phone?: string;
     company?: string;
     plan?: string;
+    monthlyRevenue?: number;
     status?: string;
     notes?: string;
     contacts: Contact[];
@@ -48,15 +51,21 @@ type Props = {
 export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) {
     const [client, setClient] = useState<ClientData | null>(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'info' | 'tickets' | 'notes' | 'invoices'>('info');
+    const [activeTab, setActiveTab] = useState<string>('info');
     const { showToast } = useToast();
 
     // Form states
     const [isEditing, setIsEditing] = useState(false);
-    const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', company: '', notes: '' });
+    const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', company: '', notes: '', monthlyRevenue: 0 });
     const [newNote, setNewNote] = useState('');
     const [showTicketForm, setShowTicketForm] = useState(false);
     const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'MEDIUM' });
+
+    // Invoice Review State
+    const [previewInvoice, setPreviewInvoice] = useState<any>(null);
+
+    // Ticket View State
+    const [selectedTicket, setSelectedTicket] = useState<any>(null);
 
     useEffect(() => {
         fetchClientData();
@@ -64,7 +73,10 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
 
     async function fetchClientData() {
         try {
-            const res = await fetch(`${API_URL}/customers/${clientId}`);
+            const token = localStorage.getItem('crm_token');
+            const res = await fetch(`${API_URL}/customers/${clientId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             if (res.ok) {
                 const data = await res.json();
                 setClient(data);
@@ -73,8 +85,11 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
                     email: data.email || '',
                     phone: data.phone || '',
                     company: data.company || '',
-                    notes: data.notes || ''
+                    notes: data.notes || '',
+                    monthlyRevenue: data.monthlyRevenue || 0
                 });
+            } else {
+                console.error('Error fetching client - status:', res.status);
             }
         } catch (err) {
             console.error('Error fetching client:', err);
@@ -85,9 +100,13 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
 
     async function handleSaveEdit() {
         try {
+            const token = localStorage.getItem('crm_token');
             const res = await fetch(`${API_URL}/customers/${clientId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(editForm)
             });
             if (res.ok) {
@@ -104,9 +123,13 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
     async function handleCreateTicket() {
         if (!newTicket.title) return;
         try {
+            const token = localStorage.getItem('crm_token');
             const res = await fetch(`${API_URL}/tickets`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     ...newTicket,
                     customerId: clientId
@@ -126,9 +149,13 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
 
     async function handleCreateChronusTask() {
         try {
+            const token = localStorage.getItem('crm_token');
             const res = await fetch(`${API_URL}/customers/${clientId}/chronus-task`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     title: `Tarea para ${client?.name}`,
                     description: `Tarea creada desde CRM para el cliente ${client?.name}`
@@ -301,12 +328,28 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
                                         className="w-full px-4 py-2 rounded-lg border border-gray-200 text-sm disabled:bg-gray-50 disabled:text-gray-500"
                                         placeholder="Empresa"
                                     />
+                                    <div className="flex gap-2">
+                                        <div className="flex-1">
+                                            <label className="text-xs text-gray-500 font-bold ml-1 mb-1 block">MRR (Ingreso Mensual)</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                disabled={!isEditing}
+                                                value={editForm.monthlyRevenue}
+                                                onFocus={(e) => e.target.select()}
+                                                onChange={e => setEditForm({ ...editForm, monthlyRevenue: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                                                className="w-full px-4 py-2 rounded-lg border border-gray-200 text-sm disabled:bg-gray-50 disabled:text-gray-500"
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {activeTab === 'tickets' && (
+                    {(activeTab as string) === 'tickets' && (
                         <div className="space-y-4">
                             {showTicketForm && (
                                 <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
@@ -341,12 +384,16 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
                                 </div>
                             )}
 
-                            {client.tickets?.length > 0 ? (
+                            {Array.isArray(client.tickets) && client.tickets.length > 0 ? (
                                 <div className="space-y-2">
-                                    {client.tickets.map(ticket => (
-                                        <div key={ticket.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex justify-between items-center">
+                                    {client.tickets.map((ticket, idx) => (
+                                        <div
+                                            key={ticket.id || idx}
+                                            onClick={() => setSelectedTicket({ ...ticket, customerId: client.id, customer: { id: client.id, name: client.name, email: client.email } })}
+                                            className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex justify-between items-center cursor-pointer hover:bg-gray-100 transition-colors"
+                                        >
                                             <div>
-                                                <p className="font-bold text-gray-800">{ticket.title}</p>
+                                                <p className="font-bold text-gray-800">{ticket.title || 'Sin título'}</p>
                                                 <p className="text-xs text-gray-500">#{ticket.id}</p>
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -354,7 +401,7 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
                                                     ticket.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-700' :
                                                         'bg-green-100 text-green-700'
                                                     }`}>
-                                                    {ticket.status}
+                                                    {ticket.status || 'UNKNOWN'}
                                                 </span>
                                             </div>
                                         </div>
@@ -374,7 +421,7 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
                         </div>
                     )}
 
-                    {activeTab === 'notes' && (
+                    {(activeTab as string) === 'notes' && (
                         <div className="space-y-4">
                             <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
                                 <h4 className="font-bold text-yellow-800 mb-2">Notas del Cliente</h4>
@@ -395,23 +442,32 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
                         </div>
                     )}
 
-                    {activeTab === 'invoices' && (
+                    {(activeTab as string) === 'invoices' && (
                         <div className="space-y-4">
-                            {client.invoices?.length > 0 ? (
-                                client.invoices.map((inv: any) => (
-                                    <div key={inv.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex justify-between">
+                            {Array.isArray(client.invoices) && client.invoices.length > 0 ? (
+                                client.invoices.map((inv: any, idx) => (
+                                    <div key={inv.id || idx} className="p-4 bg-gray-50 rounded-xl border border-gray-200 flex justify-between items-center">
                                         <div>
                                             <p className="font-bold text-gray-800">{inv.concept || 'Factura'}</p>
-                                            <p className="text-xs text-gray-500">#{inv.id}</p>
+                                            <p className="text-xs text-gray-500">#{inv.number || (inv.id ? inv.id.slice(0, 8) : 'N/A')}</p>
+                                            <p className="text-xs text-gray-500">{new Date(inv.createdAt).toLocaleDateString()}</p>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="font-bold text-gray-800">${inv.amount?.toFixed(2)}</p>
-                                            <span className={`px-2 py-0.5 text-xs font-bold rounded ${inv.status === 'PAID' ? 'bg-green-100 text-green-700' :
-                                                inv.status === 'OVERDUE' ? 'bg-red-100 text-red-700' :
-                                                    'bg-yellow-100 text-yellow-700'
-                                                }`}>
-                                                {inv.status}
-                                            </span>
+                                        <div className="flex flex-col items-end gap-2">
+                                            <div className="text-right">
+                                                <p className="font-bold text-gray-800">{inv.currency === 'VES' ? 'Bs.' : '$'}{inv.amount?.toFixed(2)}</p>
+                                                <span className={`px-2 py-0.5 text-xs font-bold rounded ${inv.status === 'PAID' ? 'bg-green-100 text-green-700' :
+                                                    inv.status === 'OVERDUE' ? 'bg-red-100 text-red-700' :
+                                                        'bg-yellow-100 text-yellow-700'
+                                                    }`}>
+                                                    {inv.status}
+                                                </span>
+                                            </div>
+                                            <button
+                                                onClick={() => setPreviewInvoice(inv)}
+                                                className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100"
+                                            >
+                                                👁️ Ver / Enviar
+                                            </button>
                                         </div>
                                     </div>
                                 ))
@@ -423,6 +479,24 @@ export default function ClientProfile({ clientId, onClose, onOpenChat }: Props) 
                         </div>
                     )}
                 </div>
+
+                {/* Invoice Preview Modal */}
+                <InvoicePreviewModal
+                    isOpen={!!previewInvoice}
+                    onClose={() => setPreviewInvoice(null)}
+                    invoice={previewInvoice}
+                />
+
+                {/* Ticket Modal */}
+                <TicketModal
+                    isOpen={!!selectedTicket}
+                    onClose={() => setSelectedTicket(null)}
+                    onSuccess={() => {
+                        setSelectedTicket(null);
+                        fetchClientData();
+                    }}
+                    ticketToEdit={selectedTicket}
+                />
             </div>
         </div>
     );

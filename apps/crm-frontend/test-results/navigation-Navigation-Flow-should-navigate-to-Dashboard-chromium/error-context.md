@@ -1,0 +1,164 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e6]:
+      - generic [ref=e9]:
+        - generic [ref=e10]:
+          - generic [ref=e11]: Paso 1 de 6
+          - button "Saltar tour" [ref=e12] [cursor=pointer]
+        - generic [ref=e14]: 👋
+        - heading "¡Bienvenido a ChronusCRM! 🎉" [level=2] [ref=e15]
+        - paragraph [ref=e16]: Este tour te guiará por las principales funciones del sistema. ¡Empecemos!
+        - button "Siguiente →" [ref=e18] [cursor=pointer]
+      - generic [ref=e19]:
+        - button [ref=e20] [cursor=pointer]
+        - button [ref=e21] [cursor=pointer]
+        - button [ref=e22] [cursor=pointer]
+        - button [ref=e23] [cursor=pointer]
+        - button [ref=e24] [cursor=pointer]
+        - button [ref=e25] [cursor=pointer]
+    - complementary [ref=e27]:
+      - generic [ref=e29] [cursor=pointer]:
+        - generic [ref=e31]: O
+        - heading "Org de Nav User" [level=2] [ref=e33]
+      - navigation [ref=e34]:
+        - button "📊 Dashboard" [ref=e35] [cursor=pointer]:
+          - generic [ref=e36]: 📊
+          - generic [ref=e37]: Dashboard
+        - button "📥 Inbox Unificado" [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: 📥
+          - generic [ref=e41]: Inbox Unificado
+        - button "💼 Leads (CRM)" [ref=e42] [cursor=pointer]:
+          - generic [ref=e43]: 💼
+          - generic [ref=e44]: Leads (CRM)
+        - button "📋 Kanban" [ref=e45] [cursor=pointer]:
+          - generic [ref=e46]: 📋
+          - generic [ref=e47]: Kanban
+        - button "👥 Clientes" [ref=e48] [cursor=pointer]:
+          - generic [ref=e49]: 👥
+          - generic [ref=e50]: Clientes
+        - button "📅 Calendario" [ref=e51] [cursor=pointer]:
+          - generic [ref=e52]: 📅
+          - generic [ref=e53]: Calendario
+        - button "🤖 AssistAI" [ref=e54] [cursor=pointer]:
+          - generic [ref=e55]: 🤖
+          - generic [ref=e56]: AssistAI
+        - button "📈 Reportes" [ref=e57] [cursor=pointer]:
+          - generic [ref=e58]: 📈
+          - generic [ref=e59]: Reportes
+        - button "⚙️ Configuración" [ref=e60] [cursor=pointer]:
+          - generic [ref=e61]: ⚙️
+          - generic [ref=e62]: Configuración
+        - button "🛍️ Pedidos (ERP)" [ref=e63] [cursor=pointer]:
+          - generic [ref=e64]: 🛍️
+          - generic [ref=e65]: Pedidos (ERP)
+        - button "🛠️ Developers" [ref=e66] [cursor=pointer]:
+          - generic [ref=e67]: 🛠️
+          - generic [ref=e68]: Developers
+      - generic [ref=e69]:
+        - button "← Colapsar" [ref=e70] [cursor=pointer]
+        - link "⏱️ Ir a ChronusDev" [ref=e72] [cursor=pointer]:
+          - /url: http://localhost:3000
+          - generic [ref=e73]: ⏱️
+          - generic [ref=e74]: Ir a ChronusDev
+    - main [ref=e77]:
+      - generic [ref=e78]:
+        - generic [ref=e79]:
+          - heading "Overview" [level=2] [ref=e80]
+          - heading "Bienvenido de nuevo" [level=1] [ref=e81]
+        - generic [ref=e82]:
+          - button "?" [ref=e83] [cursor=pointer]
+          - button "🔔" [ref=e85] [cursor=pointer]
+          - generic [ref=e86]:
+            - generic [ref=e87]: "N"
+            - generic [ref=e88]: Nav User
+      - generic [ref=e89]:
+        - generic [ref=e90]:
+          - generic [ref=e91]:
+            - generic [ref=e92]:
+              - generic [ref=e93]: 👥
+              - generic [ref=e94]: +12%
+            - generic [ref=e95]: "0"
+            - generic [ref=e96]: Clientes Activos
+          - generic [ref=e97]:
+            - generic [ref=e99]: 💵
+            - generic [ref=e100]: $0
+            - generic [ref=e101]: MRR Mensual
+          - generic [ref=e102]:
+            - generic [ref=e103]:
+              - generic [ref=e104]: 🎫
+              - generic [ref=e105]: 0 abiertos
+            - generic [ref=e106]: "5"
+            - generic [ref=e107]: Tickets Totales
+          - generic [ref=e108]:
+            - generic [ref=e110]: 📊
+            - generic [ref=e111]: 98%
+            - generic [ref=e112]: Satisfacción
+        - generic [ref=e113]:
+          - generic [ref=e114]:
+            - heading "🎫 Tickets Recientes" [level=2] [ref=e115]:
+              - generic [ref=e116]: 🎫
+              - text: Tickets Recientes
+            - generic [ref=e118]:
+              - paragraph [ref=e119]: No hay tickets recientes.
+              - button "Ir a Tickets" [ref=e120] [cursor=pointer]
+          - generic [ref=e121]:
+            - heading "💰 Últimos Pagos" [level=2] [ref=e122]:
+              - generic [ref=e123]: 💰
+              - text: Últimos Pagos
+            - generic [ref=e124]:
+              - generic [ref=e125]: 💸
+              - paragraph [ref=e126]: Sin transacciones recientes.
+              - button "Ver Facturas" [ref=e127] [cursor=pointer]
+        - generic [ref=e128]:
+          - generic [ref=e129]:
+            - generic [ref=e130]: ✨
+            - generic [ref=e131]:
+              - heading "Predicciones IA" [level=2] [ref=e132]
+              - paragraph [ref=e133]: Insights inteligentes del CRM
+          - generic [ref=e134]:
+            - generic [ref=e135]:
+              - generic [ref=e136]:
+                - generic [ref=e137]: 📈
+                - generic [ref=e138]: MRR Forecast
+              - generic [ref=e139]: $0
+              - generic [ref=e140]:
+                - generic [ref=e141]:
+                  - generic [ref=e142]: +1 mes
+                  - generic [ref=e143]: $0
+                - generic [ref=e144]:
+                  - generic [ref=e145]: +2 mes
+                  - generic [ref=e146]: $0
+            - generic [ref=e147]:
+              - generic [ref=e148]:
+                - generic [ref=e149]: ⚠️
+                - generic [ref=e150]: Riesgo Churn
+              - generic [ref=e151]: 0 clientes
+            - generic [ref=e152]:
+              - generic [ref=e153]:
+                - generic [ref=e154]: 🎯
+                - generic [ref=e155]: Pipeline
+              - generic [ref=e156]: $0
+              - generic [ref=e157]:
+                - generic [ref=e158]: 🔥 0 hot
+                - generic [ref=e159]: "Avg: 0"
+    - generic [ref=e163]:
+      - generic [ref=e166]:
+        - generic [ref=e167]:
+          - generic [ref=e168]: Paso 1 de 6
+          - button "Saltar tour" [ref=e169] [cursor=pointer]
+        - generic [ref=e171]: 👋
+        - heading "¡Bienvenido a ChronusCRM! 🎉" [level=2] [ref=e172]
+        - paragraph [ref=e173]: Este tour te guiará por las principales funciones del sistema. ¡Empecemos!
+        - button "Siguiente →" [ref=e175] [cursor=pointer]
+      - generic [ref=e176]:
+        - button [ref=e177] [cursor=pointer]
+        - button [ref=e178] [cursor=pointer]
+        - button [ref=e179] [cursor=pointer]
+        - button [ref=e180] [cursor=pointer]
+        - button [ref=e181] [cursor=pointer]
+        - button [ref=e182] [cursor=pointer]
+  - alert [ref=e183]
+```

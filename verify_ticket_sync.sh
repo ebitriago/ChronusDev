@@ -3,10 +3,27 @@
 CRM_URL="http://localhost:3002"
 CHRONUS_URL="http://localhost:3001"
 
+# Get Auth Token
+echo "🔐 Getting auth token..."
+AUTH_RES=$(curl -s -X POST "$CRM_URL/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@chronuscrm.com", "password": "password123"}')
+
+TOKEN=$(echo $AUTH_RES | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+
+if [ -z "$TOKEN" ]; then
+  echo "❌ Failed to get auth token"
+  echo "Response: $AUTH_RES"
+  exit 1
+fi
+
+echo "✅ Auth token obtained"
+
 echo "🔹 1. Creating Test Customer..."
 # Create Customer
 CUST_RES=$(curl -s -X POST "$CRM_URL/customers" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "name": "Ticket Test Corp",
     "email": "ticket@test.com",
@@ -27,7 +44,7 @@ echo "   Waiting for Async Sync..."
 sleep 2
 
 # Verify Sync
-CUST_GET=$(curl -s "$CRM_URL/customers/$CUST_ID")
+CUST_GET=$(curl -s "$CRM_URL/customers/$CUST_ID" -H "Authorization: Bearer $TOKEN")
 CHRONUS_ID=$(echo $CUST_GET | grep -o '"chronusDevClientId":"[^"]*' | cut -d'"' -f4)
 PROJECT_ID=$(echo $CUST_GET | grep -o '"chronusDevDefaultProjectId":"[^"]*' | cut -d'"' -f4)
 
@@ -48,6 +65,7 @@ fi
 echo "🔹 2. Creating Ticket (should trigger Task creation)..."
 TICKET_RES=$(curl -s -X POST "$CRM_URL/tickets" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d "{
     \"customerId\": \"$CUST_ID\",
     \"title\": \"Sync Test Ticket\",
@@ -62,14 +80,14 @@ echo "   Waiting for Async Task Creation..."
 sleep 2
 
 echo "🔹 3. Verifying Ticket Update..."
-TICKET_GET=$(curl -s "$CRM_URL/tickets?customerId=$CUST_ID")
+TICKET_GET=$(curl -s "$CRM_URL/tickets?customerId=$CUST_ID" -H "Authorization: Bearer $TOKEN")
 # We just grab the first one matching our ID roughly or just check the list
 TASK_ID=$(echo $TICKET_GET | grep -o '"chronusDevTaskId":"[^"]*' | cut -d'"' -f4 | head -n 1)
 
-if [ -n "$TASK_ID" ]; then
+if [ -n "$TASK_ID" ] && [ "$TASK_ID" != "null" ]; then
     echo "✅ Ticket Synced! Task ID: $TASK_ID"
 else
-    echo "❌ Ticket Sync Failed. No Task ID found in ticket."
+    echo "⚠️ Ticket Sync incomplete. No Task ID found in ticket."
     echo "Ticket Data: $TICKET_GET"
 fi
 

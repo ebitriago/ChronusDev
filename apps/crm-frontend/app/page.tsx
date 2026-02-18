@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useToast } from '../components/Toast';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 // API
 import { API_URL } from './api';
@@ -31,14 +30,7 @@ type Ticket = {
   assignedTo?: string;
 };
 
-type Stats = {
-  activeCustomers: number;
-  trialCustomers: number;
-  mrr: number;
-  openTickets: number;
-  overdueInvoices: number;
-  totalCustomers: number;
-};
+
 
 type User = {
   id: string;
@@ -74,13 +66,7 @@ async function fetchUsers(): Promise<User[]> {
   return Array.isArray(data) ? data : [];
 }
 
-async function fetchStats(): Promise<Stats> {
-  const data = await secureFetch('/stats');
-  return data || {
-    activeCustomers: 0, trialCustomers: 0, mrr: 0,
-    openTickets: 0, overdueInvoices: 0, totalCustomers: 0
-  };
-}
+
 
 async function fetchCustomers(): Promise<Customer[]> {
   const data = await secureFetch('/customers');
@@ -99,6 +85,7 @@ import Developers from '../components/Developers';
 import Sidebar from '../components/Sidebar';
 import Finances from '../components/Finances';
 import CustomerDetail from '../components/CustomerDetail';
+import CustomerModal from '../components/CustomerModal';
 import LeadsKanban from '../components/LeadsKanban';
 import TicketsKanban from '../components/TicketsKanban';
 import Calendar from '../components/Calendar';
@@ -113,34 +100,89 @@ import AuthPage from '../components/AuthPage';
 import SuperAdminPanel from '../components/SuperAdminPanel';
 import AiAgentsPage from './ai-agents/page';
 import Reports from '../components/Reports';
+import UserManual from '../components/UserManual';
 import ErpPanel from '../components/ErpPanel';
+import DashboardAdmin from '../components/DashboardAdmin';
+import GlobalSearch from '../components/GlobalSearch';
+import TicketDetailModal from '../components/TicketDetailModal';
+import TicketModal from '../components/TicketModal';
+import Marketing from '../components/Marketing';
 
 export default function CRMPage() {
-  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'ai-agents' | 'channels' | 'settings' | 'developers' | 'super-admin' | 'calendar' | 'kanban' | 'reports' | 'erp'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'customers' | 'tickets' | 'invoices' | 'finances' | 'leads' | 'inbox' | 'assistai' | 'ai-agents' | 'channels' | 'settings' | 'developers' | 'super-admin' | 'calendar' | 'kanban' | 'reports' | 'erp' | 'manual' | 'marketing'>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false); // Separate data loading state
 
   // Data State
-  const [stats, setStats] = useState<Stats | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [predictions, setPredictions] = useState<{
-    mrr: { current: number; forecast: { month: string; mrr: number }[]; projectedAnnual: number };
-    churn: { atRiskCount: number; atRiskMRR: number; customers: { name: string; riskLevel: string; reason: string }[] };
-    pipeline: { totalValue: number; hotLeadsCount: number; avgScore: number };
-  } | null>(null);
+
+  // Navigation History
+  const [history, setHistory] = useState<string[]>([]);
+
+  const changeView = (newView: typeof view) => {
+    if (newView === view) return;
+    setHistory(prev => [...prev, view]);
+    setView(newView);
+  };
+
+  const goBack = () => {
+    if (history.length === 0) return;
+    const previousView = history[history.length - 1];
+    setHistory(prev => prev.slice(0, -1));
+    setView(previousView as any);
+  };
 
   // Selection State
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [inboxTargetContact, setInboxTargetContact] = useState<string | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null); // For detail view
+
+  async function handleOpenActivity(activity: any) {
+    console.log('handleOpenActivity called with:', JSON.stringify(activity, null, 2));
+
+    // 1. If it's a TICKET activity, try to open the ticket modal
+    // Check metadata.ticketId OR if it's a TICKET type check if id might be useful (unlikely if it's activity id)
+    if (activity.metadata?.ticketId) {
+      try {
+        const token = localStorage.getItem('crm_token');
+        const res = await fetch(`${API_URL}/tickets/${activity.metadata.ticketId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const ticket = await res.json();
+          setSelectedTicket(ticket);
+          return;
+        }
+      } catch (e) {
+        console.error("Error fetching ticket details", e);
+      }
+    } else if (activity.type === 'TICKET') {
+      // Fallback: just go to tickets view if we can't open the specific ticket
+      setView('tickets');
+      return;
+    }
+
+    // 2. If it's a CLIENT-related activity
+    if (activity.customerId) {
+      setSelectedCustomerId(activity.customerId);
+      setView('customers');
+      return;
+    }
+
+    // 3. Fallback/Other types
+    if (activity.type === 'INVOICE' || activity.type === 'PAYMENT') {
+      setView('finances');
+      return;
+    }
+  }
 
   // Modal State
   const [showTicketModal, setShowTicketModal] = useState(false);
-  const [newTicket, setNewTicket] = useState<{ title: string; description: string; customerId: string; priority: string; assignedTo: string }>({
-    title: '', description: '', customerId: '', priority: 'MEDIUM', assignedTo: ''
-  });
+  // Removed newTicket state as it is handled by TicketModal now
 
   // Customer Modal State
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -148,6 +190,49 @@ export default function CRMPage() {
 
   // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // FAB state
+  const [fabOpen, setFabOpen] = useState(false);
+
+  // Swipe gesture refs
+  const touchStartX = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    const deltaY = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
+    // Swipe right to go back (min 80px horizontal, less than 60px vertical drift)
+    if (deltaX > 80 && deltaY < 60 && touchStartX.current < 40) {
+      goBack();
+    }
+  };
+
+  // Section labels for mobile header
+  const viewLabels: Record<string, string> = {
+    dashboard: 'Dashboard',
+    customers: 'Clientes',
+    tickets: 'Soporte',
+    invoices: 'Facturación',
+    finances: 'Finanzas',
+    leads: 'Pipeline',
+    inbox: 'Inbox',
+    assistai: 'AssistAI',
+    'ai-agents': 'Agentes IA',
+    channels: 'Canales',
+    settings: 'Configuración',
+    developers: 'Developers',
+    'super-admin': 'Super Admin',
+    calendar: 'Calendario',
+    kanban: 'Kanban',
+    reports: 'Reportes',
+    erp: 'ERP',
+    marketing: 'Marketing',
+  };
 
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -179,6 +264,14 @@ export default function CRMPage() {
     if (initialView) {
       setView(initialView as any);
       sessionStorage.removeItem('crm_initial_view');
+    }
+
+    // Check for initial actions
+    const initialAction = sessionStorage.getItem('crm_initial_action');
+    if (initialAction) {
+      if (initialAction === 'new_ticket') setShowTicketModal(true);
+      if (initialAction === 'new_customer') setShowCustomerModal(true);
+      sessionStorage.removeItem('crm_initial_action');
     }
 
     // Stop loading immediately so showing the page is fast
@@ -223,23 +316,16 @@ export default function CRMPage() {
     try {
       // Fetch logic in parallel but safe
       // We do this AFTER the UI is already rendered
-      const [statsData, customersData, usersData] = await Promise.all([
-        fetchStats(),
+      const [customersData, usersData] = await Promise.all([
         fetchCustomers(),
         fetchUsers()
       ]);
 
-      setStats(statsData);
       setCustomers(customersData);
       setUsers(usersData);
 
       // Fetch tickets separately to not block others if it fails or is slow
       fetchTickets().then(setTickets);
-
-      // Load predictions lazily
-      secureFetch('/analytics/predictions').then(pred => {
-        if (pred) setPredictions(pred);
-      });
 
     } catch (err) {
       console.error('Error loading data:', err);
@@ -255,29 +341,7 @@ export default function CRMPage() {
   }, [loadData, isAuthenticated]);
 
 
-  async function handleCreateTicket() {
-    if (!newTicket.title || !newTicket.customerId) return;
 
-    try {
-      const token = localStorage.getItem('crm_token');
-      const headers: any = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const res = await fetch(`${API_URL}/tickets`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(newTicket),
-      });
-      if (res.ok) {
-        setShowTicketModal(false);
-        setNewTicket({ title: '', description: '', customerId: '', priority: 'MEDIUM', assignedTo: '' });
-        loadData();
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Error de conexión al crear cliente');
-    }
-  }
 
   async function handleCreateCustomer() {
     if (!newCustomer.name || !newCustomer.email) {
@@ -396,6 +460,18 @@ export default function CRMPage() {
         <OnboardingTour onComplete={() => setShowOnboarding(false)} />
       )}
 
+      {/* Global Search - Cmd+K */}
+      <GlobalSearch onNavigate={(type, id) => {
+        if (type === 'customer') {
+          setSelectedCustomerId(id);
+          setView('customers');
+        } else if (type === 'lead') {
+          setView('leads');
+        } else if (type === 'ticket') {
+          setView('tickets');
+        }
+      }} />
+
       {/* Mobile Overlay */}
       {mobileMenuOpen && (
         <div
@@ -405,10 +481,14 @@ export default function CRMPage() {
       )}
 
       {/* Sidebar Navigation */}
-      <div className={`fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:static md:h-screen md:flex-shrink-0`}>
+      <div className={`fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:sticky md:top-0 md:h-screen md:flex-shrink-0`}>
         <Sidebar
           currentView={view}
-          onChangeView={(v) => { setView(v); setMobileMenuOpen(false); }}
+          onChangeView={(v) => {
+            changeView(v);
+            setMobileMenuOpen(false);
+            setInboxTargetContact(null);
+          }}
           isCollapsed={sidebarCollapsed}
           toggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
           userRole={currentUser?.role}
@@ -418,58 +498,108 @@ export default function CRMPage() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-h-screen transition-all duration-300 overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-h-screen transition-all duration-300 overflow-x-hidden" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
 
-        {/* Mobile Header */}
-        <div className="md:hidden h-16 bg-white border-b border-gray-100 flex items-center px-4 sticky top-0 z-30">
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-          </button>
-          <span className="ml-3 font-semibold text-gray-800">ChronusCRM</span>
+        {/* Mobile Header — Contextual */}
+        <div className="md:hidden h-14 bg-white border-b border-gray-100 flex items-center justify-between px-3 sticky top-0 z-30 shadow-sm">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {history.length > 0 ? (
+              <button
+                onClick={goBack}
+                className="p-2 -ml-1 text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-xl transition-colors"
+                aria-label="Volver"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              </button>
+            ) : (
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                className="p-2 -ml-1 text-gray-600 hover:bg-gray-100 active:bg-gray-200 rounded-xl transition-colors"
+                aria-label="Menú"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              </button>
+            )}
+            <h1 className="font-bold text-gray-900 text-base truncate">{viewLabels[view] || view}</h1>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                // Trigger Cmd+K global search
+                const event = new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true });
+                document.dispatchEvent(event);
+              }}
+              className="p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 rounded-xl transition-colors"
+              aria-label="Buscar"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            </button>
+            <NotificationBell />
+          </div>
         </div>
 
-        <div className="flex-1">
-          <main className="p-8 max-w-7xl mx-auto">
+        <div className="flex-1 pb-20 md:pb-0">
+          <main className="p-4 md:p-8 max-w-7xl mx-auto">
             {/* Header Area */}
-            <div className="mb-8 flex justify-between items-center">
-              <div>
-                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">
-                  {view === 'dashboard' ? 'Overview' : view.charAt(0).toUpperCase() + view.slice(1)}
-                </h2>
-                <h1 className="text-2xl font-bold text-gray-900">
+            <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div className="flex items-center gap-3 w-full md:w-auto">
+                {history.length > 0 && (
+                  <button
+                    onClick={goBack}
+                    className="hidden md:flex p-2 -ml-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors"
+                    title="Volver"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                  </button>
+                )}
+                <h1 className="text-2xl font-bold text-gray-900 truncate">
                   {view === 'dashboard' && `Bienvenido de nuevo`}
                   {view === 'customers' && `Gestión de Clientes`}
                   {view === 'tickets' && `Centro de Soporte`}
                   {view === 'invoices' && `Facturación`}
                   {view === 'finances' && `Contabilidad & Finanzas`}
                   {view === 'leads' && `Pipeline de Ventas`}
-                  {view === 'inbox' && `Bandeja de Entrada Unificada`}
-                  {view === 'assistai' && `AssistAI - Agentes de IA`}
-                  {view === 'settings' && `Configuración del Sistema`}
+                  {view === 'inbox' && `Bandeja de Entrada`}
+                  {view === 'assistai' && `AssistAI Agent`}
+                  {view === 'settings' && `Configuración`}
                   {view === 'developers' && `Developer Tools`}
                   {view === 'reports' && `Reportes y Analytics`}
+                  {view === 'erp' && `ERP & Pedidos`}
+                  {view === 'ai-agents' && `Agentes IA`}
+                  {view === 'channels' && `Canales`}
+                  {view === 'kanban' && `Kanban`}
+                  {view === 'calendar' && `Calendario`}
                 </h1>
               </div>
 
-              {/* User Profile Tiny */}
-              <div className="flex items-center gap-3">
-                {/* Help/Tour Button */}
+              {/* Right: Search + Help + Notifications + User */}
+              <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                {/* Search Bar — Desktop only */}
+                <button
+                  onClick={() => {
+                    const event = new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true });
+                    document.dispatchEvent(event);
+                  }}
+                  className="hidden md:flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-400 text-sm transition-colors group"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  <span className="group-hover:text-gray-500">Buscar...</span>
+                  <kbd className="text-[10px] font-mono bg-white px-1.5 py-0.5 rounded-md border border-gray-200 text-gray-400">⌘K</kbd>
+                </button>
+                {/* Help/Tour */}
                 <button
                   onClick={() => setShowOnboarding(true)}
                   title="Ver tour de ayuda"
-                  className="w-9 h-9 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center text-lg hover:bg-purple-100 transition-colors"
+                  className="w-9 h-9 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center hover:bg-purple-100 transition-colors"
                 >
-                  ?
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </button>
                 {/* Notification Bell */}
                 <NotificationBell />
                 {/* User Profile */}
-                <div className="flex items-center gap-2 bg-white p-2 pr-4 rounded-full border border-gray-200 shadow-sm group relative">
-                  <div className="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center font-bold text-sm">
-                    {currentUser?.name?.charAt(0) || 'U'}
+                <div className="hidden md:flex items-center gap-2 bg-white p-2 pr-4 rounded-xl border border-gray-200 shadow-sm group relative cursor-pointer hover:shadow-md transition-shadow">
+                  <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs">
+                    {currentUser?.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
                   </div>
                   <div className="text-sm font-medium text-gray-700">{currentUser?.name || 'Usuario'}</div>
                   {/* Dropdown */}
@@ -486,7 +616,8 @@ export default function CRMPage() {
                         onClick={handleLogout}
                         className="w-full p-3 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors font-medium"
                       >
-                        <span>🚪</span> Cerrar Sesión
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                        Cerrar Sesión
                       </button>
                     </div>
                   </div>
@@ -495,153 +626,12 @@ export default function CRMPage() {
             </div>
 
             {/* Dashboard */}
-            {view === 'dashboard' && stats && (
-              <div className="space-y-6 animate-fadeIn">
-                {/* Stats Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center text-xl">👥</div>
-                      <span className="text-xs font-medium bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">+12%</span>
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900">{stats.activeCustomers}</div>
-                    <div className="text-sm text-gray-500 font-medium mt-1">Clientes Activos</div>
-                  </div>
-
-                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-xl">💵</div>
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900">${stats.mrr}</div>
-                    <div className="text-sm text-gray-500 font-medium mt-1">MRR Mensual</div>
-                  </div>
-
-                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center text-xl">🎫</div>
-                      <span className="text-xs font-medium bg-red-100 text-red-700 px-2 py-1 rounded-full">{stats.openTickets} abiertos</span>
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900">{stats.openTickets + 5}</div>
-                    <div className="text-sm text-gray-500 font-medium mt-1">Tickets Totales</div>
-                  </div>
-
-                  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center text-xl">📊</div>
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900">98%</div>
-                    <div className="text-sm text-gray-500 font-medium mt-1">Satisfacción</div>
-                  </div>
-                </div>
-
-                {/* Recent Activity Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                    <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                      <span>🎫</span> Tickets Recientes
-                    </h2>
-                    <div className="space-y-4">
-                      {tickets.length > 0 ? (
-                        tickets.slice(0, 5).map(ticket => (
-                          <div key={ticket.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl transition-colors border border-transparent hover:border-gray-100">
-                            <div>
-                              <p className="font-medium text-gray-900 text-sm">{ticket.title}</p>
-                              <p className="text-xs text-gray-500 mt-0.5">{ticket.customer?.name} • hace 2h</p>
-                            </div>
-                            <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-lg ${ticketStatusColors[ticket.status]}`}>
-                              {ticket.status.replace('_', ' ')}
-                            </span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="flex flex-col items-center justify-center h-32 text-gray-400 text-center">
-                          <p className="text-sm">No hay tickets recientes.</p>
-                          <button onClick={() => setView('tickets')} className="text-emerald-600 text-xs font-bold mt-2 hover:underline">Ir a Tickets</button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                    <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                      <span>💰</span> Últimos Pagos
-                    </h2>
-                    <div className="flex flex-col items-center justify-center h-48 text-gray-400">
-                      <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mb-2 text-2xl">💸</div>
-                      <p className="text-sm">Sin transacciones recientes.</p>
-                      <button onClick={() => setView('invoices')} className="text-emerald-600 text-xs font-bold mt-2 hover:underline">Ver Facturas</button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* AI Predictions Widget */}
-                {predictions && (
-                  <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-2xl border border-purple-100 p-6" data-tour="predictions">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-xl flex items-center justify-center text-white text-lg">
-                        ✨
-                      </div>
-                      <div>
-                        <h2 className="text-lg font-bold text-gray-900">Predicciones IA</h2>
-                        <p className="text-gray-500 text-xs">Insights inteligentes del CRM</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* MRR Forecast */}
-                      <div className="bg-white rounded-xl p-4 border border-purple-100">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span>📈</span>
-                          <span className="font-bold text-gray-800 text-sm">MRR Forecast</span>
-                        </div>
-                        <div className="text-xl font-bold text-emerald-600">${predictions.mrr.current.toLocaleString()}</div>
-                        <div className="mt-2 space-y-1">
-                          {predictions.mrr.forecast.slice(1, 3).map((f, i) => (
-                            <div key={i} className="flex justify-between text-xs">
-                              <span className="text-gray-500">{f.month}</span>
-                              <span className="font-mono font-bold text-gray-700">${f.mrr.toLocaleString()}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Churn Risk */}
-                      <div className="bg-white rounded-xl p-4 border border-purple-100">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span>⚠️</span>
-                          <span className="font-bold text-gray-800 text-sm">Riesgo Churn</span>
-                        </div>
-                        <div className={`text-xl font-bold ${predictions.churn.atRiskCount > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                          {predictions.churn.atRiskCount} clientes
-                        </div>
-                        {predictions.churn.atRiskMRR > 0 && (
-                          <div className="mt-2 text-xs text-red-600">
-                            MRR en riesgo: ${predictions.churn.atRiskMRR.toLocaleString()}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Pipeline */}
-                      <div className="bg-white rounded-xl p-4 border border-purple-100">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span>🎯</span>
-                          <span className="font-bold text-gray-800 text-sm">Pipeline</span>
-                        </div>
-                        <div className="text-xl font-bold text-blue-600">${predictions.pipeline.totalValue.toLocaleString()}</div>
-                        <div className="mt-2 flex gap-2">
-                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">
-                            🔥 {predictions.pipeline.hotLeadsCount} hot
-                          </span>
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                            Avg: {predictions.pipeline.avgScore}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            {view === 'dashboard' && <DashboardAdmin
+              onNavigate={(v) => setView(v as any)}
+              onOpenActivity={handleOpenActivity}
+              onCreateTicket={() => setShowTicketModal(true)}
+              onCreateCustomer={() => setShowCustomerModal(true)}
+            />}
 
             {/* Customers View */}
             {view === 'customers' && (
@@ -649,15 +639,19 @@ export default function CRMPage() {
                 <CustomerDetail
                   customerId={selectedCustomerId}
                   onBack={() => setSelectedCustomerId(null)}
+                  onOpenChat={(contact) => {
+                    setInboxTargetContact(contact);
+                    setView('inbox');
+                  }}
                 />
               ) : (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-fadeIn">
-                  <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                    <div className="relative">
+                  <div className="p-4 md:p-6 border-b border-gray-100 flex flex-wrap gap-3 justify-between items-center">
+                    <div className="relative w-full sm:w-auto">
                       <input
                         type="text"
                         placeholder="Buscar clientes..."
-                        className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 w-64"
+                        className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 w-full sm:w-64"
                       />
                       <span className="absolute left-3 top-2.5 text-gray-400">🔍</span>
                     </div>
@@ -668,7 +662,49 @@ export default function CRMPage() {
                       + Nuevo Cliente
                     </button>
                   </div>
-                  <table className="w-full">
+                  {/* Mobile Cards View */}
+                  <div className="md:hidden divide-y divide-gray-100">
+                    {customers.map(customer => (
+                      <div
+                        key={customer.id}
+                        className="p-4 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
+                        onClick={() => setSelectedCustomerId(customer.id)}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-gradient-to-br from-slate-100 to-slate-200 rounded-full flex items-center justify-center text-slate-600 font-bold border border-slate-200 text-sm">
+                              {customer.name.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-bold text-gray-900">{customer.name}</p>
+                              <div className="flex gap-2 items-center">
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${customer.plan === 'PRO' ? 'bg-purple-50 text-purple-700 border-purple-100' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
+                                  {customer.plan}
+                                </span>
+                                <span className="text-xs text-gray-500 font-mono">${customer.monthlyRevenue}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className={`w-2 h-2 rounded-full ${customer.status === 'ACTIVE' ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                        </div>
+                        <div className="flex items-center justify-between mt-3 pl-13">
+                          <div className="flex gap-2">
+                            <span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600">🎫 {customer.openTickets || 0}</span>
+                            <span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600">📄 {customer.pendingInvoices || 0}</span>
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleSyncCustomer(e, customer.id); }}
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center border ${customer.chronusDevClientId ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-white text-gray-400 border-gray-200'}`}
+                          >
+                            {customer.chronusDevClientId ? '✓' : '🔄'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <table className="w-full hidden md:table">
                     <thead>
                       <tr className="bg-gray-50/50 border-b border-gray-100 text-left">
                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Cliente</th>
@@ -755,10 +791,19 @@ export default function CRMPage() {
             {view === 'leads' && <LeadsKanban />}
 
             {/* Inbox View */}
-            {view === 'inbox' && <Inbox />}
+            {view === 'inbox' && <Inbox initialContact={inboxTargetContact} />}
 
             {/* AssistAI View */}
             {view === 'assistai' && <AssistAI />}
+
+            {/* Marketing View */}
+            {view === 'marketing' && <Marketing />}
+
+            <CustomerModal
+              isOpen={showCustomerModal}
+              onClose={() => setShowCustomerModal(false)}
+              onSuccess={() => { loadData(); setShowCustomerModal(false); }}
+            />
 
             {/* AI Agents View */}
             {view === 'ai-agents' && <AiAgentsPage />}
@@ -770,28 +815,91 @@ export default function CRMPage() {
             {view === 'calendar' && <Calendar />}
 
             {/* Kanban View */}
-            {view === 'kanban' && <TicketsKanban />}
+            {view === 'kanban' && <TicketsKanban onNavigate={() => setView('tickets')} />}
 
             {/* Reports View */}
             {view === 'reports' && <Reports />}
 
+            {/* Manual View */}
+            {view === 'manual' && <UserManual />}
+
             {/* ERP View */}
             {view === 'erp' && <ErpPanel />}
+
+            {selectedTicket && (
+              <TicketDetailModal
+                ticket={selectedTicket}
+                onClose={() => setSelectedTicket(null)}
+                onStatusChange={async (newStatus) => {
+                  try {
+                    const token = localStorage.getItem('crm_token');
+                    await fetch(`${API_URL}/tickets/${selectedTicket.id}`, {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      },
+                      body: JSON.stringify({ status: newStatus })
+                    });
+                    // Update local state
+                    setSelectedTicket({ ...selectedTicket, status: newStatus });
+                    setTickets(prev => prev.map(t => t.id === selectedTicket.id ? { ...t, status: newStatus } : t));
+                  } catch (e) {
+                    console.error("Error updating ticket status", e);
+                  }
+                }}
+              />
+            )}
 
             {/* Tickets View */}
             {
               view === 'tickets' && (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden animate-fadeIn">
-                  <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                  <div className="p-4 md:p-6 border-b border-gray-100 flex flex-wrap gap-3 justify-between items-center">
                     <h3 className="text-lg font-bold text-gray-800">Tickets de Soporte</h3>
-                    <button
-                      onClick={() => setShowTicketModal(true)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl transition-colors text-sm font-bold shadow-lg shadow-emerald-500/20"
-                    >
-                      + Crear Ticket
-                    </button>
+                    <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
+                      <button
+                        onClick={() => setView('kanban')}
+                        className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-xl transition-colors text-sm font-bold"
+                      >
+                        📊 Vista Kanban
+                      </button>
+                      <button
+                        onClick={() => setShowTicketModal(true)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl transition-colors text-sm font-bold shadow-lg shadow-emerald-500/20"
+                      >
+                        + Crear Ticket
+                      </button>
+                    </div>
                   </div>
-                  <table className="w-full">
+                  {/* Mobile Cards for Tickets */}
+                  <div className="md:hidden divide-y divide-gray-100">
+                    {tickets.map(ticket => (
+                      <div
+                        key={ticket.id}
+                        className="p-4 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
+                        onClick={() => setSelectedTicket(ticket)}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1 pr-2">
+                            <p className="font-bold text-gray-900 line-clamp-2">{ticket.title}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{ticket.customer?.name || 'Cliente desconocido'}</p>
+                          </div>
+                          <span className={`px-2 py-1 rounded text-[10px] font-bold border ${ticketStatusColors[ticket.status]}`}>
+                            {ticket.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+                          <span className={`px-2 py-0.5 rounded border ${ticket.priority === 'URGENT' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-gray-50 border-gray-200'}`}>
+                            {ticket.priority}
+                          </span>
+                          <span className="font-mono">{ticket.id.slice(0, 8)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <table className="w-full hidden md:table">
                     <thead>
                       <tr className="bg-gray-50/50 border-b border-gray-100 text-left">
                         <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Detalle</th>
@@ -804,7 +912,11 @@ export default function CRMPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {tickets.map(ticket => (
-                        <tr key={ticket.id} className="hover:bg-gray-50 transition-colors">
+                        <tr
+                          key={ticket.id}
+                          className="hover:bg-gray-50 transition-colors cursor-pointer"
+                          onClick={() => setSelectedTicket(ticket)}
+                        >
                           <td className="px-6 py-4 w-1/3">
                             <p className="font-semibold text-gray-900 line-clamp-1">{ticket.title}</p>
                             <p className="text-xs text-gray-400 font-mono mt-1">{ticket.id}</p>
@@ -862,145 +974,16 @@ export default function CRMPage() {
             }
 
             {/* Create Ticket Modal */}
-            {
-              showTicketModal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn" onClick={() => setShowTicketModal(false)}>
-                  <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl animate-slideUp" onClick={e => e.stopPropagation()}>
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">Nuevo Ticket de Soporte</h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
-                        <input
-                          type="text"
-                          value={newTicket.title}
-                          onChange={e => setNewTicket({ ...newTicket, title: e.target.value })}
-                          className="w-full p-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
-                          placeholder="Ej: Error en login..."
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                        <textarea
-                          value={newTicket.description}
-                          onChange={e => setNewTicket({ ...newTicket, description: e.target.value })}
-                          className="w-full p-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all h-24"
-                          placeholder="Describe el problema..."
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
-                          <select
-                            value={newTicket.customerId}
-                            onChange={e => setNewTicket({ ...newTicket, customerId: e.target.value })}
-                            className="w-full p-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none bg-white"
-                          >
-                            <option value="">Seleccionar...</option>
-                            {customers.map(c => (
-                              <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
-                          <select
-                            value={newTicket.priority}
-                            onChange={e => setNewTicket({ ...newTicket, priority: e.target.value })}
-                            className="w-full p-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none bg-white"
-                          >
-                            <option value="LOW">Baja</option>
-                            <option value="MEDIUM">Media</option>
-                            <option value="HIGH">Alta</option>
-                            <option value="URGENT">Urgente</option>
-                          </select>
-                        </div>
-                      </div>
+            <TicketModal
+              isOpen={showTicketModal}
+              onClose={() => setShowTicketModal(false)}
+              onSuccess={() => {
+                setShowTicketModal(false);
+                loadData();
+              }}
+            />
 
-                      {/* ASSIGNMENT SECTION */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Asignar a Responsable</label>
-                        <div className="relative">
-                          <select
-                            value={newTicket.assignedTo}
-                            onChange={e => setNewTicket({ ...newTicket, assignedTo: e.target.value })}
-                            className="w-full p-2 pl-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none bg-white appearance-none"
-                          >
-                            <option value="">-- Sin asignar --</option>
-                            {users.map(u => (
-                              <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                            ))}
-                          </select>
-                          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                            ▼
-                          </div>
-                        </div>
-                        <p className="text-xs text-gray-400 mt-1">El responsable recibirá la notificación del ticket.</p>
-                      </div>
 
-                      <div className="flex gap-3 pt-4">
-                        <button
-                          onClick={handleCreateTicket}
-                          className="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/20"
-                        >
-                          Crear Ticket
-                        </button>
-                        <button
-                          onClick={() => setShowTicketModal(false)}
-                          className="px-4 py-2.5 border border-gray-200 rounded-xl font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            }
-
-            {/* ERP / Finances Module Placeholder */}
-            {
-              view === 'finances' && (
-                <div className="space-y-6 animate-fadeIn">
-                  {/* Summary Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-emerald-500 text-white p-6 rounded-2xl shadow-lg shadow-emerald-500/20">
-                      <div className="text-emerald-100 text-sm font-medium mb-1">Ingresos Totales (Mes)</div>
-                      <div className="text-4xl font-bold">$12,450</div>
-                      <div className="mt-4 text-xs bg-emerald-600 w-fit px-2 py-1 rounded flex items-center gap-1">
-                        <span>📈</span> +24% vs mes anterior
-                      </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                      <div className="text-gray-500 text-sm font-medium mb-1">Gastos Operativos</div>
-                      <div className="text-3xl font-bold text-gray-900">$4,200</div>
-                      <div className="mt-4 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-red-400 w-[35%]"></div>
-                      </div>
-                      <div className="mt-1 text-xs text-gray-400 text-right">35% de ingresos</div>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                      <div className="text-gray-500 text-sm font-medium mb-1">Beneficio Neto</div>
-                      <div className="text-3xl font-bold text-emerald-600">$8,250</div>
-                      <div className="mt-4 flex items-center gap-2">
-                        <span className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-lg font-bold">Saludable</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Transactions Table Placeholder */}
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
-                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">🧾</div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">Libro Diario</h3>
-                    <p className="text-gray-500 max-w-md mx-auto">
-                      El módulo de contabilidad detallada está en construcción. Pronto podrás registrar ingresos, egresos y generar balances automáticamente.
-                    </p>
-                    <button className="mt-6 bg-slate-900 text-white px-6 py-3 rounded-xl hover:bg-slate-800 transition-colors font-medium">
-                      Configurar Cuentas Contables
-                    </button>
-                  </div>
-                </div>
-              )
-            }
 
 
             {/* Developers View */}
@@ -1098,6 +1081,108 @@ export default function CRMPage() {
       {/* Onboarding Tour */}
       {showOnboarding && (
         <OnboardingTour onComplete={() => setShowOnboarding(false)} />
+      )}
+
+      {/* ===== MOBILE BOTTOM NAV BAR ===== */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 safe-area-bottom">
+        <div className="flex justify-around items-center h-16">
+          {[
+            {
+              id: 'dashboard', icon: (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1" /></svg>
+              ), label: 'Inicio'
+            },
+            {
+              id: 'inbox', icon: (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
+              ), label: 'Inbox'
+            },
+            {
+              id: 'customers', icon: (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              ), label: 'Clientes'
+            },
+            {
+              id: 'tickets', icon: (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" /></svg>
+              ), label: 'Tickets'
+            },
+            {
+              id: '_more', icon: (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 6h16M4 12h16M4 18h16" /></svg>
+              ), label: 'Más'
+            },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                if (tab.id === '_more') {
+                  setMobileMenuOpen(true);
+                } else {
+                  changeView(tab.id as any);
+                }
+                setFabOpen(false);
+              }}
+              className={`flex flex-col items-center justify-center gap-0.5 w-full h-full transition-colors ${tab.id !== '_more' && view === tab.id
+                ? 'text-emerald-600'
+                : 'text-gray-400 active:text-gray-600'
+                }`}
+            >
+              {tab.icon}
+              <span className="text-[10px] font-semibold">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* ===== MOBILE FAB (Quick Create) ===== */}
+      <div className="md:hidden fixed bottom-20 right-4 z-50">
+        {/* FAB Menu */}
+        {fabOpen && (
+          <div className="mb-3 flex flex-col gap-2 items-end animate-fadeIn">
+            <button
+              onClick={() => { setShowCustomerModal(true); setFabOpen(false); }}
+              className="flex items-center gap-2 bg-white shadow-lg rounded-full pl-4 pr-5 py-2.5 text-sm font-semibold text-gray-800 border border-gray-100 active:scale-95 transition-transform"
+            >
+              <span className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-lg">👤</span>
+              Nuevo Cliente
+            </button>
+            <button
+              onClick={() => { setShowTicketModal(true); setFabOpen(false); }}
+              className="flex items-center gap-2 bg-white shadow-lg rounded-full pl-4 pr-5 py-2.5 text-sm font-semibold text-gray-800 border border-gray-100 active:scale-95 transition-transform"
+            >
+              <span className="w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-lg">🎫</span>
+              Nuevo Ticket
+            </button>
+            <button
+              onClick={() => { changeView('leads'); setFabOpen(false); }}
+              className="flex items-center gap-2 bg-white shadow-lg rounded-full pl-4 pr-5 py-2.5 text-sm font-semibold text-gray-800 border border-gray-100 active:scale-95 transition-transform"
+            >
+              <span className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-lg">💼</span>
+              Nuevo Lead
+            </button>
+          </div>
+        )}
+        {/* FAB Button */}
+        <button
+          onClick={() => setFabOpen(!fabOpen)}
+          className={`w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-200 active:scale-90 ${fabOpen
+            ? 'bg-gray-800 rotate-45'
+            : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/30'
+            }`}
+        >
+          <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+      </div>
+
+      {/* FAB backdrop */}
+      {fabOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
+          onClick={() => setFabOpen(false)}
+        />
       )}
     </div>
   );

@@ -1,0 +1,325 @@
+
+> @chronusdev/crm@0.1.0 dev
+> tsx watch src/index.ts
+
+🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+[Job] Starting AssistAI Sync Job (Every 1 minute)...
+[Scheduler] Initialized. Polling for scheduled interactions every minute...
+[ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+🚀 ChronusCRM API running on http://localhost:3002
+📚 API Docs: http://localhost:3002/api/docs
+🔌 Socket.io ready for connections
+✅ [DB] Successfully connected to PostgreSQL
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=ese709bf
+🔌 Client connected: O38fyzY71kkn4pM_AAAF
+🔌 Client connected: eLwxEZQ_x928g8E6AAAG
+🔌 Client connected: lxElGdmeENq0PqqBAAAH
+🔌 Client connected: z7UeaOQO7RrP7b3RAAAI
+🔌 Client connected: RQcpUU7vDLE_CiKOAAAJ
+Socket O38fyzY71kkn4pM_AAAF joined room: dev-admin-chronus-980-1770414565303-iddfmukaw
+Socket lxElGdmeENq0PqqBAAAH joined room: dev-admin-chronus-980-1770414565303-iddfmukaw
+Socket RQcpUU7vDLE_CiKOAAAJ joined room: dev-admin-chronus-980-1770414565303-iddfmukaw
+Socket eLwxEZQ_x928g8E6AAAG joined room: assistai-1770389583348-uks76z0ap
+Socket z7UeaOQO7RrP7b3RAAAI joined room: dev-admin-chronus-980-1770414565303-iddfmukaw
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esfpgsrv
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esfpjvm1
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esfpnpjq
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esfr9pno
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esfrh1ic
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esfrseu0
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esft4pil
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esftf9ap
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esfttj5h
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esfu41y8
+[DEBUG] Request received: GET /assistai/poll
+[Auth] Request: GET /assistai/poll
+[DEBUG] Request received: GET /conversations
+[Auth] Request: GET /conversations
+[DEBUG] Request received: GET /health
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esishccf
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=eskc1xks
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=eskc5tmw
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=eskm5zsu
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=eskopii4
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=eskora9s
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=eskqjnig
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esnf4u2c
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esoyqzch
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=esp3bshu
+[DEBUG] Request received: GET /assistai/poll?since=2026-02-09T00%3A03%3A28.421Z
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A03%3A28.421Z
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=ess1thsd
+[DEBUG] Request received: GET /assistai/poll?since=2026-02-09T00%3A03%3A52.807Z
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=et04wmkl
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A03%3A52.807Z
+[DEBUG] Request received: GET /socket.io?EIO=4&transport=polling&t=et49iv10
+8:03:59 PM [tsx] change in ./src/index.ts Restarting...
+8:04:01 PM [tsx] change in ./src/index.ts Process hasn't exited. Killing process...
+c🔌 [DB] Connecting to: postgresql://postgres:****@localhost:5434/chronuscrm?schema=public
+[Job] Starting AssistAI Sync Job (Every 1 minute)...
+[Scheduler] Initialized. Polling for scheduled interactions every minute...
+[ReminderScheduler] Initialized. Checking for reminders daily at 8:00 AM...
+🚀 ChronusCRM API running on http://localhost:3002
+📚 API Docs: http://localhost:3002/api/docs
+🔌 Socket.io ready for connections
+✅ [DB] Successfully connected to PostgreSQL
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A03%3A58.879Z
+🔌 Client connected: 4nGvC0m44SU8WS8fAAAC
+🔌 Client connected: XldhsMcbVhuU3bL0AAAE
+🔌 Client connected: fg3_mQkDv84ZGi2DAAAF
+Socket 4nGvC0m44SU8WS8fAAAC joined room: assistai-1770389583348-uks76z0ap
+Socket XldhsMcbVhuU3bL0AAAE joined room: dev-admin-chronus-980-1770414565303-iddfmukaw
+Socket fg3_mQkDv84ZGi2DAAAF joined room: dev-admin-chronus-980-1770414565303-iddfmukaw
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A04%3A40.993Z
+[Auth] Request: GET /notifications
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /customers
+[Auth] Request: GET /users
+[Auth] Request: GET /notifications
+[Dashboard] GET /summary reached
+[Auth] Request: GET /tickets
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /projects
+[Dashboard] GET /summary reached
+[Auth] Request: GET /projects
+[Auth] Request: GET /conversations
+[Auth] Request: GET /customers
+[Auth] Request: GET /assistai/poll
+[Auth] Request: GET /conversations
+[Auth] Request: GET /assistai/poll
+[Auth] Request: GET /conversations
+[Auth] Request: GET /conversations
+[Auth] Request: GET /customers
+[Auth] Request: GET /customers/match?value=chat-1770566346204-h34wum39e
+[AssistAI] Fetching agents...
+[Auth] Request: GET /conversations?page=2&take=25
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A04%3A53.493Z
+🔌 Client connected: yqpDWGun1TryZD3CAAAH
+Socket yqpDWGun1TryZD3CAAAH joined room: dev-admin-chronus-980-1770414565303-iddfmukaw
+🔌 Client connected: Go25rP3_S3COueYWAAAJ
+Socket Go25rP3_S3COueYWAAAJ joined room: dev-admin-chronus-980-1770414565303-iddfmukaw
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A05%3A08.351Z
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A05%3A23.997Z
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A05%3A39.024Z
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A05%3A54.004Z
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A06%3A09.037Z
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A06%3A24.020Z
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A06%3A40.336Z
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A07%3A40.348Z
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A08%3A40.297Z
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A09%3A40.145Z
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A10%3A40.283Z
+[AssistAI] Fetching agents...
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A10%3A55.096Z
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A11%3A09.019Z
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A11%3A23.998Z
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A11%3A39.005Z
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A11%3A54.029Z
+[AssistAI] Fetching agents...
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A12%3A40.240Z
+[Job] AssistAI Sync skipped - previous run still active
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A13%3A40.267Z
+[AssistAI] Fetching agents...
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A14%3A40.174Z
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A15%3A10.012Z
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /notifications
+[Auth] Request: GET /users
+[Auth] Request: GET /customers
+[Dashboard] GET /summary reached
+[Auth] Request: GET /notifications
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /projects
+[Dashboard] GET /summary reached
+[Auth] Request: GET /projects
+[Auth] Request: GET /tickets
+[Auth] Request: GET /customers
+[Auth] Request: GET /conversations
+[Auth] Request: GET /assistai/poll
+[Auth] Request: GET /conversations
+[Auth] Request: GET /assistai/poll
+[Auth] Request: GET /customers
+[Auth] Request: GET /conversations
+[Auth] Request: GET /conversations
+[Auth] Request: GET /pipeline-stages
+[Auth] Request: GET /leads
+[Auth] Request: GET /leads
+[Auth] Request: GET /pipeline-stages
+[Auth] Request: GET /conversations
+[Auth] Request: GET /customers
+[Auth] Request: GET /assistai/poll
+[Auth] Request: GET /conversations
+[Auth] Request: GET /assistai/poll
+[Auth] Request: GET /customers
+[Auth] Request: GET /conversations
+[Auth] Request: GET /conversations
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A15%3A28.059Z
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A15%3A44.063Z
+[AssistAI] Fetching agents...
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A15%3A59.022Z
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A16%3A13.074Z
+🔌 Client connected: FewC98G-B5vvsoE0AAAM
+🔌 Client connected: x1nC5sF4WTEpIPflAAAN
+Socket FewC98G-B5vvsoE0AAAM joined room: dev-admin-chronus-980-1770561859937-sk3p6iku9
+Socket x1nC5sF4WTEpIPflAAAN joined room: dev-admin-chronus-980-1770561859937-sk3p6iku9
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A16%3A29.025Z
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A16%3A44.036Z
+[AssistAI] Fetching agents...
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A16%3A59.017Z
+Client disconnected: FewC98G-B5vvsoE0AAAM
+Client disconnected: x1nC5sF4WTEpIPflAAAN
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A17%3A14.020Z
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A17%3A40.163Z
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A18%3A40.375Z
+[AssistAI] Fetching agents...
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A19%3A40.131Z
+[Auth] Request: POST /assistai/sync-recent
+[AssistAI] Fetching agents...
+[Auth] Request: GET /assistai/poll?since=2026-02-09T00%3A20%3A09.858Z
+[Auth] Request: GET /pipeline-stages
+[Auth] Request: GET /leads
+[Auth] Request: GET /pipeline-stages
+[Auth] Request: GET /leads
+[Auth] Request: GET /tickets
+[Auth] Request: GET /tickets
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /customers
+[Auth] Request: GET /users
+[Auth] Request: GET /tickets/cmldxg5fb0001rktp87on5t80
+[Auth] Request: POST /tickets/cmldxg5fb0001rktp87on5t80/attachments
+[ChronusDev Sync] Error notifying attachment-added: fetch failed
+[Auth] Request: GET /conversations?page=1&take=25
+[Auth] Request: POST /tickets/cmldxg5fb0001rktp87on5t80/send-to-chronusdev
+[ChronusDev Sync] Using key: chro...
+[ChronusDev] Sending Ticket cmldxg5fb0001rktp87on5t80 with full data to http://localhost:3001/webhooks/crm/ticket-created
+[ChronusDev] Network/fetch error: fetch failed
+[ChronusDev] Full error: TypeError: fetch failed
+    at node:internal/deps/undici/undici:16416:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async <anonymous> (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/routes/tickets.ts:264:24) {
+  [cause]: AggregateError [ECONNREFUSED]: 
+      at internalConnectMultiple (node:net:1134:18)
+      at afterConnectMultiple (node:net:1715:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+[Auth] Request: POST /tickets/cmldxg5fb0001rktp87on5t80/send-to-chronusdev
+[ChronusDev Sync] Using key: chro...
+[ChronusDev] Sending Ticket cmldxg5fb0001rktp87on5t80 with full data to http://localhost:3001/webhooks/crm/ticket-created
+[ChronusDev] Network/fetch error: fetch failed
+[ChronusDev] Full error: TypeError: fetch failed
+    at node:internal/deps/undici/undici:16416:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async <anonymous> (/Users/eduardobitriagoe/ChronusDev-1/apps/crm/src/routes/tickets.ts:264:24) {
+  [cause]: AggregateError [ECONNREFUSED]: 
+      at internalConnectMultiple (node:net:1134:18)
+      at afterConnectMultiple (node:net:1715:7) {
+    code: 'ECONNREFUSED',
+    [errors]: [ [Error], [Error] ]
+  }
+}
+Client disconnected: yqpDWGun1TryZD3CAAAH
+Client disconnected: Go25rP3_S3COueYWAAAJ
+🔌 Client connected: YIU_pPxNK332o9wmAAAQ
+🔌 Client connected: pB8uKuUtCjZhHCELAAAR
+Socket YIU_pPxNK332o9wmAAAQ joined room: dev-admin-chronus-980-1770414565303-iddfmukaw
+Socket pB8uKuUtCjZhHCELAAAR joined room: dev-admin-chronus-980-1770414565303-iddfmukaw
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[AssistAI] Fetching agents...
+🔌 Client connected: 0cX7Ox_82DJj1u3HAAAU
+🔌 Client connected: VskzdoEK0N9qWNfsAAAV
+Socket 0cX7Ox_82DJj1u3HAAAU joined room: dev-admin-chronus-980-1770414565303-iddfmukaw
+Socket VskzdoEK0N9qWNfsAAAV joined room: dev-admin-chronus-980-1770414565303-iddfmukaw
+Client disconnected: 0cX7Ox_82DJj1u3HAAAU
+Client disconnected: VskzdoEK0N9qWNfsAAAV
+[Auth] Request: GET /customers
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /notifications
+[Auth] Request: GET /users
+[Dashboard] GET /summary reached
+[Auth] Request: GET /tickets
+[Auth] Request: GET /notifications
+[Auth] Request: GET /dashboard/summary
+[Auth] Request: GET /projects
+[Dashboard] GET /summary reached
+[Auth] Request: GET /projects
+[Auth] Request: GET /customers
+[Auth] Request: GET /conversations
+[Auth] Request: GET /assistai/poll
+[Auth] Request: GET /conversations
+[Auth] Request: GET /assistai/poll
+[Auth] Request: GET /conversations
+[Auth] Request: GET /customers
+[Auth] Request: GET /conversations
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj
+[Auth] Request: GET /leads
+[Auth] Request: GET /pipeline-stages
+[Auth] Request: GET /leads
+[Auth] Request: GET /pipeline-stages
+[Auth] Request: GET /tickets
+[Auth] Request: GET /tickets
+[Auth] Request: GET /customers
+[Auth] Request: GET /users
+[Auth] Request: GET /tickets/cmldxg5fb0001rktp87on5t80
+[Auth] Request: POST /tickets/cmldxg5fb0001rktp87on5t80/send-to-chronusdev
+[ChronusDev Sync] Using key: chro...
+[ChronusDev] Sending Ticket cmldxg5fb0001rktp87on5t80 with full data to http://localhost:3001/webhooks/crm/ticket-created
+[ChronusDev] Network/fetch error: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+[ChronusDev] Full error: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+    at JSON.parse (<anonymous>)
+    at parseJSONFromBytes (node:internal/deps/undici/undici:4259:19)
+    at successSteps (node:internal/deps/undici/undici:6882:27)
+    at readAllBytes (node:internal/deps/undici/undici:5807:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[Auth] Request: GET /ai-agents
+[Auth] Request: GET /ai-agents
+[Auth] Request: GET /tickets
+[Auth] Request: GET /tickets
+[AssistAI] Fetching agents...
+[Job] Synced 85 conversations for Org cml5yoic5000011u0c2zirycj

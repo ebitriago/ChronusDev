@@ -126,9 +126,14 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-white/80 mb-2">
-                Contraseña
-              </label>
+              <div className="flex justify-between items-center mb-2">
+                <label htmlFor="password" className="block text-sm font-medium text-white/80">
+                  Contraseña
+                </label>
+                <a href="/auth/forgot-password" className="text-xs text-purple-300 hover:text-purple-200 transition-colors">
+                  ¿Olvidaste tu contraseña?
+                </a>
+              </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                   <svg className="w-5 h-5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,45 +198,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
             </button>
           </div>
 
-          {/* Divider */}
-          <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className="text-white/40 text-xs uppercase tracking-wider">Demo</span>
-            <div className="flex-1 h-px bg-white/10" />
-          </div>
 
-          {/* Quick login buttons */}
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => handleQuickLogin('super@chronusdev.com')}
-              disabled={loading}
-              className="flex flex-col items-center justify-center gap-1 px-3 py-3 bg-white/5 border border-white/10 rounded-xl text-white/80 hover:bg-white/10 hover:border-white/20 transition-all text-xs font-medium disabled:opacity-50"
-            >
-              <span className="text-lg">👑</span>
-              Super Admin
-            </button>
-            <button
-              onClick={() => handleQuickLogin('admin@chronusdev.com')}
-              disabled={loading}
-              className="flex flex-col items-center justify-center gap-1 px-3 py-3 bg-white/5 border border-white/10 rounded-xl text-white/80 hover:bg-white/10 hover:border-white/20 transition-all text-xs font-medium disabled:opacity-50"
-            >
-              <span className="text-lg">🏢</span>
-              Admin Org
-            </button>
-            <button
-              onClick={() => handleQuickLogin('juan@chronusdev.com')}
-              disabled={loading}
-              className="flex flex-col items-center justify-center gap-1 px-3 py-3 bg-white/5 border border-white/10 rounded-xl text-white/80 hover:bg-white/10 hover:border-white/20 transition-all text-xs font-medium disabled:opacity-50"
-            >
-              <span className="text-lg">💻</span>
-              Dev
-            </button>
-          </div>
-
-          {/* Footer */}
-          <p className="text-center text-white/40 text-xs mt-6">
-            Password de demo: <span className="text-white/60 font-mono">demo123</span>
-          </p>
         </div>
 
         {/* Branding */}

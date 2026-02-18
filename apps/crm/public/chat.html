@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat en Vivo - ChronusCRM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            margin: 0 auto 20px;
+        }
+
+        h1 {
+            color: #1f2937;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .org-name {
+            color: #10b981;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            font-size: 15px;
+            margin-bottom: 30px;
+        }
+
+        .error-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-box.show {
+            display: block;
+        }
+
+        .error-text {
+            color: #dc2626;
+            font-size: 14px;
+        }
+
+        .cta {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            padding: 16px 32px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+        }
+
+        .info {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            text-align: left;
+        }
+
+        .info h3 {
+            color: #1f2937;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .info p {
+            color: #6b7280;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .session-id {
+            background: #f3f4f6;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #4b5563;
+            word-break: break-all;
+            margin-top: 10px;
+        }
+
+        .loader {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #10b981;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="logo">💬</div>
+        <h1>Bienvenido al Chat</h1>
+        <p class="subtitle">Estás conectando con <span class="org-name" id="orgName">Cargando...</span></p>
+
+        <div class="error-box" id="errorBox">
+            <p class="error-text" id="errorText">Error</p>
+        </div>
+
+        <button class="cta" id="startChat" onclick="openChat()">
+            💬 Iniciar Conversación
+        </button>
+
+        <div class="info">
+            <h3>🔒 Chat Seguro</h3>
+            <p>Cada conversación tiene un identificador único. Podrás continuar tu conversación desde este mismo
+                dispositivo.</p>
+            <div class="session-id" id="sessionInfo">Tu ID de sesión: <span id="sessionId">-</span></div>
+        </div>
+    </div>
+
+    <script>
+        // Get organization ID from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const orgId = urlParams.get('org') || urlParams.get('id') || 'default';
+
+        // Generate or retrieve session ID per device
+        let sessionId = localStorage.getItem(`chronus_chat_${orgId}`);
+        if (!sessionId) {
+            sessionId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            localStorage.setItem(`chronus_chat_${orgId}`, sessionId);
+        }
+
+        document.getElementById('sessionId').textContent = sessionId.substring(0, 20) + '...';
+
+        // Fetch organization info
+        const API_URL = window.location.origin;
+
+        async function loadOrgInfo() {
+            try {
+                const res = await fetch(`${API_URL}/widget/org/${orgId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('orgName').textContent = data.name || 'Soporte';
+                } else {
+                    document.getElementById('orgName').textContent = 'Soporte';
+                }
+            } catch (e) {
+                document.getElementById('orgName').textContent = 'Soporte';
+            }
+        }
+        loadOrgInfo();
+
+        function openChat() {
+            // Trigger widget open or redirect to chat
+            const widgetBtn = document.getElementById('chronus-chat-button');
+            if (widgetBtn) {
+                widgetBtn.click();
+            }
+        }
+    </script>
+
+    <!-- ChronusCRM Live Chat Widget - Dynamic Organization -->
+    <script>
+        const script = document.createElement('script');
+        script.src = '/chat-widget.js';
+        script.setAttribute('data-org-id', orgId);
+        document.body.appendChild(script);
+    </script>
+</body>
+
+</html>

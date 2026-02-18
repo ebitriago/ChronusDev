@@ -76,7 +76,7 @@ export default function SuperAdminDashboard() {
             )}
 
             {/* Sidebar Navigation */}
-            <div className={`fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:static md:h-screen md:flex-shrink-0`}>
+            <div className={`fixed inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:sticky md:top-0 md:h-screen md:flex-shrink-0`}>
                 <Sidebar
                     currentView="super-admin"
                     onChangeView={(v) => {

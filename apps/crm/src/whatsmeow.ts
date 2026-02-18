@@ -3,6 +3,11 @@
 
 const WHATSMEOW_API_BASE = process.env.WHATSMEOW_API_URL || 'https://whatsapp.qassistai.work/api/v1';
 
+// HTTP Basic Auth for WhatsMeow API server
+const WHATSMEOW_API_USER = process.env.WHATSMEOW_API_USER || 'admin';
+const WHATSMEOW_API_PASS = process.env.WHATSMEOW_API_PASS || '1234';
+const WHATSMEOW_BASIC_AUTH = Buffer.from(`${WHATSMEOW_API_USER}:${WHATSMEOW_API_PASS}`).toString('base64');
+
 // Types
 export interface WhatsMeowAgent {
     id: number;
@@ -87,6 +92,7 @@ async function whatsMeowFetch<T>(
 
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        'Authorization': `Basic ${WHATSMEOW_BASIC_AUTH}`,
     };
 
     if (token) {
@@ -101,7 +107,10 @@ async function whatsMeowFetch<T>(
 
     if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[WhatsMeow API Error] ${endpoint}: ${response.status} - ${errorText}`);
+        // Don't log 404s as errors, just throw. It's common for getAgent checks.
+        if (response.status !== 404) {
+            console.error(`[WhatsMeow API Error] ${endpoint}: ${response.status} - ${errorText}`);
+        }
         throw new Error(`WhatsMeow API error: ${response.status} - ${errorText}`);
     }
 
@@ -190,7 +199,7 @@ export async function setWebhook(code: string, token: string, webhookUrl: string
  * Get agent details including webhook configuration
  */
 export async function getAgent(code: string, token: string): Promise<WhatsMeowAgent> {
-    return whatsMeowFetch<WhatsMeowAgent>(`/agents/${code}`, {
+    return whatsMeowFetch<WhatsMeowAgent>(`/agents/${code}/info`, {
         method: 'GET',
         token,
     });

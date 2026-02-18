@@ -1,0 +1,165 @@
+# ==========================================================
+# DOCKER COMPOSE - DESARROLLO LOCAL
+# ==========================================================
+# Este archivo está configurado para el entorno de desarrollo.
+# Incluye base de datos PostgreSQL local con volúmenes persistentes.
+#
+# Uso: docker-compose -f docker-compose.dev.yml up -d
+# ==========================================================
+
+services:
+  # ==========================================================
+  # CHRONUSDEV BACKEND (API Principal - Project Management)
+  # ==========================================================
+  chronusdev-backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: chronusdev-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - CHRONUSDEV_DATABASE_URL=${CHRONUSDEV_DATABASE_URL:-postgresql://postgres:postgres@db:5432/chronuscrm?schema=chronusdev}
+      - JWT_SECRET=${JWT_SECRET:-Xy-9s8L2_kP5zW-xQ3vN7bJ4yH1M9pL2kR5zW8xQ3vN7bJ4yH1_sV6tB0gC9fD2h}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - chronus-network
+
+  # ==========================================================
+  # CHRONUSDEV FRONTEND (Next.js - Project Management UI)
+  # ==========================================================
+  chronusdev-frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${CHRONUSDEV_API_URL:-http://localhost:3001}
+    container_name: chronusdev-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=${CHRONUSDEV_API_URL:-http://localhost:3001}
+      - NEXT_PUBLIC_CRM_APP_URL=${CHRONUSCRM_URL:-http://localhost:3003}
+    depends_on:
+      chronusdev-backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - chronus-network
+
+  # ==========================================================
+  # CHRONUSCRM BACKEND (API CRM + Socket.io + AssistAI)
+  # ==========================================================
+  chronuscrm-backend:
+    build:
+      context: apps/crm
+      dockerfile: Dockerfile
+      args:
+        - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@db:5432/chronuscrm?schema=public}
+    container_name: chronuscrm-backend
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - RATE_LIMIT_DISABLED=true
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@db:5432/chronuscrm?schema=public}
+      # Integration with ChronusDev (local)
+      - CHRONUSDEV_URL=${CHRONUSDEV_URL:-http://chronusdev-backend:3001}
+      - CHRONUSDEV_API_URL=${CHRONUSDEV_API_URL:-http://chronusdev-backend:3001}
+      - CHRONUSDEV_TOKEN=${CHRONUSDEV_TOKEN:-token-admin-123}
+      - CRM_FRONTEND_URL=${CRM_FRONTEND_URL:-http://localhost:3003}
+      # AssistAI Integration
+      - ASSISTAI_API_URL=${ASSISTAI_API_URL:-https://public.assistai.lat}
+      - ASSISTAI_API_TOKEN=${ASSISTAI_API_TOKEN}
+      - ASSISTAI_TENANT_DOMAIN=${ASSISTAI_TENANT_DOMAIN}
+      - ASSISTAI_ORG_CODE=${ASSISTAI_ORG_CODE}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      # Dynamic Redirect URI based on API_PUBLIC_URL
+      - API_PUBLIC_URL=${API_PUBLIC_URL:-http://localhost:3002}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://127.0.0.1:3002/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - chronus-network
+
+  # ==========================================================
+  # DATABASE (Postgres) - Solo para desarrollo
+  # ==========================================================
+  db:
+    image: postgres:15-alpine
+    container_name: chronus-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: chronuscrm
+    ports:
+      - "5434:5432"
+    volumes:
+      - chronuscrm-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - chronus-network
+
+  # ==========================================================
+  # CHRONUSCRM FRONTEND (Next.js - CRM UI + Live Chat)
+  # ==========================================================
+  chronuscrm-frontend:
+    build:
+      context: .
+      dockerfile: apps/crm-frontend/Dockerfile
+      args:
+        - NEXT_PUBLIC_CRM_API_URL=${CHRONUSCRM_API_URL:-/api}
+        - NEXT_PUBLIC_API_URL=${CHRONUSDEV_API_URL:-http://localhost:3001}
+    container_name: chronuscrm-frontend
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - NEXT_PUBLIC_CRM_API_URL=${CHRONUSCRM_API_URL:-/api}
+      - NEXT_PUBLIC_API_URL=${CHRONUSDEV_API_URL:-/api}
+      - CRM_BACKEND_INTERNAL_URL=http://chronuscrm-backend:3002
+    depends_on:
+      chronuscrm-backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - chronus-network
+
+# ==========================================================
+# NETWORK & VOLUMES
+# ==========================================================
+networks:
+  chronus-network:
+    name: chronus-network-dev
+    driver: bridge
+
+volumes:
+  chronuscrm-pgdata:
+    name: chronuscrm-pgdata-dev
